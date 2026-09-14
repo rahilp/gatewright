@@ -1,0 +1,725 @@
+<!-- gatewright board v1 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gatewright</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f3;
+    --bg-raised: #ffffff;
+    --bg-sunken: #ececea;
+    --border: #d8d8d4;
+    --text: #1a1a18;
+    --text-dim: #63635c;
+    --text-faint: #93938a;
+    --accent: #1c5d8c;
+    --accent-bg: #e4eef6;
+    --danger: #9c3b28;
+    --danger-bg: #f6e6e2;
+    --warn: #8a6a1d;
+    --warn-bg: #f6efdd;
+    --ok: #2c6e3f;
+    --ok-bg: #e5f1e8;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --bg-raised: #1f2124;
+      --bg-sunken: #131415;
+      --border: #33363a;
+      --text: #e7e7e4;
+      --text-dim: #a3a39c;
+      --text-faint: #6e6e68;
+      --accent: #6badde;
+      --accent-bg: #1d3245;
+      --danger: #e0806e;
+      --danger-bg: #3a231f;
+      --warn: #d8b458;
+      --warn-bg: #3a3220;
+      --ok: #7fc394;
+      --ok-bg: #1f3527;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 var(--sans);
+    min-height: 100vh;
+  }
+  code, .mono, .ids, td.id, td.evidence, .evidence-list, .event-line time { font-family: var(--mono); }
+  a { color: var(--accent); }
+  button, select, input {
+    font: inherit;
+    color: inherit;
+  }
+  header#gw-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-wrap: wrap;
+  }
+  header#gw-header h1 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  header#gw-header .meta { color: var(--text-dim); font-size: 0.82rem; }
+  header#gw-header .totals { display: flex; gap: 0.9rem; margin-left: auto; font-size: 0.82rem; color: var(--text-dim); }
+  header#gw-header .totals b { color: var(--text); }
+  .snapshot-pill {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    white-space: nowrap;
+  }
+  .live-pill {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    background: var(--ok-bg);
+    color: var(--ok);
+    border: 1px solid var(--ok);
+    white-space: nowrap;
+  }
+  nav#gw-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.4rem 1.25rem 0;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  nav#gw-tabs button {
+    background: none;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  nav#gw-tabs button:hover { color: var(--text); }
+  nav#gw-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  #gw-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.6rem 1.25rem;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+  }
+  #gw-filters select, #gw-filters input[type="search"] {
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  #gw-filters input[type="search"] { min-width: 14rem; flex: 1 1 14rem; }
+  #gw-filters .clear-filters {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  main#gw-view { padding: 1.1rem 1.25rem 3rem; }
+
+  /* Overview */
+  .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  .overview-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.9rem 1rem;
+    box-shadow: var(--shadow);
+  }
+  .overview-card h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 0.6rem; }
+  .count-row { display: flex; justify-content: space-between; padding: 0.2rem 0; font-size: 0.85rem; border-bottom: 1px dashed var(--border); }
+  .count-row:last-child { border-bottom: none; }
+  .count-row .bar { flex: 1; margin: 0 0.6rem; background: var(--bg-sunken); border-radius: 0.2rem; overflow: hidden; height: 0.5rem; align-self: center; }
+  .count-row .bar span { display: block; height: 100%; background: var(--accent); }
+
+  /* Board */
+  #board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+  .column {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    min-width: 240px;
+    max-width: 260px;
+    flex: 0 0 auto;
+  }
+  .column-head {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg-raised);
+    border-radius: 0.5rem 0.5rem 0 0;
+  }
+  .column-head .count { color: var(--text-faint); font-weight: 400; }
+  .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
+  .card {
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .card-id { font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim); }
+  .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; }
+  .card .card-meta { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.7rem; color: var(--text-dim); }
+  .tag {
+    display: inline-block;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.25rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+  }
+  .tag.flag-blocked, .tag.flag-conflict { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+  .tag.flag-needs-triage, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+
+  /* Table */
+  table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+  table.gw-table th, table.gw-table td { text-align: left; padding: 0.45rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+  table.gw-table th { cursor: pointer; user-select: none; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+  table.gw-table th.sorted { color: var(--text); }
+  table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
+  table.gw-table td.id { white-space: nowrap; }
+
+  /* Stages & rules */
+  .stage-rule {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.6rem;
+  }
+  .stage-rule h3 { margin: 0 0 0.25rem; font-size: 0.88rem; }
+  .stage-rule .exit { color: var(--text-dim); font-size: 0.82rem; margin: 0 0 0.4rem; }
+  .stage-rule .requires { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); white-space: pre-wrap; }
+  .stage-rule .flags { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.3rem; }
+
+  /* Export */
+  .export-panel { max-width: 40rem; }
+  .export-panel button { background: var(--accent); color: #fff; border: none; padding: 0.5rem 0.9rem; border-radius: 0.4rem; cursor: pointer; font-size: 0.85rem; }
+
+  /* Empty state */
+  #gw-empty {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--text-dim);
+  }
+  #gw-empty h2 { color: var(--text); }
+  #gw-empty code { background: var(--bg-sunken); padding: 0.1rem 0.4rem; border-radius: 0.3rem; }
+
+  /* Item panel (drawer) */
+  #gw-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: none;
+    z-index: 100;
+  }
+  #gw-overlay.open { display: block; }
+  #gw-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(480px, 100vw);
+    background: var(--bg-raised);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.15s ease;
+    z-index: 101;
+    padding: 1rem 1.25rem 2.5rem;
+  }
+  #gw-overlay.open #gw-panel { transform: translateX(0); }
+  #gw-panel .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+  #gw-panel h2 { margin: 0; font-size: 1.05rem; }
+  #gw-panel .close-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-dim); }
+  #gw-panel .readonly-banner {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.78rem;
+    margin: 0.6rem 0;
+  }
+  #gw-panel .readonly-banner code { font-family: var(--mono); }
+  #gw-panel dl { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
+  #gw-panel dt { color: var(--text-dim); }
+  #gw-panel dd { margin: 0; }
+  #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
+  #gw-panel .stage-buttons button {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.76rem;
+    color: var(--text-faint);
+    cursor: not-allowed;
+  }
+  #gw-panel .stage-buttons button[title] { }
+  #gw-panel h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 1rem 0 0.35rem; }
+  #gw-panel .event-line { display: flex; gap: 0.5rem; font-size: 0.76rem; padding: 0.2rem 0; border-bottom: 1px dashed var(--border); }
+  #gw-panel .event-line time { color: var(--text-faint); white-space: nowrap; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <header id="gw-header">
+    <h1>gatewright</h1>
+    <span class="meta" id="gw-snapshot-meta"></span>
+    <span class="totals" id="gw-totals"></span>
+  </header>
+
+  <nav id="gw-tabs">
+    <button data-view="overview" class="active">Overview</button>
+    <button data-view="board">Board</button>
+    <button data-view="table">Table</button>
+    <button data-view="stages">Stages &amp; rules</button>
+    <button data-view="export">Export</button>
+  </nav>
+
+  <div id="gw-filters">
+    <select id="f-phase"><option value="">phase: all</option></select>
+    <select id="f-gate"><option value="">gate: all</option></select>
+    <select id="f-type"><option value="">type: all</option></select>
+    <select id="f-stage"><option value="">stage: all</option></select>
+    <select id="f-flag"><option value="">flag: all</option></select>
+    <input type="search" id="f-search" placeholder="search id / title / scope">
+    <button class="clear-filters" id="f-clear">clear</button>
+  </div>
+
+  <main id="gw-view"></main>
+
+  <div id="gw-empty" class="hidden">
+    <h2>No items yet</h2>
+    <p>Add your first item with <code>gw add "&lt;title&gt;"</code>, then <code>gw open</code> again to refresh this snapshot.</p>
+  </div>
+
+  <div id="gw-overlay">
+    <div id="gw-panel" role="dialog" aria-label="Item detail"></div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  function readBlock(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const text = el.textContent.trim();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return null; }
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  }
+
+  // -- rules, mirrored from lib/rules.js so the panel can explain a disabled
+  // stage button the same way `gw move` would refuse the command.
+  function stageList(stages) { return [...(stages.stages || []), ...(stages.extra || [])]; }
+  function stageIndexOf(stages, id) { return (stages.stages || []).findIndex((s) => s.id === id); }
+  function nextStageId(stages, id) {
+    const i = stageIndexOf(stages, id);
+    return i >= 0 ? (stages.stages[i + 1] ? stages.stages[i + 1].id : null) : null;
+  }
+  function evaluateRequires(item, targetId, ctx) {
+    const target = stageList(ctx.stages).find((s) => s.id === targetId);
+    const requires = target && target.requires;
+    if (!requires) return { ok: true, failures: [] };
+    const failures = [];
+    if (requires.owner && !item.owner) failures.push('needs an owner: run `gw claim ' + item.id + '`');
+    if (requires.evidence_min && (item.evidence || []).length < requires.evidence_min) {
+      failures.push('needs at least ' + requires.evidence_min + ' evidence entr' + (requires.evidence_min === 1 ? 'y' : 'ies') + ': run `gw move ' + item.id + ' ' + targetId + ' --evidence <e>`');
+    }
+    if (requires.evidence_match) {
+      const re = new RegExp(requires.evidence_match);
+      if (!(item.evidence || []).some((e) => re.test(e))) failures.push('needs matching evidence: run `gw move ' + item.id + ' ' + targetId + ' --evidence <e>`');
+    }
+    if (requires.deps_at_least) {
+      const boundary = stageIndexOf(ctx.stages, requires.deps_at_least);
+      const byId = new Map(ctx.items.map((c) => [c.id, c]));
+      const bad = (item.deps || []).filter((id) => { const dep = byId.get(id); return !dep || stageIndexOf(ctx.stages, dep.stage) < boundary; });
+      if (bad.length) failures.push('dependencies must be at least ' + requires.deps_at_least + ': ' + bad.join(', ') + '. Move them with `gw move <id> ' + requires.deps_at_least + '`.');
+    }
+    return { ok: failures.length === 0, failures };
+  }
+
+  const STAGE_LABEL_FALLBACK = (id) => id;
+
+  const State = {
+    items: [], events: [], stages: { stages: [], extra: [] }, config: {}, generatedAt: null, live: false,
+    view: 'overview',
+    filters: { phase: '', gate: '', type: '', stage: '', flag: '', search: '' },
+    sort: { key: 'updated', dir: 'desc' },
+  };
+
+  async function loadState() {
+    const items = readBlock('gw-items');
+    const events = readBlock('gw-events');
+    const stages = readBlock('gw-stages');
+    const config = readBlock('gw-config');
+    const blocksInjected = stages !== null && config !== null;
+
+    if (!blocksInjected && location.protocol.indexOf('http') === 0) {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            items: data.items || [], events: data.events || [],
+            stages: data.stages || { stages: [], extra: [] }, config: data.config || {},
+            generatedAt: data.generatedAt || new Date().toISOString(), live: true,
+          };
+        }
+      } catch { /* no server yet; fall through to whatever was injected */ }
+    }
+
+    return {
+      items: items || [], events: events || [],
+      stages: stages || { stages: [], extra: [] }, config: config || {},
+      generatedAt: (config && config.generatedAt) || null, live: false,
+    };
+  }
+
+  function stageLabel(id) {
+    const s = stageList(State.stages).find((s) => s.id === id);
+    return s ? s.label : STAGE_LABEL_FALLBACK(id);
+  }
+
+  function filteredItems() {
+    const f = State.filters;
+    const q = f.search.trim().toLowerCase();
+    return State.items.filter((it) => {
+      if (f.phase && it.phase !== f.phase) return false;
+      if (f.gate && it.gate !== f.gate) return false;
+      if (f.type && it.type !== f.type) return false;
+      if (f.stage && it.stage !== f.stage) return false;
+      if (f.flag && it.flag !== f.flag) return false;
+      if (q) {
+        const hay = ((it.id || '') + ' ' + (it.title || '') + ' ' + (it.scope || '')).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function populateFilterOptions() {
+    const vocab = (State.config && State.config.vocab) || {};
+    function fill(select, values, current) {
+      const keep = select.querySelector('option[value=""]');
+      select.innerHTML = '';
+      select.appendChild(keep);
+      for (const v of values) {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        if (v === current) opt.selected = true;
+        select.appendChild(opt);
+      }
+    }
+    fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase);
+    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate);
+    fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type);
+    fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
+    fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
+  }
+
+  function renderHeader() {
+    document.getElementById('gw-snapshot-meta').innerHTML = State.live
+      ? '<span class="live-pill">live · gw serve</span>'
+      : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>';
+    const total = State.items.length;
+    const flagged = State.items.filter((i) => i.flag).length;
+    const terminal = new Set(State.stages.terminal || []);
+    const open = State.items.filter((i) => !terminal.has(i.stage)).length;
+    document.getElementById('gw-totals').innerHTML =
+      '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
+  }
+
+  function renderOverview(container) {
+    function counts(key) {
+      const map = new Map();
+      for (const it of State.items) {
+        const k = it[key] || '(none)';
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      return [...map.entries()].sort((a, b) => b[1] - a[1]);
+    }
+    function card(title, rows, labelFor) {
+      const max = Math.max(1, ...rows.map((r) => r[1]));
+      const body = rows.map(([k, n]) =>
+        '<div class="count-row"><span>' + escapeHtml(labelFor ? labelFor(k) : k) + '</span>' +
+        '<span class="bar"><span style="width:' + Math.round((n / max) * 100) + '%"></span></span>' +
+        '<span>' + n + '</span></div>'
+      ).join('');
+      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') + '</div>';
+    }
+    const byStageOrdered = stageList(State.stages).map((s) => [s.id, State.items.filter((i) => i.stage === s.id).length]).filter((r) => r[1] > 0);
+    container.innerHTML = '<div class="overview-grid">' +
+      card('By stage', byStageOrdered, stageLabel) +
+      card('By phase', counts('phase')) +
+      card('By gate', counts('gate')) +
+      card('By type', counts('type')) +
+      '</div>';
+  }
+
+  function cardMarkup(it) {
+    const evCount = (it.evidence || []).length;
+    return '<div class="card" data-id="' + escapeHtml(it.id) + '">' +
+      '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
+      '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
+      '<div class="card-meta">' +
+      '<span class="tag">' + escapeHtml(it.type || '?') + '</span>' +
+      (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
+      (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
+      '<span class="tag mono">ev:' + evCount + '</span>' +
+      '</div></div>';
+  }
+
+  function renderBoard(container) {
+    const items = filteredItems();
+    const cols = stageList(State.stages);
+    container.innerHTML = '<div id="board">' + cols.map((s) => {
+      const inCol = items.filter((i) => i.stage === s.id);
+      return '<div class="column"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
+        '<div class="column-body">' + (inCol.map(cardMarkup).join('') || '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  function renderTable(container) {
+    const items = filteredItems();
+    const cols = [
+      ['id', 'ID'], ['title', 'Title'], ['type', 'Type'], ['phase', 'Phase'], ['gate', 'Gate'],
+      ['priority', 'Priority'], ['stage', 'Stage'], ['flag', 'Flag'], ['owner', 'Owner'], ['updated', 'Updated'],
+    ];
+    const key = State.sort.key, dir = State.sort.dir;
+    const sorted = [...items].sort((a, b) => {
+      const av = a[key] == null ? '' : a[key], bv = b[key] == null ? '' : b[key];
+      const cmp = String(av).localeCompare(String(bv));
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    container.innerHTML = '<table class="gw-table"><thead><tr>' +
+      cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
+        '<td class="id">' + escapeHtml(it.id) + '</td>' +
+        '<td>' + escapeHtml(it.title) + '</td>' +
+        '<td>' + escapeHtml(it.type) + '</td>' +
+        '<td>' + escapeHtml(it.phase) + '</td>' +
+        '<td>' + escapeHtml(it.gate) + '</td>' +
+        '<td>' + escapeHtml(it.priority) + '</td>' +
+        '<td>' + escapeHtml(stageLabel(it.stage)) + '</td>' +
+        '<td>' + (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(it.owner) + '</td>' +
+        '<td>' + escapeHtml(fmtDate(it.updated)) + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table>';
+  }
+
+  function renderStages(container) {
+    const cols = stageList(State.stages);
+    container.innerHTML = cols.map((s) => {
+      const req = s.requires ? JSON.stringify(s.requires, null, 2) : '(no machine rule — advanced manually)';
+      const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', (State.stages.terminal || []).includes(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
+      return '<div class="stage-rule"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' +
+        (s.exit ? '<p class="exit">' + escapeHtml(s.exit) + '</p>' : '') +
+        '<div class="requires">' + escapeHtml(req) + '</div>' +
+        (flags ? '<div class="flags">' + escapeHtml(flags) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  function renderExport(container) {
+    container.innerHTML = '<div class="export-panel"><p>Download this snapshot as JSON — items, events, stages, and config exactly as loaded.</p><button id="export-btn">Download JSON</button></div>';
+    container.querySelector('#export-btn').addEventListener('click', () => {
+      const payload = JSON.stringify({ items: State.items, events: State.events, stages: State.stages, config: State.config, generatedAt: State.generatedAt }, null, 2);
+      const blob = new Blob([payload], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'gatewright-board.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  function renderView() {
+    const container = document.getElementById('gw-view');
+    const empty = document.getElementById('gw-empty');
+    if (State.items.length === 0) {
+      container.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    if (State.view === 'overview') renderOverview(container);
+    else if (State.view === 'board') renderBoard(container);
+    else if (State.view === 'table') renderTable(container);
+    else if (State.view === 'stages') renderStages(container);
+    else if (State.view === 'export') renderExport(container);
+  }
+
+  function openPanel(id) {
+    const it = State.items.find((i) => i.id === id);
+    if (!it) return;
+    const panel = document.getElementById('gw-panel');
+    const overlay = document.getElementById('gw-overlay');
+    const itemEvents = State.events.filter((e) => e.item === id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+
+    const target = nextStageId(State.stages, it.stage);
+    const evalResult = target ? evaluateRequires(it, target, State) : null;
+
+    const banner = State.live
+      ? ''
+      : '<div class="readonly-banner">read-only snapshot' +
+        (target ? ' &middot; to advance this item run: <code>gw move ' + escapeHtml(it.id) + ' ' + escapeHtml(target) + ' --evidence &lt;commit&gt;</code>' : '') +
+        '</div>';
+
+    const stageButtons = stageList(State.stages).slice(0, (stageList(State.stages).length)).map((s) => {
+      if (s.id === it.stage) return '';
+      const isNext = s.id === target;
+      let reason = '';
+      if (!isNext) reason = 'use `gw move --force` to skip stages';
+      else if (evalResult && !evalResult.ok) reason = evalResult.failures.join('; ');
+      return '<button disabled title="' + escapeHtml(reason || 'read-only snapshot') + '">' + escapeHtml(s.label) + '</button>';
+    }).join('');
+
+    const fields = ['id', 'title', 'phase', 'priority', 'gate', 'type', 'stage', 'flag', 'owner', 'scope', 'deps', 'evidence', 'notes', 'refs', 'parent', 'created_by', 'gh', 'created', 'updated'];
+    const dl = fields.map((f) => {
+      let v = it[f];
+      if (Array.isArray(v)) v = v.length ? v.join(', ') : '(none)';
+      else if (v && typeof v === 'object') v = JSON.stringify(v);
+      else if (v == null || v === '') v = '(none)';
+      return '<dt>' + f + '</dt><dd class="' + (f === 'id' || f === 'evidence' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
+    }).join('');
+
+    const eventsHtml = itemEvents.length
+      ? itemEvents.map((e) => '<div class="event-line"><time>' + escapeHtml(fmtDate(e.ts)) + '</time><span>' + escapeHtml(e.type) + (e.from ? ' ' + escapeHtml(e.from) + '→' + escapeHtml(e.to) : '') + ' by ' + escapeHtml(e.by) + '</span></div>').join('')
+      : '<p class="meta">no events recorded</p>';
+
+    panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
+      '<p>' + escapeHtml(it.title) + '</p>' +
+      banner +
+      '<div class="stage-buttons">' + stageButtons + '</div>' +
+      '<dl>' + dl + '</dl>' +
+      '<h3>Event history</h3>' + eventsHtml;
+
+    panel.querySelector('#panel-close').addEventListener('click', closePanel);
+    overlay.classList.add('open');
+  }
+
+  function closePanel() {
+    document.getElementById('gw-overlay').classList.remove('open');
+  }
+
+  function wireStatic() {
+    document.querySelectorAll('#gw-tabs button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#gw-tabs button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        State.view = btn.dataset.view;
+        renderView();
+      });
+    });
+
+    ['phase', 'gate', 'type', 'stage', 'flag'].forEach((key) => {
+      const el = document.getElementById('f-' + key);
+      el.addEventListener('change', () => { State.filters[key] = el.value; renderView(); });
+    });
+    document.getElementById('f-search').addEventListener('input', (e) => { State.filters.search = e.target.value; renderView(); });
+    document.getElementById('f-clear').addEventListener('click', () => {
+      State.filters = { phase: '', gate: '', type: '', stage: '', flag: '', search: '' };
+      document.querySelectorAll('#gw-filters select').forEach((s) => { s.value = ''; });
+      document.getElementById('f-search').value = '';
+      renderView();
+    });
+
+    document.getElementById('gw-view').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-id]');
+      if (card) openPanel(card.dataset.id);
+    });
+    document.getElementById('gw-view').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-key]');
+      if (!th) return;
+      const key = th.dataset.key;
+      if (State.sort.key === key) State.sort.dir = State.sort.dir === 'asc' ? 'desc' : 'asc';
+      else { State.sort.key = key; State.sort.dir = 'asc'; }
+      renderView();
+    });
+
+    document.getElementById('gw-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'gw-overlay') closePanel();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePanel();
+    });
+  }
+
+  async function boot() {
+    const loaded = await loadState();
+    Object.assign(State, loaded);
+    populateFilterOptions();
+    renderHeader();
+    wireStatic();
+    renderView();
+  }
+
+  // The injected data blocks are appended after this script tag in document
+  // order, so they haven't been parsed yet when this script runs. Wait for
+  // DOMContentLoaded so getElementById can find them.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
