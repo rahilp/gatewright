@@ -39,6 +39,7 @@
   "github": {
     "enabled": false,
     "repo": null,
+    "sync_interval_min": null,
     "dispatch_label": "agent/go",
     "mirror_children": false,
     "comment_on_move": true,
@@ -93,6 +94,7 @@
   "policy": {
     "auto_dispatch_children": false,
     "max_children_per_item": 10,
+    "max_depth": 3,
     "triage_required_for": [
       "agent"
     ]
