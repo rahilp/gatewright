@@ -1,0 +1,31 @@
+{
+  "name": "gatewright",
+  "version": "0.1.0-dev",
+  "description": "Evidence-gated work tracking for coding agents. File-first, provider-agnostic, zero dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Rahil Pirani",
+  "homepage": "https://gatewright.dev",
+  "bin": {
+    "gw": "bin/gw.js",
+    "gatewright": "bin/gw.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "templates/",
+    "viewer/",
+    "adapters/"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["agents", "tracker", "kanban", "claude-code", "codex", "cli"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahilpirani/gatewright.git"
+  }
+}
