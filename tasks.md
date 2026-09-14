@@ -109,6 +109,9 @@ All closed 2026-09-14. Rationale in `PRD.md` § Decisions.
 
 ## Parking lot (not scheduled)
 
+- **Configurable pipeline vocabulary.** `dropped`, `paused`, `backlog` and `verified` are hardcoded across add, import, check, brief and move (found in the v0.1 consolidation sweep). `check.stale_exempt_stages` set the precedent that process belongs in config, but finishing the job needs a semantics mapping — which stage means "dropped", which flag means "paused" — so a user with a custom pipeline gets correct behaviour everywhere, not just in staleness. Design change, not cleanup.
+- **`id_scheme` is advertised but only `phase-seq` is implemented.** `lib/ids.js` throws on any other value, which is honest, but `config.json` implies a choice that does not exist yet.
+
 - Rebuild `items.jsonl` from events.
 - `events.jsonl` rotation.
 - Multi-repo aggregation.
