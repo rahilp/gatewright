@@ -548,6 +548,42 @@ Push:
 
 Conflict rule: GitHub-owned fields take the newer `updated_at`. Tracker-owned fields are never written by sync. There is no three-way merge.
 
+### 9.1 How sync is built, so it can be trusted
+
+**One injectable wrapper.** Every `gh` invocation goes through a single function
+that takes the argv and returns stdout. Nothing else in the codebase shells out
+to `gh`. That function is injectable, so the entire sync layer is tested against
+a stub that returns recorded fixtures and the test suite never touches the
+network or needs a GitHub account. A sync that can only be tested by syncing is
+a sync nobody will refactor.
+
+**`--dry-run` prints what it would do and touches nothing** — neither GitHub nor
+`.gatewright/`. It is the first thing a cautious user runs against a real repo,
+so it is not an afterthought.
+
+**Sync is idempotent.** `last_sync` is a watermark, not a checkpoint: running
+sync twice with no intervening change produces no writes and no events, and a
+test asserts exactly that by hashing the data files. A sync that churns the
+board on every run makes `git log` on `.gatewright/` useless, which is one of
+the reasons the data is in git at all.
+
+**An incoming issue lands in the stage it has earned.** Issues arrive in the
+`initial` role's stage regardless of how finished they look on GitHub — closed,
+labelled done, whatever. This is the same invariant import already enforces
+(§6): nothing mints a stage that was never earned, or the board means nothing.
+A closed issue with no corresponding work is flagged for a human, not silently
+marked verified.
+
+**A label that maps to a value outside `config.vocab` is a warning, not a
+write.** The item keeps its previous value and sync reports the mismatch, naming
+the label and the field. Writing an unvalidated value would let GitHub put the
+board into a state the CLI would refuse to create, and `gw check` would then
+report an item the user cannot fix from the board's own tools.
+
+**`gh` missing or unauthenticated is a clear error naming the fix** (`gh auth
+login`), not a stack trace. We never handle tokens; that is the whole reason
+this shells out rather than calling the API.
+
 ## 10. Runner (v0.4)
 
 Scheduler loop in `serve`, every `tick_s` (default 5):
