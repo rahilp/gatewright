@@ -166,6 +166,62 @@ Semantics:
 
 Order in the array is the pipeline order. Users edit this file to change their process; nothing is hardcoded.
 
+### 4.1 Stage roles
+
+Some behaviour needs to know what a stage *means*, not what it is called: where
+new items start, what a source marking work "done" maps to, which stage means
+abandoned. Naming those stages in code — `stage === 'backlog'` — silently breaks
+every pipeline that does not use our words, which contradicts the sentence above.
+
+A stage may declare a `role`:
+
+| role | meaning | used by |
+|---|---|---|
+| `initial` | where new items start | `add`, `import` |
+| `done` | what a source "done" marker maps to | `import` |
+| `dropped` | abandoned; a dependency here can never be satisfied | `check`, `brief` |
+| `paused` | parked; leaving it clears the `paused` flag | `move` |
+
+```json
+{ "id": "icebox", "label": "Icebox", "role": "initial" },
+{ "id": "shipped", "label": "Shipped", "role": "done" }
+```
+
+The role is a property of the stage rather than a mapping in `config.json`,
+because a mapping is a reference and a reference can name a stage that does not
+exist. A `role` key cannot be wrong about which stage it belongs to. It is the
+same choice already made for `auto`.
+
+**Defaults, so that the common case needs no configuration:**
+
+- `initial` — the first stage in pipeline order.
+- `done` — the last stage in pipeline order.
+- `dropped` and `paused` — a stage with that `id`, if one exists, whether in the
+  pipeline or in `extra`.
+
+The shipped eight-stage default therefore declares no roles at all: `backlog` is
+first, `verified` is last, and `dropped` and `paused` are found by id. An
+existing board keeps working with no migration.
+
+A role that resolves to nothing disables the behaviour that needs it rather than
+failing: a pipeline with no `dropped` stage simply never reports a dropped
+dependency. A role may be declared at most once; two stages claiming the same
+role is a configuration error, not a race to be resolved.
+
+### 4.2 Validating the process definition
+
+`stages.json` is user-edited, so it is checked like any other input. `gw check`
+validates it and reports, before it looks at any item:
+
+- a `role` that is not one of the four above, or claimed by two stages
+- `terminal` naming a stage that does not exist
+- `requires.deps_at_least` naming a stage that is not in the pipeline
+- `requires.evidence_match` that is not a valid regular expression
+- an empty pipeline, or duplicate stage ids
+
+A board whose rules are malformed cannot be trusted to enforce anything, so
+this runs first and exits non-zero on any finding.
+
 ## 5. config.json
 
 ```json
@@ -226,6 +282,16 @@ Order in the array is the pipeline order. Users edit this file to change their p
   }
 }
 ```
+
+`id_scheme` selects how ids are assigned. `phase-seq` gives `P2-01`, numbered
+per phase, with children as `P2-01.1`. `seq` gives `T-0001`, numbered across the
+whole board, with children as `T-0001.1`, for teams who would rather an id never
+imply a phase. Any other value is refused at write time, naming the supported
+schemes — a config key that silently accepts a value it does not implement is
+worse than one that does not exist.
+
+New items take their default phase from `vocab.phase[0]` rather than a literal
+`P1`, and no phase at all when no vocabulary is configured.
 
 `vocab.priority` is an **ordered** array, highest priority first. It is the scheduler's pick order (§10) as well as a validation list; the other vocab arrays are validation only.
 
