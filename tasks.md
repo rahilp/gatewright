@@ -109,8 +109,7 @@ All closed 2026-09-14. Rationale in `PRD.md` § Decisions.
 
 ## Parking lot (not scheduled)
 
-- **Configurable pipeline vocabulary.** `dropped`, `paused`, `backlog` and `verified` are hardcoded across add, import, check, brief and move (found in the v0.1 consolidation sweep). `check.stale_exempt_stages` set the precedent that process belongs in config, but finishing the job needs a semantics mapping — which stage means "dropped", which flag means "paused" — so a user with a custom pipeline gets correct behaviour everywhere, not just in staleness. Design change, not cleanup.
-- **`id_scheme` is advertised but only `phase-seq` is implemented.** `lib/ids.js` throws on any other value, which is honest, but `config.json` implies a choice that does not exist yet.
+- **Markdown import assumes `## P<n>` phase headings.** Deliberate: the parser implements Gatewright's own documented `tasks.md` format, and accepting arbitrary phase tokens would turn a format contract into config-aware parsing. A mismatched file now exits 2 with the expected format rather than importing nothing in silence. Revisit only if people are actually importing from boards with other phase vocabularies.
 
 - Rebuild `items.jsonl` from events.
 - `events.jsonl` rotation.
