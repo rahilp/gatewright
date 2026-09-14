@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
+import { readConfig } from '../lib/config.js';
 import { createServeServer, listen } from '../lib/serve/server.js';
 
 const item = { id: 'P1-01', title: 'Live board', phase: 'P1', priority: 'P1', gate: 'G0', type: 'feature', stage: 'backlog', flag: null, owner: null, scope: '', deps: [], evidence: [], notes: '', refs: [], parent: null, created_by: 'human', gh: null, created: '2026-01-01T00:00:00Z', updated: '2026-01-01T00:00:00Z' };
@@ -17,6 +18,31 @@ async function withServer(fn, { items = [item], stages } = {}) {
   store.appendEvent({ ts: '2026-01-02T00:00:00.000Z', type: 'move', item: item.id, by: 'human', from: 'backlog', to: 'specified' });
   const server = createServeServer({ store }); const address = await listen(server, { port: 0 });
   try { await fn({ store, url: `http://127.0.0.1:${address.port}` }); } finally { await new Promise((resolve) => server.close(resolve)); }
+}
+
+function fakeClock() {
+  let now = 0; let next = 1; const timers = new Map();
+  return {
+    now: () => now,
+    jump(ms) { now += ms; },
+    setTimeout(fn, delay) { const id = next++; timers.set(id, { fn, at: now + delay }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    async advance(ms) {
+      now += ms;
+      for (;;) {
+        const due = [...timers.entries()].filter(([, timer]) => timer.at <= now).sort((a, b) => a[1].at - b[1].at);
+        if (!due.length) break;
+        for (const [id, timer] of due) { if (timers.delete(id)) await timer.fn(); }
+        await Promise.resolve();
+      }
+    },
+  };
+}
+
+function configureGithub(store, over = {}) {
+  const config = readConfig(store);
+  config.github = { ...config.github, enabled: true, repo: 'owner/repo', sync_interval_min: 1, ...over };
+  writeFileSync(store.paths.config, JSON.stringify(config));
 }
 
 function write(url, path, body) {
@@ -111,4 +137,35 @@ test('serve rejects a non-loopback Origin and does not write board data', async 
     await fetch(url + '/'); await fetch(url + '/api/state');
     assert.equal(digest(), before);
   });
+});
+
+test('scheduled GitHub sync is off by default and makes zero gh calls', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-serve-sync-')); const store = createStore(root); store.ensure();
+  let calls = 0; const clock = fakeClock();
+  const server = createServeServer({ store, clock, ghRun: () => { calls += 1; return { stdout: '[]', status: 0 }; } });
+  try { await clock.advance(60 * 60 * 1000); assert.equal(calls, 0); } finally { server.close(); }
+});
+
+test('scheduled sync waits for its first tick and reports success, failure, and staleness', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-serve-sync-')); const store = createStore(root); store.ensure(); configureGithub(store);
+  const clock = fakeClock(); let calls = 0; const server = createServeServer({ store, clock, syncFn: async () => { calls += 1; } });
+  try {
+    assert.equal(calls, 0); await clock.advance(59 * 1000); assert.equal(calls, 0);
+    await clock.advance(1 * 1000); assert.equal(calls, 1);
+    const address = await listen(server, { port: 0 }); const state = await (await fetch(`http://127.0.0.1:${address.port}/api/state`)).json();
+    assert.equal(state.sync.status, 'success');
+    clock.jump(60 * 1000);
+    const stale = await (await fetch(`http://127.0.0.1:${address.port}/api/state`)).json(); assert.equal(stale.sync.status, 'stale');
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('a failed scheduled sync leaves serve alive and retries with backoff', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-serve-sync-')); const store = createStore(root); store.ensure(); configureGithub(store);
+  const clock = fakeClock(); let calls = 0; const server = createServeServer({ store, clock, syncFn: async () => { calls += 1; throw new Error('offline'); } });
+  try {
+    const address = await listen(server, { port: 0 }); await clock.advance(60 * 1000); assert.equal(calls, 1);
+    const state = await (await fetch(`http://127.0.0.1:${address.port}/api/state`)).json(); assert.equal(state.sync.status, 'failure'); assert.match(state.sync.lastError, /offline/);
+    await clock.advance(119 * 1000); assert.equal(calls, 1); await clock.advance(1 * 1000); assert.equal(calls, 2);
+    assert.equal((await fetch(`http://127.0.0.1:${address.port}/api/state`)).status, 200);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
