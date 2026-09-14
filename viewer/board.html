@@ -199,6 +199,7 @@
     font-size: 0.8rem;
   }
   .card:hover { border-color: var(--accent); }
+  .card.card-child { margin-left: 0.8rem; border-left: 3px solid var(--border); }
   .card.card-moved { animation: card-moved 1.6s ease-out; }
   @keyframes card-moved { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } to { border-color: var(--border); box-shadow: none; } }
   @media (prefers-reduced-motion: reduce) { .card.card-moved { animation: none; border-color: var(--accent); } }
@@ -482,7 +483,7 @@
   const STAGE_LABEL_FALLBACK = (id) => id;
 
   const State = {
-    items: [], events: [], stages: { stages: [], extra: [] }, config: {}, generatedAt: null, live: false,
+    items: [], events: [], stages: { stages: [], extra: [] }, config: {}, sync: { status: 'off' }, generatedAt: null, live: false,
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     view: 'overview',
@@ -544,6 +545,7 @@
           return {
             items: data.items || [], events: data.events || [],
             stages: data.stages || { stages: [], extra: [] }, config: data.config || {},
+            sync: data.sync || { status: 'off' },
             generatedAt: data.generatedAt || new Date().toISOString(), live: true,
           };
         }
@@ -553,6 +555,7 @@
     return {
       items: items || [], events: events || [],
       stages: stages || { stages: [], extra: [] }, config: config || {},
+      sync: { status: 'off' },
       generatedAt: (config && config.generatedAt) || null, live: false,
     };
   }
@@ -600,9 +603,15 @@
   }
 
   function renderHeader() {
+    const sync = State.sync || { status: 'off' };
+    const syncText = sync.status === 'off' ? ''
+      : sync.status === 'success' ? 'github · synced ' + syncAge(sync.lastSuccessAt) + ' ago'
+        : sync.status === 'stale' ? 'github · sync stale'
+          : sync.status === 'failure' ? 'github · sync failing' : 'github · syncing';
+    const syncPill = syncText ? ' <span class="live-pill">' + syncText + '</span>' : '';
     document.getElementById('gw-snapshot-meta').innerHTML = State.live
-      ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>'
-      : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>';
+      ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>' + syncPill
+      : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>' + syncPill;
     const total = State.items.length;
     const flagged = State.items.filter((i) => i.flag).length;
     const terminal = new Set(State.stages.terminal || []);
@@ -636,6 +645,12 @@
     return Math.max(0, Math.floor((Date.now() - State.lastLiveUpdate) / 1000)) + 's';
   }
 
+  function syncAge(iso) {
+    if (!iso) return 'never';
+    const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
+    return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm';
+  }
+
   function renderOverview(container) {
     function counts(key) {
       const map = new Map();
@@ -666,15 +681,19 @@
   function cardMarkup(it, moved) {
     const evCount = (it.evidence || []).length;
     const dispatched = isDispatched(it.id);
+    const parent = it.parent ? State.items.find((candidate) => candidate.id === it.parent) : null;
+    const parentState = it.parent && !parent ? 'orphaned parent' : parent && (State.stages.terminal || []).includes(parent.stage) ? 'parent terminal' : null;
     const actions = State.live ? '<div class="card-actions">' + (dispatched
       ? '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch. There is no runner in v0.2, so this only clears the queue entry — nothing was running to stop.">Stop</button>'
       : '<button data-play="' + escapeHtml(it.id) + '" title="Queues this item for an agent — the same as gw brief surfacing it as dispatched. Nothing starts running: v0.2 has no runner yet.">Play</button>') + '</div>' : '';
-    return '<div class="card' + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
+    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
       '<span class="tag">' + escapeHtml(it.type || '?') + '</span>' +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
+      (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
+      (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
       (dispatched ? '<span class="tag badge-queued">queued</span>' : '') +
       (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
       '<span class="tag mono">ev:' + evCount + '</span>' +
@@ -686,8 +705,10 @@
     const cols = stageList(State.stages);
     container.innerHTML = '<div id="board">' + cols.map((s) => {
       const inCol = items.filter((i) => i.stage === s.id);
+      const ordered = []; const visit = (parentId) => inCol.filter((item) => item.parent === parentId).forEach((child) => { ordered.push(child); visit(child.id); });
+      inCol.filter((item) => !item.parent || !inCol.some((candidate) => candidate.id === item.parent)).forEach((root) => { ordered.push(root); visit(root.id); });
       return '<div class="column" data-stage="' + escapeHtml(s.id) + '"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
-        '<div class="column-body">' + (inCol.map(cardMarkup).join('') || '') + '</div></div>';
+        '<div class="column-body">' + (ordered.map(cardMarkup).join('') || '') + '</div></div>';
     }).join('') + '</div>';
   }
 
@@ -1130,7 +1151,7 @@
       const data = await res.json(); const previous = State.items;
       const priorDispatch = new Map(previous.map((item) => [item.id, isDispatched(item.id)]));
       State.items = data.items || []; mergeEvents(data.events || []);
-      State.stages = data.stages || State.stages; State.config = data.config || State.config;
+      State.stages = data.stages || State.stages; State.config = data.config || State.config; State.sync = data.sync || State.sync;
       State.generatedAt = data.generatedAt || new Date().toISOString();
       State.lastLiveUpdate = Date.now(); State.liveError = null; State.pollingDelay = 2000;
       populateFilterOptions(); renderHeader();

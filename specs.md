@@ -266,6 +266,7 @@ this runs first and exits non-zero on any finding.
   "github": {
     "enabled": false,
     "repo": null,
+    "sync_interval_min": null,
     "dispatch_label": "agent/go",
     "mirror_children": false,
     "comment_on_move": true,
@@ -320,6 +321,7 @@ this runs first and exits non-zero on any finding.
   "policy": {
     "auto_dispatch_children": false,
     "max_children_per_item": 10,
+    "max_depth": 3,
     "triage_required_for": [
       "agent"
     ]
@@ -349,6 +351,8 @@ this runs first and exits non-zero on any finding.
 }
 ```
 
+`github.sync_interval_min` sets the optional serve GitHub sync interval in minutes; `null` disables scheduled sync (the default).
+
 `id_scheme` selects how ids are assigned. `phase-seq` gives `P2-01`, numbered
 per phase, with children as `P2-01.1`. `seq` gives `T-0001`, numbered across the
 whole board, with children as `T-0001.1`, for teams who would rather an id never
@@ -360,6 +364,8 @@ New items take their default phase from `vocab.phase[0]` rather than a literal
 `P1`, and no phase at all when no vocabulary is configured.
 
 `vocab.priority` is an **ordered** array, highest priority first. It is the scheduler's pick order (§10) as well as a validation list; the other vocab arrays are validation only.
+
+`policy.max_depth` (default 3) limits child nesting; adding a child beyond that depth is refused.
 
 Staleness is about work that should still be moving, so stages representing finished work are exempt through `check.stale_exempt_stages`.
 

@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
 import { run } from '../lib/commands/add.js';
+import { isSchedulable } from '../lib/policy.js';
+import { readStages } from '../lib/config.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 function repo(config = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-add-')); mkdirSync(join(root, '.gatewright')); writeFileSync(join(root, '.gatewright/config.json'), JSON.stringify({ vocab: { phase: ['P1', 'P2'] }, policy: {}, ...config })); const store = createStore(root); store.ensure(); return { root, store }; }
@@ -73,6 +75,33 @@ test('agent child policy and vocabulary validation are enforced', () => {
   const { store } = repo({ vocab: { phase: ['P1'], type: ['feature'] }, policy: { max_children_per_item: 0, triage_required_for: ['agent'], auto_dispatch_children: false } }); store.writeItems([{ id: 'P1-01', parent: null }]);
   assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01', phase: 'P1', type: 'feature' }, positionals: ['child'], stdout: { write() {} } }), /children/i);
   assert.throws(() => run({ store, root: store.root, actor: 'human:x', flags: { phase: 'P9' }, positionals: ['bad'], stdout: { write() {} } }), /P1/);
+});
+
+test('agent creation is held, is capped per parent, and a human is not subject to the agent cap', () => {
+  const { store } = repo({ policy: { max_children_per_item: 10, triage_required_for: ['agent'], auto_dispatch_children: false } });
+  store.writeItems([{ id: 'P1-01', parent: null }, ...Array.from({ length: 10 }, (_, n) => ({ id: `P1-01.${n + 1}`, parent: 'P1-01' }))]);
+  assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: ['eleventh'], stdout: { write() {} } }), /P1-01.*max_children_per_item \(10\)/);
+  run({ store, root: store.root, actor: 'human:lead', flags: { parent: 'P1-01' }, positionals: ['human child'], stdout: { write() {} } });
+  assert.equal(store.readItems().at(-1).flag, null);
+});
+
+test('a fourth-generation child is refused at the default max_depth of 3', () => {
+  const { store } = repo();
+  store.writeItems([
+    { id: 'P1-01', parent: null }, { id: 'P1-01.1', parent: 'P1-01' },
+    { id: 'P1-01.1.1', parent: 'P1-01.1' }, { id: 'P1-01.1.1.1', parent: 'P1-01.1.1' },
+  ]);
+  assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01.1.1.1' }, positionals: ['too deep'], stdout: { write() {} } }), /max_depth \(3\).*P1-01\.1\.1\.1/);
+});
+
+test('agent child-creation loop terminates at the cap with every created item held and none schedulable', () => {
+  const { store } = repo({ policy: { max_children_per_item: 10, triage_required_for: ['agent'], auto_dispatch_children: false } });
+  run({ store, root: store.root, actor: 'agent:r', flags: {}, positionals: ['root'], stdout: { write() {} } });
+  for (let n = 0; n < 10; n += 1) run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: [`child ${n}`], stdout: { write() {} } });
+  assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: ['one too many'], stdout: { write() {} } }), /max_children_per_item \(10\)/);
+  const items = store.readItems();
+  assert.equal(items.length, 11); assert.equal(items.filter((item) => item.flag === 'needs-triage').length, 11);
+  assert.equal(items.filter((item) => isSchedulable(item, { config: {}, stages: readStages(store), items })).length, 0);
 });
 
 test('add uses the shared vocabulary validation message', () => {

@@ -29,6 +29,13 @@ test('brief reproduces the fixed section order and filters dispatches by owner',
   assert.match(out, /P2-01.*specified → building/);
 });
 
+test('brief shows each parent its open child count', () => {
+  const parent = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', flag: null, deps: [] };
+  const child = { ...makeItems(1)[0], id: 'P1-01.1', parent: 'P1-01', stage: 'backlog', flag: null, deps: [] };
+  const out = renderBrief({ items: [parent, child], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /P1-01.*1 open child/);
+});
+
 test('brief footer derives the stage before the first evidence gate', () => {
   const foreignStages = {
     stages: [
