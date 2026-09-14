@@ -7,13 +7,15 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
 import { run } from '../lib/commands/move.js';
+import { run as check } from '../lib/commands/check.js';
 import { RuleError, UsageError } from '../lib/cli/errors.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const stages = {
   stages: [
-    { id: 'backlog' }, { id: 'building', requires: { owner: true } },
-    { id: 'built', requires: { evidence_min: 1 } }, { id: 'verified', requires: { evidence_min: 2 } },
+    { id: 'backlog' }, { id: 'specified' }, { id: 'building', requires: { owner: true } },
+    { id: 'built', requires: { evidence_min: 1 } }, { id: 'in_review', requires: { evidence_match: '^https://github.com/.+/pull/\\d+' } },
+    { id: 'reviewed' }, { id: 'merged' }, { id: 'verified', requires: { evidence_min: 2 } },
   ], terminal: ['verified', 'dropped'], extra: [{ id: 'dropped' }, { id: 'paused' }],
 };
 const item = (over = {}) => ({ id: 'P1-01', title: 'test', stage: 'backlog', flag: null, owner: null, deps: [], evidence: [], updated: '2020-01-01T00:00:00.000Z', gh: null, ...over });
@@ -29,8 +31,41 @@ function ctx(b, positionals, flags = {}) { return { flags, positionals, store: b
 
 test('--force never bypasses requires', () => {
   const b = board();
-  assert.throws(() => run(ctx(b, ['P1-01', 'built'], { force: true })), (error) => error instanceof RuleError && /needs at least 1 evidence/.test(error.failures[0]));
+  assert.throws(() => run(ctx(b, ['P1-01', 'built'], { force: true })), (error) => error instanceof RuleError && /built: needs at least 1 evidence/.test(error.failures.join('\n')));
   assert.equal(b.store.readItems()[0].stage, 'backlog');
+});
+
+test('force jump to merged refuses every skipped owner evidence and PR gate', () => {
+  const b = board();
+  assert.throws(() => execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'merged', '--force'], { cwd: b.root, encoding: 'utf8' }), (error) => {
+    assert.equal(error.status, 1);
+    assert.match(error.stderr, /building: needs an owner/);
+    assert.match(error.stderr, /built: needs at least 1 evidence/);
+    assert.match(error.stderr, /in_review: needs matching evidence/);
+    return true;
+  });
+  assert.equal(b.store.readItems()[0].stage, 'backlog');
+});
+
+test('force jump with already-satisfied intermediate gates still succeeds', () => {
+  const b = board([item({ stage: 'specified', owner: 'human:test', evidence: ['abc123'] })]);
+  run(ctx(b, ['P1-01', 'built'], { force: true }));
+  assert.equal(b.store.readItems()[0].stage, 'built');
+});
+
+test('an item progressed through every gate in order remains valid to move and check', () => {
+  const b = board([item({ stage: 'backlog' })]);
+  run(ctx(b, ['P1-01', 'specified']));
+  b.store.writeItems([item({ stage: 'specified', owner: 'human:test', evidence: [] })]);
+  run(ctx(b, ['P1-01', 'building']));
+  run(ctx(b, ['P1-01', 'built'], { evidence: ['abc123'] }));
+  run(ctx(b, ['P1-01', 'in_review'], { evidence: ['https://github.com/a/b/pull/1'] }));
+  run(ctx(b, ['P1-01', 'reviewed']));
+  run(ctx(b, ['P1-01', 'merged']));
+  assert.equal(b.store.readItems()[0].stage, 'merged');
+  let output = '';
+  assert.equal(check({ ...ctx(b, []), stdout: { write(text) { output += text; } } }), 0);
+  assert.equal(output, 'Board is clean.\n');
 });
 
 test('move counts command evidence toward the target requirement and writes one move event', () => {
@@ -53,6 +88,8 @@ test('move refuses an out-of-order pipeline target without force but allows side
   assert.throws(() => run(ctx(b, ['P1-01', 'built'])), (error) => error instanceof RuleError && /use --force to skip stages/.test(error.message));
   run(ctx(b, ['P1-01', 'paused']));
   assert.equal(b.store.readItems()[0].stage, 'paused');
+  const dropped = board(); run(ctx(dropped, ['P1-01', 'dropped']));
+  assert.equal(dropped.store.readItems()[0].stage, 'dropped');
 });
 
 test('move rejects unknown items, unknown stages, same stages, and terminal moves', () => {

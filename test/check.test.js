@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js';
 import { run } from '../lib/commands/check.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
-const stages = { stages: [{ id: 'backlog' }, { id: 'building', requires: { owner: true } }, { id: 'built', requires: { evidence_min: 1 } }, { id: 'verified', requires: { evidence_min: 2 } }, { id: 'merged' }], terminal: ['verified', 'dropped'], extra: [{ id: 'dropped' }, { id: 'paused' }] };
+const stages = { stages: [{ id: 'backlog' }, { id: 'specified' }, { id: 'building', requires: { owner: true } }, { id: 'built', requires: { evidence_min: 1 } }, { id: 'in_review', requires: { evidence_match: '^https://github.com/.+/pull/\\d+' } }, { id: 'reviewed' }, { id: 'merged' }, { id: 'verified', requires: { evidence_min: 2 } }], terminal: ['verified', 'dropped'], extra: [{ id: 'dropped' }, { id: 'paused' }] };
 const item = (over = {}) => ({ id: 'P1-01', title: 'test', stage: 'backlog', owner: null, deps: [], evidence: [], updated: new Date().toISOString(), gh: null, flag: null, ...over });
 function board(items = [item()]) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(stages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7 } })); return { root, store }; }
 function ctx(b, flags = {}) { let output = ''; return { output: () => output, ctx: { flags, positionals: [], store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write(s) { output += s; } }, stderr: { write(s) { output += s; } } } }; }
@@ -35,17 +35,24 @@ test('check catches a hand-placed verified item with no evidence', () => {
 });
 
 test('check does not report a legitimately verified item with two evidence entries', () => {
-  const b = board([item({ stage: 'verified', evidence: ['abc123', 'test/check.test.js'] })]);
+  const b = board([item({ stage: 'verified', owner: 'human:test', evidence: ['abc123', 'https://github.com/a/b/pull/1'] })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 0);
   assert.equal(result.output(), 'Board is clean.\n');
 });
 
 test('check does not report a terminal merged item as stale', () => {
-  const b = board([item({ stage: 'merged', owner: 'human:test', updated: '2020-01-01T00:00:00.000Z' })]);
+  const b = board([item({ stage: 'merged', owner: 'human:test', evidence: ['abc123', 'https://github.com/a/b/pull/1'], updated: '2020-01-01T00:00:00.000Z' })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 0);
   assert.equal(result.output(), 'Board is clean.\n');
+});
+
+test('check catches a hand-edited merged item that skipped the built evidence gate', () => {
+  const b = board([item({ stage: 'merged' })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*built: needs at least 1 evidence/i);
 });
 
 test('check groups current-stage, missing-dependency, cycle, dropped-dependency, stale, and conflict findings', () => {

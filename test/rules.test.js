@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stageList, stageIndex, nextStage, evaluateRequires, findCycles, missingDeps } from '../lib/rules.js';
+import { stageList, stageIndex, nextStage, evaluateRequires, evaluateCumulative, findCycles, missingDeps } from '../lib/rules.js';
 
 const stages = { stages: [
   { id: 'backlog' }, { id: 'building', requires: { owner: true } },
@@ -35,6 +35,15 @@ test('dependency stage requirement accepts its boundary and rejects earlier, mis
 });
 
 test('a stage without requirements passes', () => assert.deepEqual(evaluateRequires(item(), 'backlog', { items: [], stages }), { ok: true, failures: [] }));
+
+test('cumulative rules name each pipeline gate skipped by a late-stage jump', () => {
+  const result = evaluateCumulative(item(), 'review', { items: [], stages });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.join('\n'), /building: needs an owner/);
+  assert.match(result.failures.join('\n'), /built: needs at least 1 evidence/);
+  assert.match(result.failures.join('\n'), /review: needs matching evidence/);
+  assert.deepEqual(evaluateCumulative(item(), 'paused', { items: [], stages }), { ok: true, failures: [] });
+});
 
 test('findCycles deterministically finds self, two-item, and three-item cycles', () => {
   assert.deepEqual(findCycles([item({ id: 'A', deps: ['A'] })]), [['A']]);
