@@ -12,7 +12,7 @@ All closed 2026-09-14. Rationale in `PRD.md` § Decisions.
 
 - **P0-01** · Item ID scheme · decision · G0 · — · **Decided:** phase-seq (`P2-01`, children `P2-01.1`); an item that changes phase keeps its ID. Recorded in `specs.md` §2 and `config.json.id_scheme`. ✅
 - **P0-02** · License · decision · G0 · — · **Decided:** MIT. LICENSE lands with P1-01. ✅
-- **P0-03** · Package name and domain · decision · G0 · — · **Decided:** `gatewright@0.0.1` placeholder published, `gatewright.dev` registered, `bin` exposes both `gw` and `gatewright` so a PATH collision on `gw` never blocks anyone. ✅
+- **P0-03** · Package name and domain · decision · G0 · — · **Decided:** name `gatewright`, `gatewright.dev` registered, `bin` exposes both `gw` and `gatewright` so a PATH collision on `gw` never blocks anyone. ✅ · **Open:** the npm placeholder is NOT published (needs an npm login; registry returns 404), so the name is unclaimed. Blocks P1-20.
 - **P0-04** · Default stages for `init` · decision · G0 · — · **Decided:** `templates/stages.json` ships the eight-stage default (Backlog → Specified → Building → Built → In review → Reviewed → Merged → Verified) with `auto` flags set per `design.md`. ✅
 - **P0-05** · Read-only board delivery · decision · G0 · — · **Decided:** `gw open` writes a snapshot with data inlined as JSON blocks; no `file://` fetch, no File System Access API, `serve` is the only write path. Recorded in `specs.md` §7. ✅
 

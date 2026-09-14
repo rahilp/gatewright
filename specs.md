@@ -418,6 +418,36 @@ The agent inside a run uses the normal CLI. `GW_ROOT` points it at the main repo
 
 Written by `init`. Fenced so `init --force` can replace it and `upgrade` can update it.
 
+### 11.1 Where the block is written
+
+`AGENTS.md` is always created or updated. It is the provider-agnostic contract
+and every mainstream agent reads it, so a repo that has only this file is fully
+set up. In a brand-new or empty repo, it is the only file `init` writes outside
+`.gatewright/`.
+
+Provider-specific mirrors are written **only when that provider's own artifact
+already exists**, because the mirror is worthless to someone who does not use
+that provider and writing it is presumptuous:
+
+| Target | Written when |
+|---|---|
+| `CLAUDE.md` | the file already exists |
+| `.cursor/rules/gatewright.mdc` | the file exists, or `.cursor/rules/` exists |
+| `.github/copilot-instructions.md` | **the file already exists** |
+
+The asymmetry is deliberate. `.cursor/rules/` exists only if someone uses
+Cursor, so the directory is real evidence. `.github/` exists in almost every
+repo that has CI and is evidence of nothing at all — keying off it writes a
+Copilot instructions file for people who have never opened Copilot. A parent
+directory is only a signal when the directory belongs to the provider.
+
+`init --mirror <claude|cursor|copilot|all>` creates a mirror the user asks for
+even when its file is absent, which covers the case of "I use Cursor but this
+repo has no rules directory yet". `init` reports what it wrote and what it
+skipped, naming the flag, so the choice is visible rather than silent.
+
+`upgrade` refreshes every mirror that exists and creates none.
+
 ```
 <!-- gatewright:start -->
 ## Work tracking

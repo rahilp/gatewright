@@ -4,7 +4,7 @@
 
 ## Name
 
-**Gatewright.** A wright builds a thing well (shipwright, playwright); a gatewright builds gates. The product's differentiator is evidence gates between stages, so the name says what it does. Coined, with no npm, GitHub, or web collisions found on 2026-09-13. Package `gatewright`, binaries `gw` and `gatewright`, folder `.gatewright/`. `gatewright.dev` registered and `gatewright@0.0.1` published as a placeholder on 2026-09-14.
+**Gatewright.** A wright builds a thing well (shipwright, playwright); a gatewright builds gates. The product's differentiator is evidence gates between stages, so the name says what it does. Coined, with no npm, GitHub, or web collisions found on 2026-09-13. Package `gatewright`, binaries `gw` and `gatewright`, folder `.gatewright/`. `gatewright.dev` registered 2026-09-14. **The npm name is not yet claimed** — `registry.npmjs.org/gatewright` returns 404 because we are not logged in to npm, so the placeholder publish has not happened. Until it does, the name is available to anyone.
 
 ## Landscape
 
@@ -87,7 +87,7 @@ Edge cases that are stories in their own right:
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| R1 | `npx gatewright init` creates `.gatewright/` with items, events, stages, config, and the pinned viewer, and appends an instruction block to `AGENTS.md` (and `CLAUDE.md`, `.cursor/rules`, `.github/copilot-instructions.md` if present) | Fresh repo → run init → four data files + `board.html` exist, `AGENTS.md` contains the block, running init again is a no-op |
+| R1 | `npx gatewright init` creates `.gatewright/` with items, events, stages and config, and writes the instruction block to `AGENTS.md` always, mirroring it into a provider's own file only when that provider's artifact already exists (specs §11.1), or when `--mirror` asks for it | Fresh repo → run init → four data files + `board.html` exist, `AGENTS.md` contains the block, running init again is a no-op |
 | R2 | `gw brief` prints in-flight, blocked, owned, and next-unblocked items in ≤25 lines | Board with 100 items (test fixture) → brief output ≤25 lines, ≤500 tokens |
 | R3 | `gw add`, `edit`, `claim`, `move`, `note` write to items and events atomically | Each command appends exactly one event; a crash mid-write leaves valid JSONL |
 | R4 | `gw move` enforces stage exit rules from `stages.json` (evidence required, deps must be at or past a stage) | Move to Built with no evidence → non-zero exit and reason; with evidence → succeeds |
@@ -154,7 +154,7 @@ Closed 2026-09-14. Each was a blocking open question; the rationale is kept beca
 | D2 | **`serve` is the only write path.** The File System Access API is not used. | Follows from D1: the snapshot is read-only by construction, and a second write path would have to re-implement the rules. Chromium-only with per-session permission prompts on top. |
 | D3 | **Item IDs are phase-seq**: `P2-01`, children `P2-01.1`. An item that moves phase keeps its ID. | The prefix reads well on a board and in a brief. Phase is a field; the prefix is just where the item started. Renaming IDs would break evidence links and event history. |
 | D4 | **License: MIT.** | This is a CLI people will vendor and fork. Apache-2.0's patent grant buys nothing here and adds adoption friction. |
-| D5 | **Package `gatewright`, binary `gw` *and* `gatewright`, domain `gatewright.dev`.** | Shipping both binary names means a `gw` collision on someone's PATH is an annoyance, never a blocker. |
+| D5 | **Package `gatewright`, binary `gw` *and* `gatewright`, domain `gatewright.dev`.** | Shipping both binary names means a `gw` collision on someone's PATH is an annoyance, never a blocker. Publishing the placeholder is still open: it needs an npm login, and the name is unclaimed until then. |
 | D6 | **`gw check` detects out-of-band writes via a committed `.gatewright/.digest`.** | The "never hand-edit" rule needs enforcement, not just instruction. A hash written after every CLI/API write, committed so it survives a clone, is the cheapest mechanism that works. |
 
 ## Open questions
