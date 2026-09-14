@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { createRunRegistry } from '../lib/run/registry.js';
 import { createScheduler } from '../lib/run/scheduler.js';
+import { spawn } from 'node:child_process';
 
 const stages = { stages: [{ id: 'backlog' }, { id: 'specified', auto: true, requires: { deps_at_least: 'specified' } }, { id: 'done', auto: false }], terminal: ['done'] };
 
@@ -91,4 +92,20 @@ test('no re-dispatch after run_ended prevents the overnight budget burn loop', (
   const candidate = item('P1-01');
   const store = board({ items: [candidate], events: [{ type: 'dispatch', item: candidate.id }, { type: 'run_ended', item: candidate.id, run: 'r-old', outcome: 'ok' }] });
   const { scheduler: subject, calls } = scheduler(store); subject.tick(); assert.equal(calls.length, 0);
+});
+
+test('a fresh scheduler instance enforces a timeout from the durable record started time before paused admission', async () => {
+  const store = board({ runner: { paused: true, run_timeout_min: 1, stop_timeout_s: 0.01 } }); const worktree = join(store.root, 'worktree'); mkdirSync(worktree);
+  store.writeItems([item('P1-01', { stage: 'backlog', owner: 'agent:r-old' })]);
+  const proc = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { detached: true, stdio: 'ignore', cwd: worktree });
+  const registry = createRunRegistry({ store }); registry.record({ run: 'r-old', item: 'P1-01', pid: proc.pid, worktree, started: new Date(Date.now() - 61_000).toISOString() });
+  try {
+    // This is intentionally a newly-created scheduler, modelling a restarted
+    // supervisor whose only clock is the durable registry timestamp.
+    const restarted = createScheduler({ store, registry });
+    assert.equal(restarted.tick().status, 'paused');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.throws(() => process.kill(proc.pid, 0), { code: 'ESRCH' });
+    assert.equal(store.readEvents().at(-1).outcome, 'timeout');
+  } finally { try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { process.kill(proc.pid, 'SIGKILL'); } catch {} } }
 });
