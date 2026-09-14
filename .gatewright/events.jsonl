@@ -196,3 +196,7 @@
 {"ts":"2026-09-14T17:51:15.585Z","type":"note","item":"P1-21","by":"human:rahil","note":"Smoke-test item created while verifying gw serve; not real work."}
 {"ts":"2026-09-14T17:51:15.632Z","type":"move","item":"P1-21","from":"building","to":"dropped","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-14T17:51:29.381Z","type":"edit","item":"P2-01","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-14T20:04:15.218Z","type":"move","item":"P1-20","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T20:04:15.267Z","type":"claim","item":"P1-20","by":"human:rahil"}
+{"ts":"2026-09-14T20:04:15.319Z","type":"move","item":"P1-20","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T20:04:15.367Z","type":"note","item":"P1-20","by":"human:rahil","note":"Published gatewright@0.1.0 to npm. Verified by installing from the registry on a clean machine: both gw and gatewright bins report 0.1.0 and the README quickstart runs verbatim, including the evidence refusal."}
