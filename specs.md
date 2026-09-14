@@ -479,6 +479,33 @@ A 409 is the interesting one: it is not a failure of the request, it is the
 board working. "needs at least 1 evidence entry" belongs next to the stage
 button that refused, in the same words the CLI would have used.
 
+### 8.3 Transitions are asked for, not broadcast
+
+The board needs to know which stages an item can enter and why the others are
+refused. That question is answered by the rules engine on the server —
+never by a copy of the rules in the viewer. A client-side mirror is a second
+implementation, and the one that existed had already drifted: it predated
+cumulative gates and went on greying out buttons by the old rule.
+
+```
+GET /api/items/:id/transitions
+{ "built":     { "ok": true,  "failures": [] },
+  "in_review": { "ok": false, "failures": ["in_review: needs matching evidence: ..."] },
+  "merged":    { "ok": false, "failures": [...], "force": true } }
+```
+
+`force: true` marks a target reachable only by skipping stage order — allowed,
+but never by skipping a rule. The failure strings are the ones the CLI prints
+and the ones a POST would return, because all three come from the same call.
+
+It is a per-item endpoint rather than a field on `/api/state` for a plain
+reason: stage buttons exist only in the open item panel, so exactly one item
+needs this at a time, while `/api/state` is polled every two seconds for the
+whole board. Measured on the 100-item fixture, embedding transitions in state
+took the payload from 46 KiB to 149 KiB — 68% of every poll spent on data for
+99 items nobody is looking at. The viewer fetches transitions when a panel
+opens and refreshes them while it stays open.
+
 ### 8.2 Guarding writes
 
 `serve` binds loopback and has no auth, which is fine while every request is a
