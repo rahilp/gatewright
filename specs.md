@@ -305,11 +305,24 @@ First, the out-of-band write check. `store` writes `.gatewright/.digest` after e
 - Differ → report `items.jsonl modified outside gw since <ts>`, then re-baseline the digest so the same edit is reported once rather than on every run.
 - `.digest` missing (fresh clone that predates it, or first run after upgrade) → write it silently and report nothing. A missing digest is not evidence of an edit.
 
-Then, for every non-terminal item:
+Then the board itself. Two different scopes, and the difference matters:
+
+**Every item, terminal included:**
 - exit-rule violations at its current stage (should not happen through the CLI; catches the hand edits the digest just flagged)
 - deps that don't exist, dep cycles, deps in `dropped`
+
+Terminal items are checked precisely *because* they are terminal. Editing an
+item into `verified` by hand is the cheapest way to fake a finished board, so
+excluding terminal items would leave the one stage that most needs auditing
+unaudited. An item sitting in `verified` with no evidence is the clearest
+possible signal that something wrote the file directly.
+
+**Non-terminal items only:**
 - items with `owner` set but no run and no activity in `stale_days` (config, default 7)
 - items linked to a closed GitHub issue not in a terminal stage → `flag: conflict`
+
+Staleness and conflict are about work that should still be moving. A merged
+item that hasn't been touched in a month is finished, not stale.
 
 Exit 1 if anything is reported.
 
