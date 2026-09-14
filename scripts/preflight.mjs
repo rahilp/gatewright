@@ -70,15 +70,19 @@ function documentedCommands(readme) {
   return commands;
 }
 
-export function helpCommands(help) {
-  const commands = new Set();
-  for (const line of help.split(/\r?\n/)) {
+export function usageCommandEntries(help) {
+  const entries = [];
+  for (const [index, line] of help.split(/\r?\n/).entries()) {
     const syntax = line.match(/^ {2}([^\n]+)$/)?.[1] ?? '';
     const primary = syntax.match(/^([a-z][\w-]*)\b/);
-    if (primary) commands.add(primary[1]);
-    for (const match of syntax.matchAll(/\|\s*([a-z][\w-]*)\b/g)) commands.add(match[1]);
+    if (primary) entries.push({ name: primary[1], line: index + 1 });
+    for (const match of syntax.matchAll(/\|\s*([a-z][\w-]*)\b/g)) entries.push({ name: match[1], line: index + 1 });
   }
-  return commands;
+  return entries;
+}
+
+export function helpCommands(help) {
+  return new Set(usageCommandEntries(help).map((entry) => entry.name));
 }
 
 function advertisedImportFormats(help) {
@@ -152,6 +156,9 @@ export function runPreflight({ root = process.cwd(), ci = false } = {}) {
       failures.push(`${bin ?? 'package.json'}: could not run local gw --help; fix the binary before release. ${help.output}`);
     } else {
       const available = helpCommands(help.output);
+      const counts = new Map();
+      for (const entry of usageCommandEntries(help.output)) counts.set(entry.name, (counts.get(entry.name) ?? 0) + 1);
+      for (const [name, count] of counts) if (count > 1) failures.push(`gw --help: command \`${name}\` appears ${count} times; keep one usage entry per command.`);
       for (const [name, doc] of documentedCommands(readme)) {
         if (doc.notYet && available.has(name)) failures.push(`README.md:${doc.line}: marks \`gw ${name}\` as not yet, but gw --help lists it; update the command table.`);
         else if (!doc.notYet && !available.has(name)) failures.push(`README.md:${doc.line}: documents \`gw ${name}\`, but gw --help does not list it; update the README or binary.`);

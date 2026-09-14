@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { helpCommands, runPreflight } from '../scripts/preflight.mjs';
+import { helpCommands, runPreflight, usageCommandEntries } from '../scripts/preflight.mjs';
 
 function write(root, file, content) {
   mkdirSync(dirname(join(root, file)), { recursive: true });
@@ -61,6 +61,12 @@ test('parses aliases and long usage lines without relying on columns', () => {
     '  show <id> | list [--stage S]          read items',
   ].join('\n'));
   assert.deepEqual(commands, new Set(['init', 'edit', 'claim', 'release', 'show', 'list']));
+  assert.deepEqual(usageCommandEntries('  show <id> | list [--stage S]          read items').map((entry) => entry.name), ['show', 'list']);
+});
+
+test('fails when a command has duplicate usage entries', () => {
+  const root = fixture({ help: '  init  create a board\n  init  create a board again' });
+  assertFailure(root, /gw --help: command `init` appears 2 times/);
 });
 
 test('fails when usage and command modules disagree', () => {
