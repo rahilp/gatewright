@@ -179,7 +179,7 @@ Order in the array is the pipeline order. Users edit this file to change their p
     "type": ["decision", "defect", "feature", "test", "doc"]
   },
   "brief": { "max_lines": 25 },
-  "check": { "stale_days": 7 },
+  "check": { "stale_days": 7, "stale_exempt_stages": ["merged"] },
   "github": {
     "enabled": false,
     "repo": null,
@@ -228,6 +228,8 @@ Order in the array is the pipeline order. Users edit this file to change their p
 ```
 
 `vocab.priority` is an **ordered** array, highest priority first. It is the scheduler's pick order (§10) as well as a validation list; the other vocab arrays are validation only.
+
+Staleness is about work that should still be moving, so stages representing finished work are exempt through `check.stale_exempt_stages`.
 
 `memory` is ignored entirely when `enabled` is false; the adapter module is not even loaded. Tokens come from an environment variable named in `token_env`, never from the file.
 

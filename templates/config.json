@@ -8,7 +8,7 @@
     "type": ["decision", "defect", "feature", "test", "doc"]
   },
   "brief": { "max_lines": 25 },
-  "check": { "stale_days": 7 },
+  "check": { "stale_days": 7, "stale_exempt_stages": ["merged"] },
   "github": {
     "enabled": false,
     "repo": null,
