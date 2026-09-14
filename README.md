@@ -26,7 +26,7 @@ gw open
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
-`init` creates `.gatewright/` (items, events, stages, config, prompt) and writes an instruction block to `AGENTS.md`. The first store write — your first `gw add` or `gw move` — creates `.digest`. `gw open` writes `board.html`. From then on the CLI is the only write path; the board is a snapshot the tool writes on demand.
+`init` creates `.gatewright/` (items, events, stages, config, prompt) and writes an instruction block to `AGENTS.md`. The first store write — your first `gw add` or `gw move` — creates `.digest`. `gw open` writes `board.html`. The CLI and the live board's write API are the only write paths; the snapshot board is written on demand.
 
 ## The refusal
 
@@ -57,7 +57,7 @@ P1-01  building → built  ·  evidence: abc1234, test/scheduler.test.js
   events.jsonl   append-only, one event per line
   stages.json    stages and their exit rules
   config.json    vocab, labels, policy, runner, memory
-  prompt.md      dispatch prompt template (v0.2)
+  prompt.md      dispatch prompt template
 
 created on the first store write (first add or move):
   .digest        SHA-256 of items.jsonl after each gw write
@@ -70,7 +70,7 @@ A change to one item is a one-line diff. `grep P2-01 .gatewright/events.jsonl` i
 
 Three rules keep the data trustworthy:
 
-- The CLI is the only write path. The CLI, the `serve` API, `sync`, and the scheduler all call the same `store` module, so every stage move evaluates the same exit rules whether a human dragged a card or an agent ran a command.
+- Gatewright is the only write path. The CLI, the `serve` API, `sync`, and the scheduler all call the same `store` module, so every stage move evaluates the same exit rules whether a human dragged a card or an agent ran a command.
 - Agents never edit files in `.gatewright/` directly. `store` writes a hash of `items.jsonl` to `.gatewright/.digest` after every successful write; `gw check` reports a mismatch and re-baselines so the same edit is reported once, not on every run.
 - The board is a snapshot, not a live page. `gw open` takes the pinned `viewer/board.html`, injects the current data as `<script type="application/json">` blocks, and writes `.gatewright/board.html`. A `file://` page cannot fetch its own data because Chrome and Firefox give it an opaque origin; inlining works in every browser with no server and no flags.
 
@@ -84,7 +84,44 @@ Overview view:
 
 ![Overview](docs/img/overview.png)
 
-The board is read-only when opened from a snapshot. Under `gw serve` (v0.2) it becomes live, with editors, Play and Stop, and a 2-second poll for new events.
+The board is read-only when opened from a snapshot. `gw serve` makes it live, with editors, Play and Stop, global pause, and a 2-second poll for new events.
+
+## Live board
+
+`gw serve` serves the board on loopback and polls the store for new items and events every two seconds. Edits, moves, notes, Play, Stop, and global pause write back through the same rules as the CLI.
+
+```
+$ gw serve --port 17888
+Gatewright live board: http://127.0.0.1:17888/
+```
+
+When a move is refused, the card shows the CLI's own refusal inline. For example, a skipped-stage move returned:
+
+```
+use --force to skip stages
+```
+
+Play only queues a dispatch event; Stop cancels that queued dispatch. Neither starts an agent. There is no runner until v0.4. Global pause records the scheduler pause state for that future runner; it starts nothing today.
+
+## GitHub sync
+
+Gatewright uses the GitHub CLI; it shells out to `gh` and never handles your tokens. Authenticate and enable a board for a repository, then preview and run synchronization:
+
+```sh
+gh auth login
+gw init --gh --repo owner/repo
+gw sync --dry-run
+gw sync
+```
+
+GitHub owns intake fields; Gatewright owns execution fields, and sync never writes the latter. `agent/go` is the dispatch label, moves can post issue comments, and conflicts are flagged for review.
+
+On an enabled board without an authenticated GitHub CLI, the observed dry run was:
+
+```
+$ gw sync --dry-run
+GitHub CLI is not authenticated. Run `gh auth login`.
+```
 
 ## Commands
 
@@ -92,7 +129,8 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 
 | Command | What it does |
 | --- | --- |
-| `gw init [--force]` | Create `.gatewright/` and write the instruction block to `AGENTS.md` (and `CLAUDE.md`, `.cursor/rules`, `.github/copilot-instructions.md` if present) |
+| `gw init [--gh] [--repo owner/name] [--force]` | Create `.gatewright/` and write the instruction block to `AGENTS.md`; `--gh` enables GitHub sync, and `--repo` supplies the repository when no GitHub origin is available |
+| `gw init --mirror claude,cursor,copilot` | Also write the instruction block to `CLAUDE.md`, `.cursor/rules/gatewright.mdc`, and `.github/copilot-instructions.md` |
 | `gw brief [--me <owner>] [--json] [--recall]` | Print in-flight, blocked, owned, and next-unblocked items in 25 lines or fewer. `--recall` is accepted but has no effect until the v0.5 memory backend is enabled. |
 | `gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--gate G] [--scope "..."] [--by <who>]` | Create an item; print its id |
 | `gw claim <id> [--by <who>]` | Take ownership |
@@ -104,10 +142,10 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
 | `gw check [--json]` | Report rule violations and out-of-band writes; exit 1 on any report |
 | `gw import <file> [--format md]` | Ingest a markdown task list. CSV and JSON are planned but not yet accepted; `--format csv` or `--format json` returns exit 2 today. |
-| `gw open [--no-browser]` | Write `board.html` and open it |
+| `gw open [--no-browser] [--watch]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
-| `gw serve [--port 7777] [--open]` | Serve the board with a write API and (v0.4) a scheduler — **not yet, v0.2** |
-| `gw sync [--dry-run]` | Pull and push GitHub issues through `gh` — **not yet, v0.3** |
+| `gw serve [--port 7777] [--open]` | Serve the live board on loopback with its write API; it has no runner |
+| `gw sync [--dry-run]` | Pull linked GitHub issues through `gh`; `--dry-run` previews synchronization |
 | `gw stop <id> \| --all` | Stop a run, or stop all runs — **not yet, v0.4** |
 | `gw resume <id>` | Resume a paused run with the log tail in the prompt — **not yet, v0.4** |
 | `gw triage <id> --approve \| --drop` | Approve or drop an agent-created item — **not yet, v0.4** |
@@ -150,23 +188,17 @@ with `paused` and `dropped` as side states. Each stage has:
 
 ## Status
 
-Gatewright is at v0.1.
+Gatewright is at v0.3.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only — CSV and JSON return exit 2 today), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
+Shipped in v0.2: `gw serve`: a live board with write-back, editing, Play/Stop queuing, and global pause. Play queues work and Stop cancels that queue; neither starts an agent. There is no runner until v0.4.
+
+Shipped in v0.3: `gw sync`: GitHub issue pull/push, the `agent/go` dispatch label, comments on move, conflict flagging, and `init --gh`.
+
 Coming:
 
-- v0.2 — `serve` with a write API and live board (Play and Stop write events; no runner yet).
-- v0.3 — `gw sync` for GitHub issues, label-driven dispatch, comments on move, child mirroring.
 - v0.4 — scheduler, git worktrees per run, runner, stop and resume, triage gate, kill switch, provider adapters.
 - v0.5 — optional memory backend: recall prior context into dispatch prompts, remember on completion. Off by default; off means no network calls.
 
-Node 18+. Zero runtime dependencies. MIT.
-
-```
-$ npm ls --prod
-npm warn Expanding --prod to --production. This will stop working in the next major version of npm.
-npm warn config production Use `--omit=dev` instead.
-gatewright@0.1.0-dev /home/rahil/Projects/gatewright
-└── (empty)
-```
+Node 18+. The published package has zero runtime dependencies. MIT.
