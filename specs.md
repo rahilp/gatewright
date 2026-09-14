@@ -666,6 +666,50 @@ Scheduler loop in `serve`, every `tick_s` (default 5):
 
 The agent inside a run uses the normal CLI. `GW_ROOT` points it at the main repo's `.gatewright/`, not the worktree's copy, so all runs write to one board.
 
+### 10.1 Rules for spawning things
+
+Everything before v0.4 could only lose work. The runner can spend money and
+leave processes behind, so it gets stricter rules than the rest of the tool.
+
+**Nothing spawns without two deliberate acts.** A provider must be configured
+AND the scheduler must be started. A default install has no provider and no
+running scheduler; `serve` alone never spawns. An unconfigured provider is an
+error at start, not a silent no-op that surprises someone later.
+
+**The spawn function is injectable, like `gh`.** One module owns process
+creation; everything else calls it. Tests pass a stub and **no test may ever
+spawn a real agent** — a suite that bills the person running it is a suite
+nobody runs. The same rule that made the sync layer testable applies here with
+more force.
+
+**`--dry-run` renders the prompt and logs the exact argv without spawning.**
+This is how a user sees what their configuration will actually do before it does
+it, and it is the first thing anyone sane tries.
+
+**Every run is recorded on disk before the process starts**, in
+`.gatewright/runs/<run>.json` with its pid, item, worktree and start time. Not
+in the server's memory. `gw stop --all` must work from any terminal, with no
+browser and no `serve` — including when `serve` has died and left runs behind.
+A kill switch that depends on the thing that might have crashed is not a kill
+switch.
+
+**Orphans are reconciled on startup.** A run whose recorded pid is no longer
+alive gets a `run_ended` event with outcome `error`, and its item's owner is
+cleared. Otherwise a crash strands items owned by a run that will never finish,
+and the board lies about what is happening.
+
+**Caps are refused before spawning, not after.** `max_concurrent`,
+`run_timeout_min`, and `max_children_per_item` are checked at the point of
+decision. A cap enforced after the money is spent is a report, not a cap.
+
+**Agent-created work is held by default.** `needs-triage` is not an advisory
+flag: a held item is invisible to the scheduler's eligibility check. The failure
+mode being prevented is a run that files three items, each of which starts a run
+that files three more.
+
+**One run, one worktree, one branch, one log.** Killing a run never dirties the
+main checkout, and two runs cannot stomp each other's files.
+
 ## 11. AGENTS.md block
 
 Written by `init`. Fenced so `init --force` can replace it and `upgrade` can update it.
