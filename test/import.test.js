@@ -6,9 +6,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { parseMarkdown, inferStage } from '../lib/import/md.js';
-import { run } from '../lib/commands/import.js';
+import { run, resolveImportStage, resolveImportStages } from '../lib/commands/import.js';
 import { createStore } from '../lib/store.js';
 import { RuleError } from '../lib/cli/errors.js';
+import { evaluateCumulative, findCycles, missingDeps } from '../lib/rules.js';
+import { readStages } from '../lib/config.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const FIXTURE = fileURLToPath(new URL('./fixtures/sample-tasks.md', import.meta.url));
@@ -25,6 +27,10 @@ function repo() {
 function capture() {
   const out = [];
   return { stdout: { write: (s) => { out.push(s); } }, lines: out };
+}
+
+function defaultStages() {
+  return readStages({ paths: { stages: join(tmpdir(), `gw-stages-${Date.now()}.json`) } });
 }
 
 test('inferStage defaults to backlog, marks decided and checked scopes verified', () => {
@@ -51,8 +57,9 @@ test('parseMarkdown returns items, deps, and skipped malformed lines', () => {
   assert.deepEqual(items.find((i) => i.id === 'P1-04.1').deps, []);
 
   const scopeWithDot = items.find((i) => i.id === 'P1-05').scope;
-  assert.equal(scopeWithDot, ' The `foo · bar` case.');
+  assert.equal(scopeWithDot, 'The `foo · bar` case.');
 
+  assert.equal(items.find((i) => i.id === 'P1-01').title, 'No deps em dash');
   assert.equal(items.find((i) => i.id === 'P1-06').stage, 'verified');
   assert.equal(items.find((i) => i.id === 'P1-07').stage, 'verified');
 });
@@ -79,18 +86,39 @@ test('parseMarkdown round-trips the real tasks.md with 81 items and correct deta
   assert.match(p101.scope, /`node --test`/);
   assert.equal(p101.stage, 'backlog');
 
+  const p108a = items.find((i) => i.id === 'P1-08a');
+  assert.equal(p108a.scope[0], 'P');
+  assert.match(p108a.scope, /^Per `specs.md`/);
+
   assert.equal(items.find((i) => i.id === 'P0-01').stage, 'verified');
 });
 
-test('import command writes items and add events, then refuses collisions', async () => {
+test('resolveImportStage places verified only when requirements are actually met', () => {
+  const stages = defaultStages();
+  const base = { id: 'X', owner: 'human:tester', deps: [], evidence: [] };
+  const noEvidence = resolveImportStage({ ...base }, 'verified', { items: [], stages });
+  assert.equal(noEvidence.stage, 'backlog');
+  assert.match(noEvidence.reason, /2 evidence/);
+
+  const withEvidence = resolveImportStage({ ...base, evidence: ['abc123', 'https://github.com/a/b/pull/1'] }, 'verified', { items: [], stages });
+  assert.equal(withEvidence.stage, 'verified');
+  assert.equal(withEvidence.reason, null);
+});
+
+test('import command downgrades unearned verified items and reports them', async () => {
   const { store } = repo();
   const streams = capture();
   const code = await run({ store, root: store.root, actor: 'human:tester', flags: {}, positionals: [FIXTURE], ...streams });
   assert.equal(code, 0);
   const stored = store.readItems();
   assert.equal(stored.length, 8);
-  assert.deepEqual(stored.map((i) => i.id), ['P1-01', 'P1-02', 'P1-03', 'P1-04', 'P1-04.1', 'P1-05', 'P1-06', 'P1-07']);
-  assert.ok(stored.every((i) => i.created_by === 'human:tester'));
+  assert.equal(stored.find((i) => i.id === 'P1-06').stage, 'backlog');
+  assert.equal(stored.find((i) => i.id === 'P1-07').stage, 'backlog');
+
+  const out = streams.lines.join('');
+  assert.match(out, /P1-06: source says done, imported to backlog \(verified needs at least 2 evidence entries\)/);
+  assert.match(out, /P1-07: source says done, imported to backlog \(verified needs at least 2 evidence entries\)/);
+  assert.match(out, /2 item\(s\) marked done in the source could not enter verified/);
 
   const events = store.readEvents();
   assert.equal(events.length, 8);
@@ -122,4 +150,21 @@ test('import through the real binary in a temp repo', () => {
   const items = createStore(root).readItems();
   assert.equal(items.length, 8);
   assert.ok(items.some((i) => i.id === 'P1-05' && i.scope.includes('foo · bar')));
+});
+
+test('importing the real tasks.md never produces a board that fails stage rules', async () => {
+  const { store } = repo();
+  const streams = capture();
+  const code = await run({ store, root: store.root, actor: 'human:tester', flags: {}, positionals: [TASKS_MD], ...streams });
+  assert.equal(code, 0);
+  const items = store.readItems();
+  const stages = readStages(store);
+
+  for (const item of items) {
+    const { ok, failures } = evaluateCumulative(item, item.stage, { items, stages });
+    assert.ok(ok, `${item.id} in ${item.stage} violates its stage rules: ${failures.join('; ')}`);
+  }
+
+  assert.deepEqual(findCycles(items), []);
+  assert.deepEqual(missingDeps(items), []);
 });
