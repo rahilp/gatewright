@@ -1,0 +1,5 @@
+{
+  "name": "gatewright",
+  "description": "Evidence-gated work tracking for Claude Code",
+  "version": "0.3.0"
+}
