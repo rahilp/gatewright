@@ -41,6 +41,13 @@ test('move counts command evidence toward the target requirement and writes one 
   assert.deepEqual(b.store.readEvents().map(({ type, item: id, from, to, by, evidence }) => ({ type, item: id, from, to, by, evidence })), [{ type: 'move', item: 'P1-01', from: 'building', to: 'built', by: 'human:test', evidence: ['abc123'] }]);
 });
 
+test('move prints exactly one confirmation line on success', () => {
+  const b = board([item({ stage: 'building', owner: 'human:test' })]);
+  let output = '';
+  run({ ...ctx(b, ['P1-01', 'built'], { evidence: ['abc1234', 'test/scheduler.test.js'] }), stdout: { write(text) { output += text; } } });
+  assert.equal(output, 'P1-01  building → built  ·  evidence: abc1234, test/scheduler.test.js\n');
+});
+
 test('move refuses an out-of-order pipeline target without force but allows side stages', () => {
   const b = board();
   assert.throws(() => run(ctx(b, ['P1-01', 'built'])), (error) => error instanceof RuleError && /use --force to skip stages/.test(error.message));
