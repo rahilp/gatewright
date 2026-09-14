@@ -32,27 +32,72 @@ test('init creates .gatewright/ from the shipped templates and writes the block 
 
 test('init never creates uninvited instruction files', () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
-  run(['init'], root);
+  const out = run(['init'], root);
   assert.ok(!existsSync(join(root, 'CLAUDE.md')));
   assert.ok(!existsSync(join(root, '.cursor')));
   assert.ok(!existsSync(join(root, '.github')));
+  assert.match(out, /skipped Claude, Cursor and Copilot/);
+  assert.match(out, /--mirror claude,cursor,copilot/);
 });
 
-test('init updates instruction files only where the file or its parent directory already exists', () => {
+test('init updates only provider artifacts that already exist, with provider-owned directory evidence', () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
   writeFileSync(join(root, 'CLAUDE.md'), '# Claude rules\n\nBe terse.\n');
   mkdirSync(join(root, '.cursor', 'rules'), { recursive: true });
-  mkdirSync(join(root, '.github'));
+  mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
   mkdirSync(join(root, 'other-project', '.cursor'), { recursive: true });
 
-  run(['init'], root);
+  const out = run(['init'], root);
 
   const claude = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
   assert.ok(claude.startsWith('# Claude rules\n\nBe terse.\n'), 'existing CLAUDE.md content must be preserved');
   assert.ok(claude.includes(readTemplate('agents-block.md')));
   assert.ok(readFileSync(join(root, '.cursor', 'rules', 'gatewright.mdc'), 'utf8').includes(readTemplate('agents-block.md')));
-  assert.ok(readFileSync(join(root, '.github', 'copilot-instructions.md'), 'utf8').includes(readTemplate('agents-block.md')));
+  assert.ok(!existsSync(join(root, '.github', 'copilot-instructions.md')));
+  assert.match(out, /skipped Copilot/);
+  assert.match(out, /--mirror copilot/);
   assert.ok(!existsSync(join(root, 'other-project', '.cursor', 'rules')), 'a bare .cursor/ must not gain a rules/ directory');
+});
+
+test('init updates an existing Copilot file and preserves surrounding content', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  mkdirSync(join(root, '.github'));
+  writeFileSync(join(root, '.github', 'copilot-instructions.md'), '# Copilot rules\n\nKeep this.\n');
+
+  run(['init'], root);
+
+  const copilot = readFileSync(join(root, '.github', 'copilot-instructions.md'), 'utf8');
+  assert.ok(copilot.startsWith('# Copilot rules\n\nKeep this.\n'));
+  assert.ok(copilot.includes(readTemplate('agents-block.md')));
+});
+
+test('init --mirror creates the requested mirrors and accepts all', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  const out = run(['init', '--mirror', 'all'], root);
+
+  for (const file of ['CLAUDE.md', join('.cursor', 'rules', 'gatewright.mdc'), join('.github', 'copilot-instructions.md')]) {
+    assert.ok(existsSync(join(root, file)), `${file} must be created`);
+  }
+  assert.ok(out.includes('CLAUDE.md'));
+  assert.ok(out.includes('gatewright.mdc'));
+  assert.ok(out.includes('copilot-instructions.md'));
+});
+
+test('init --mirror copilot creates .github and its instruction file when requested', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  run(['init', '--mirror', 'copilot'], root);
+  assert.ok(existsSync(join(root, '.github', 'copilot-instructions.md')));
+});
+
+test('init --mirror nonsense is a usage error naming valid targets', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  try {
+    run(['init', '--mirror', 'nonsense'], root);
+    assert.fail('expected a usage error');
+  } catch (err) {
+    assert.equal(err.status, 2);
+    assert.match(String(err.stderr), /claude, cursor, copilot, all/);
+  }
 });
 
 test('a second init changes nothing and says so', () => {
@@ -97,7 +142,7 @@ test('init fails cleanly on a malformed AGENTS.md without creating .gatewright/'
 });
 
 test('init creates the root at ctx.cwd, not at process.cwd()', async () => {
-  const { runRouter } = await import('../bin/gw.js');
+  const { runRouter } = await import('../lib/cli/router.js');
   const target = mkdtempSync(join(tmpdir(), 'gw-init-cwd-'));
   const elsewhere = mkdtempSync(join(tmpdir(), 'gw-init-elsewhere-'));
   let out = '';

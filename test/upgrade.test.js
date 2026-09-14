@@ -76,6 +76,7 @@ test('upgrade refreshes every mirrored instruction block and creates no new file
   writeFileSync(join(root, 'CLAUDE.md'), '# Claude rules\n\nBe terse.\n');
   mkdirSync(join(root, '.cursor', 'rules'), { recursive: true });
   mkdirSync(join(root, '.github'));
+  writeFileSync(join(root, '.github', 'copilot-instructions.md'), '# Copilot rules\n');
   run(['init'], root);
 
   for (const file of ['AGENTS.md', ...MIRRORS]) {
@@ -108,10 +109,12 @@ test('upgrade regenerates a missing board but never creates instruction files', 
   writeFileSync(join(root, '.gatewright', 'board.html'), '');
   const before = walk(root);
 
-  run(['upgrade'], root);
+  const out = run(['upgrade'], root);
 
   assert.match(readFileSync(join(root, '.gatewright', 'board.html'), 'utf8'), /^<!-- gatewright board v1 -->/);
   assert.deepEqual(walk(root), before.filter((f) => f !== 'AGENTS.md'), 'no instruction file may be created');
+  assert.match(out, /warning: AGENTS\.md is missing/);
+  assert.match(out, /gw init/);
   assert.ok(!existsSync(join(root, 'CLAUDE.md')));
   assert.ok(!existsSync(join(root, '.cursor')));
   assert.ok(!existsSync(join(root, '.github')));

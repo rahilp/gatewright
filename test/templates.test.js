@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { templatePath, readTemplate, upsertBlock } from '../lib/templates.js';
+import { BLOCK_TARGETS, templatePath, readTemplate, upsertBlock } from '../lib/templates.js';
 
 const START = '<!-- gatewright:start -->';
 const END = '<!-- gatewright:end -->';
@@ -133,5 +133,12 @@ test('upsertBlock throws a clear error instead of corrupting a malformed AGENTS.
   assert.throws(
     () => upsertBlock(`${START}\none\n${START}\ntwo\n${END}\n`, block),
     (err) => /exactly one/.test(err.message),
+  );
+});
+
+test('mirror invitation metadata only treats provider-owned directories as evidence', () => {
+  assert.deepEqual(
+    Object.fromEntries(BLOCK_TARGETS.map((target) => [target.name, target.parent])),
+    { claude: null, cursor: '.cursor/rules', copilot: null },
   );
 });
