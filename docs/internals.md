@@ -1,6 +1,8 @@
 # Gatewright internals
 
-`bin/gw.js` resolves `gw <name>` to `lib/commands/<name>.js`. A command module exports:
+`bin/gw.js` is the unconditional executable entry point; it delegates to the exported
+`runRouter` in `lib/cli/router.js`. The router resolves `gw <name>` to
+`lib/commands/<name>.js`. A command module exports:
 
 ```js
 export const spec = {
@@ -21,6 +23,11 @@ directory the router was invoked with (`process.cwd()` unless overridden through
 options); commands that create the root, such as `init`, use it instead of calling
 `process.cwd()` themselves. Use the supplied output streams rather than `process.stdout`
 and `process.stderr`.
+
+`findRoot(cwd, env, { stopAt })` walks to the filesystem root by default. Tests and other
+callers that must not search past a fixture can pass `stopAt`; that directory is checked but
+its parent is not. If the selected `.gatewright` root is outside the enclosing Git repository,
+the CLI warns on stderr and continues. Outside a Git repository, root lookup remains silent.
 
 Exit codes are 0 success, 1 rule violation, 2 usage error, and 3 I/O or unexpected error.
 Throw `UsageError`, `RuleError`, or `IOError` from `lib/cli/errors.js` to select codes 2, 1,

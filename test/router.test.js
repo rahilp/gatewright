@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runRouter } from '../bin/gw.js';
+import { runRouter } from '../lib/cli/router.js';
 
 function io() { let out = ''; let err = ''; return { stdout: { write: (s) => { out += s; } }, stderr: { write: (s) => { err += s; } }, get out() { return out; }, get err() { return err; } }; }
 function loader(module) { return async () => module; }
@@ -25,13 +25,23 @@ test('router maps command error classes to their contract exit codes', async () 
   }
 });
 
-test('root lookup honors GW_ROOT and gives a useful missing-root error', async () => {
+test('root lookup honors GW_ROOT, stops at its boundary, and gives a useful missing-root error', async () => {
   const { findRoot, actor } = await import('../lib/cli/root.js');
   const base = mkdtempSync(join(tmpdir(), 'gw-root-')); const root = join(base, 'repo'); const nested = join(root, 'a', 'b');
   mkdirSync(join(root, '.gatewright'), { recursive: true }); mkdirSync(nested, { recursive: true });
-  assert.equal(findRoot(nested, {}), root); assert.equal(findRoot(base, { GW_ROOT: join(root, '.gatewright') }), root);
+  assert.equal(findRoot(nested, {}, { stopAt: base }), root); assert.equal(findRoot(base, { GW_ROOT: join(root, '.gatewright') }), root);
   assert.equal(actor({}, { USER: 'sam' }), 'human:sam');
-  assert.throws(() => findRoot(base, {}), /no .gatewright/);
+  assert.throws(() => findRoot(base, {}, { stopAt: base }), /no .gatewright/);
+});
+
+test('root lookup warns when an ancestor root is outside the enclosing git repository', async () => {
+  const { findRoot } = await import('../lib/cli/root.js');
+  const base = mkdtempSync(join(tmpdir(), 'gw-root-warning-'));
+  const gitRoot = join(base, 'repo'); const nested = join(gitRoot, 'src');
+  mkdirSync(join(base, '.gatewright')); mkdirSync(nested, { recursive: true });
+  const streams = io();
+  assert.equal(findRoot(nested, {}, { stderr: streams.stderr, getGitRoot: () => gitRoot }), base);
+  assert.match(streams.err, new RegExp(`outside this git repository: ${base}`));
 });
 
 test('config readers use defaults for absent files and identify malformed filenames', async () => {
