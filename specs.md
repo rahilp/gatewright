@@ -151,6 +151,16 @@ Semantics:
   - `evidence_min: n` — at least n evidence entries
   - `evidence_match: regex` — at least one evidence entry matches
   - `deps_at_least: stage` — every dep must be at that stage or later (by list order)
+- **Gates are cumulative.** To stand in stage N, an item must satisfy the `requires`
+  of every pipeline stage up to and including N — not just N's own block. A single
+  stage's `requires` is an entry gate for that stage; the pipeline as a whole is the
+  claim. Without this, `gw move X merged --force` succeeds on an item with no owner
+  and no evidence, because `merged` only requires `deps_at_least` and an item with no
+  deps satisfies it vacuously. `move` evaluates cumulatively to the target, and
+  `check` evaluates cumulatively to the item's current stage, so a card that skipped
+  a gate is reported rather than blessed. `--force` skips stage ORDER; it has never
+  been allowed to skip evidence, and cumulative evaluation is what makes that true
+  for skips as well as for single steps.
 - `auto: true` on a stage means: when an item is in the *previous* stage and eligible, the scheduler may start a run whose goal is to reach this stage. The human-gated stages are whatever has `auto: false`.
 - `paused` and `dropped` are side states. `paused` remembers `prev_stage` in the item so resume can restore it.
 
