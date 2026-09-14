@@ -179,3 +179,20 @@
 {"ts":"2026-09-14T17:27:12.861Z","type":"move","item":"P1-14","from":"building","to":"built","by":"human:rahil","evidence":["c51b5eb","test/upgrade.test.js"]}
 {"ts":"2026-09-14T17:27:13.059Z","type":"move","item":"P1-10","from":"building","to":"built","by":"human:rahil","evidence":["c129ed4","test/check.test.js"]}
 {"ts":"2026-09-14T17:27:13.160Z","type":"move","item":"P1-10a","from":"building","to":"built","by":"human:rahil","evidence":["c129ed4","test/check.test.js"]}
+{"ts":"2026-09-14T17:48:58.469Z","type":"add","item":"P1-21","by":"human:rahil","parent":null}
+{"ts":"2026-09-14T17:48:58.518Z","type":"claim","item":"P1-21","by":"human:rahil"}
+{"ts":"2026-09-14T17:48:58.570Z","type":"move","item":"P1-21","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:49:10.373Z","type":"move","item":"P1-21","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:49:55.623Z","type":"claim","item":"P2-01","by":"human:rahil"}
+{"ts":"2026-09-14T17:49:55.676Z","type":"note","item":"P2-01","by":"human:rahil","note":"Implemented read-only loopback server and /api/state; added server coverage and manually verified live hydration/polling."}
+{"ts":"2026-09-14T17:49:55.731Z","type":"move","item":"P2-01","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:49:55.781Z","type":"move","item":"P2-01","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:49:55.835Z","type":"move","item":"P2-01","from":"building","to":"built","by":"human:rahil","evidence":["test/serve.test.js"]}
+{"ts":"2026-09-14T17:49:55.882Z","type":"claim","item":"P2-05","by":"human:rahil"}
+{"ts":"2026-09-14T17:49:55.937Z","type":"note","item":"P2-05","by":"human:rahil","note":"Implemented in-place two-second polling, retry backoff/status indicator, and moved-card highlight; manually verified against CLI changes."}
+{"ts":"2026-09-14T17:49:55.989Z","type":"move","item":"P2-05","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:49:56.047Z","type":"move","item":"P2-05","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:49:56.101Z","type":"move","item":"P2-05","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html"]}
+{"ts":"2026-09-14T17:51:15.585Z","type":"note","item":"P1-21","by":"human:rahil","note":"Smoke-test item created while verifying gw serve; not real work."}
+{"ts":"2026-09-14T17:51:15.632Z","type":"move","item":"P1-21","from":"building","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T17:51:29.381Z","type":"edit","item":"P2-01","by":"human:rahil","fields":["scope"]}
