@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -141,6 +141,16 @@ test('import --dry-run prints a summary and writes nothing', async () => {
   const out = streams.lines.join('');
   assert.match(out, /would import 8 item\(s\)/);
   assert.match(out, /P1-04\.1/);
+});
+
+test('import explains when no strict phase headings are present', async () => {
+  const { root, store } = repo();
+  const file = join(root, 'foreign-phases.md');
+  writeFileSync(file, '## X1 — Work\n- **X1-01** · Item · feature · G0 · — · Scope\n');
+  const streams = capture();
+  assert.equal(await run({ store, root, actor: 'human:tester', flags: {}, positionals: [file], ...streams }), 0);
+  assert.equal(streams.lines.join(''), 'no `## P<n> —` phase headings found; see specs §6 for the expected format\n');
+  assert.equal(store.readItems().length, 0);
 });
 
 test('import through the real binary in a temp repo', () => {

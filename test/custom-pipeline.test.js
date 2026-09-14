@@ -64,6 +64,7 @@ test('the full binary workflow uses a foreign pipeline exclusively', () => {
 
   const emitted = output.join('');
   assert.match(emitted, /source says done, imported to icebox \(shipped needs at least 1 evidence entry\)/);
+  assert.match(emitted, /`gw move` needs evidence past Coding\. Never edit/);
   assert.doesNotMatch(emitted, /backlog|verified|dropped/);
   assert.doesNotMatch(checkOutput, /backlog|verified/);
   assert.equal(readFileSync(store.paths.stages, 'utf8').includes('paused'), false);

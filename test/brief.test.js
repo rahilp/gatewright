@@ -13,8 +13,8 @@ import { renderBrief } from '../lib/brief.js';
 import { makeItems, makeEvents } from './fixtures/make-items.js';
 
 const stages = { stages: [
-  { id: 'backlog' }, { id: 'specified' }, { id: 'building', requires: { owner: true } },
-  { id: 'built' }, { id: 'in_review' }, { id: 'reviewed' }, { id: 'merged' }, { id: 'verified' },
+  { id: 'backlog' }, { id: 'specified' }, { id: 'building', label: 'Building', requires: { owner: true } },
+  { id: 'built', requires: { evidence_min: 1 } }, { id: 'in_review' }, { id: 'reviewed' }, { id: 'merged' }, { id: 'verified' },
 ], terminal: ['verified', 'dropped'], extra: [{ id: 'dropped' }, { id: 'paused' }] };
 
 test('brief reproduces the fixed section order and filters dispatches by owner', () => {
@@ -27,6 +27,24 @@ test('brief reproduces the fixed section order and filters dispatches by owner',
   assert.ok(out.indexOf('IN FLIGHT') < out.indexOf('BLOCKED'));
   assert.ok(out.endsWith('`gw move` needs evidence past Building. Never edit .gatewright/ by hand.\n'));
   assert.match(out, /P2-01.*specified → building/);
+});
+
+test('brief footer derives the stage before the first evidence gate', () => {
+  const foreignStages = {
+    stages: [
+      { id: 'icebox', label: 'Icebox' },
+      { id: 'speccing', label: 'Speccing' },
+      { id: 'coding', label: 'Coding' },
+      { id: 'shipped', label: 'Shipped', requires: { evidence_min: 1 } },
+    ],
+  };
+  const out = renderBrief({ items: [], events: [], stages: foreignStages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /`gw move` needs evidence past Coding\. Never edit/);
+});
+
+test('brief footer is neutral when no pipeline stage requires evidence', () => {
+  const out = renderBrief({ items: [], events: [], stages: { stages: [{ id: 'icebox' }, { id: 'shipped' }] }, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /`gw move` needs evidence where the stage requires it\. Never edit/);
 });
 
 test('100-item brief stays within the agent token and line budget and keeps dispatch visible', () => {
