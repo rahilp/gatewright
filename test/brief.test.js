@@ -42,6 +42,15 @@ test('brief footer derives the stage before the first evidence gate', () => {
   assert.match(out, /`gw move` needs evidence past Coding\. Never edit/);
 });
 
+test('brief title-cases an unlabelled stage id in its footer', () => {
+  const out = renderBrief({
+    items: [], events: [],
+    stages: { stages: [{ id: 'icebox' }, { id: 'coding' }, { id: 'shipped', requires: { evidence_min: 1 } }] },
+    config: { brief: { max_lines: 25 } },
+  });
+  assert.match(out, /`gw move` needs evidence past Coding\. Never edit/);
+});
+
 test('brief footer is neutral when no pipeline stage requires evidence', () => {
   const out = renderBrief({ items: [], events: [], stages: { stages: [{ id: 'icebox' }, { id: 'shipped' }] }, config: { brief: { max_lines: 25 } } });
   assert.match(out, /`gw move` needs evidence where the stage requires it\. Never edit/);

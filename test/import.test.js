@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseMarkdown, inferStage } from '../lib/import/md.js';
 import { run, resolveImportStage, resolveImportStages } from '../lib/commands/import.js';
 import { createStore } from '../lib/store.js';
-import { RuleError } from '../lib/cli/errors.js';
+import { RuleError, UsageError } from '../lib/cli/errors.js';
 import { evaluateCumulative, findCycles, missingDeps } from '../lib/rules.js';
 import { readStages } from '../lib/config.js';
 
@@ -143,13 +143,26 @@ test('import --dry-run prints a summary and writes nothing', async () => {
   assert.match(out, /P1-04\.1/);
 });
 
-test('import explains when no strict phase headings are present', async () => {
+test('import rejects files without strict phase headings', async () => {
   const { root, store } = repo();
   const file = join(root, 'foreign-phases.md');
   writeFileSync(file, '## X1 — Work\n- **X1-01** · Item · feature · G0 · — · Scope\n');
   const streams = capture();
+  await assert.rejects(
+    () => run({ store, root, actor: 'human:tester', flags: {}, positionals: [file], ...streams }),
+    (error) => error instanceof UsageError && error.message === 'no `## P<n> —` phase headings found; see specs §6 for the expected format',
+  );
+  assert.equal(streams.lines.join(''), '');
+  assert.equal(store.readItems().length, 0);
+});
+
+test('import accepts a valid empty phase section', async () => {
+  const { root, store } = repo();
+  const file = join(root, 'empty-phase.md');
+  writeFileSync(file, '## P1 — Work\n');
+  const streams = capture();
   assert.equal(await run({ store, root, actor: 'human:tester', flags: {}, positionals: [file], ...streams }), 0);
-  assert.equal(streams.lines.join(''), 'no `## P<n> —` phase headings found; see specs §6 for the expected format\n');
+  assert.equal(streams.lines.join(''), 'no importable task lines found under phase headings; see specs §6 for the expected format\n');
   assert.equal(store.readItems().length, 0);
 });
 
