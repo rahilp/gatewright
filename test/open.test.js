@@ -102,9 +102,12 @@ test('gw open --watch rebuilds after a store change', async () => {
   const watcher = startWatcher(root);
   try {
     await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    // The initial snapshot is written BEFORE fs.watch is registered. Mutating in
+    // that window means the change is never observed, and no deadline rescues a
+    // missed event — wait for the watcher to announce itself first.
+    await waitFor(() => /Watching items\.jsonl and events\.jsonl/.test(watcher.output()));
     store.writeItems([item(), item({ id: 'P1-02', title: 'Watch this board' })]);
     await waitFor(() => readFileSync(store.paths.board, 'utf8').includes('Watch this board'));
-    await waitFor(() => /Watching items\.jsonl and events\.jsonl/.test(watcher.output()));
     await waitFor(() => /P1-02 added/.test(watcher.output()));
     const startup = watcher.output();
     assert.ok(startup.indexOf('Watching') < startup.indexOf('P1-02 added'));
@@ -121,6 +124,9 @@ test('gw open --watch debounces rapid changes', async () => {
   const watcher = startWatcher(root);
   try {
     await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    // Wait until the watcher is registered: the initial snapshot is written
+    // before fs.watch exists, and a change made in that window is never seen.
+    await waitFor(() => /Watching items\.jsonl and events\.jsonl/.test(watcher.output()));
     for (let i = 0; i < 5; i += 1) store.writeItems([item({ title: `Rapid ${i}` })]);
     await waitFor(() => readFileSync(store.paths.board, 'utf8').includes('Rapid 4'));
     await waitFor(() => /\d{4}-\d\d-\d\dT.*· \d+ items? · /.test(watcher.output()));
@@ -138,6 +144,9 @@ test('gw open --watch summarizes a stage move', async () => {
   const watcher = startWatcher(root);
   try {
     await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    // Wait until the watcher is registered: the initial snapshot is written
+    // before fs.watch exists, and a change made in that window is never seen.
+    await waitFor(() => /Watching items\.jsonl and events\.jsonl/.test(watcher.output()));
     const moved = item({ stage: 'decided' });
     store.writeItems([moved]);
     await waitFor(() => /P1-01 → decided/.test(watcher.output()));
@@ -152,6 +161,9 @@ test('gw open --watch keeps the last good board when JSONL is corrupt', async ()
   const watcher = startWatcher(root);
   try {
     await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    // Wait until the watcher is registered: the initial snapshot is written
+    // before fs.watch exists, and a change made in that window is never seen.
+    await waitFor(() => /Watching items\.jsonl and events\.jsonl/.test(watcher.output()));
     const before = readFileSync(store.paths.board, 'utf8');
     writeFileSync(store.paths.items, '{corrupt\n');
     await new Promise((resolve) => setTimeout(resolve, 350));

@@ -2,13 +2,40 @@
   "version": 1,
   "id_scheme": "phase-seq",
   "vocab": {
-    "phase": ["P0", "P1", "P2", "P3"],
-    "priority": ["P0", "P1", "P2", "P3"],
-    "gate": ["G0", "G1", "G2"],
-    "type": ["decision", "defect", "feature", "test", "doc"]
+    "phase": [
+      "P0",
+      "P1",
+      "P2",
+      "P3"
+    ],
+    "priority": [
+      "P0",
+      "P1",
+      "P2",
+      "P3"
+    ],
+    "gate": [
+      "G0",
+      "G1",
+      "G2"
+    ],
+    "type": [
+      "decision",
+      "defect",
+      "feature",
+      "test",
+      "doc"
+    ]
   },
-  "brief": { "max_lines": 25 },
-  "check": { "stale_days": 7, "stale_exempt_stages": ["merged"] },
+  "brief": {
+    "max_lines": 25
+  },
+  "check": {
+    "stale_days": 7,
+    "stale_exempt_stages": [
+      "merged"
+    ]
+  },
   "github": {
     "enabled": false,
     "repo": null,
@@ -17,18 +44,43 @@
     "comment_on_move": true,
     "close_on": "verified",
     "labels": {
-      "priority/P0": { "priority": "P0" },
-      "type/defect": { "type": "defect" },
-      "phase/2": { "phase": "P2" }
+      "priority/P0": {
+        "priority": "P0"
+      },
+      "type/defect": {
+        "type": "defect"
+      },
+      "phase/2": {
+        "phase": "P2"
+      }
     },
     "milestone_to": "gate"
   },
   "runner": {
     "provider": "claude",
     "providers": {
-      "claude": { "cmd": ["claude", "-p", "{prompt}", "--allowedTools", "Edit,Bash"] },
-      "codex":  { "cmd": ["codex", "exec", "{prompt}"] },
-      "custom": { "cmd": ["./scripts/run-agent.sh", "{item}"] }
+      "claude": {
+        "cmd": [
+          "claude",
+          "-p",
+          "{prompt}",
+          "--allowedTools",
+          "Edit,Bash"
+        ]
+      },
+      "codex": {
+        "cmd": [
+          "codex",
+          "exec",
+          "{prompt}"
+        ]
+      },
+      "custom": {
+        "cmd": [
+          "./scripts/run-agent.sh",
+          "{item}"
+        ]
+      }
     },
     "prompt_template": ".gatewright/prompt.md",
     "tick_s": 5,
@@ -41,16 +93,30 @@
   "policy": {
     "auto_dispatch_children": false,
     "max_children_per_item": 10,
-    "triage_required_for": ["agent"]
+    "triage_required_for": [
+      "agent"
+    ]
   },
   "memory": {
     "enabled": false,
     "provider": "second-brain",
     "providers": {
-      "second-brain": { "url": "https://second-brain.example.workers.dev/mcp", "token_env": "SECOND_BRAIN_TOKEN" }
+      "second-brain": {
+        "url": "https://second-brain.example.workers.dev/mcp",
+        "token_env": "SECOND_BRAIN_TOKEN"
+      }
     },
     "project_id": null,
-    "recall": { "on_dispatch": true, "top_k": 5, "max_chars": 2000 },
-    "remember": { "on_run_ok": true, "on_close": true, "max_chars": 800, "extra_tags": [] }
+    "recall": {
+      "on_dispatch": true,
+      "top_k": 5,
+      "max_chars": 2000
+    },
+    "remember": {
+      "on_run_ok": true,
+      "on_close": true,
+      "max_chars": 800,
+      "extra_tags": []
+    }
   }
 }
