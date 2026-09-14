@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { readTemplate } from '../lib/templates.js';
+import { run as init } from '../lib/commands/init.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const DATA = ['.gatewright/items.jsonl', '.gatewright/events.jsonl', '.gatewright/stages.json', '.gatewright/config.json', '.gatewright/prompt.md', '.gatewright/.digest'];
@@ -159,7 +160,50 @@ test('init creates the root at ctx.cwd, not at process.cwd()', async () => {
   assert.match(out, /initialized/);
 });
 
-test('the usage text does not advertise --gh before P3-08 lands', () => {
+function initWithGh(root, flags, ghRun) {
+  let output = '';
+  init({ flags, cwd: root, ghRun, stdout: { write(value) { output += value; } } });
+  return output;
+}
+
+test('init --gh enables the default label map for a GitHub origin without invoking real gh', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  mkdirSync(join(root, '.git'));
+  writeFileSync(join(root, '.git', 'config'), '[remote "origin"]\n\turl = git@github.com:owner/from-remote.git\n');
+  const calls = [];
+  const out = initWithGh(root, { gh: true }, (argv) => { calls.push(argv); return { stdout: '', status: 0 }; });
+  const config = JSON.parse(readFileSync(join(root, '.gatewright', 'config.json')));
+  assert.deepEqual(calls, [['auth', 'status']]);
+  assert.equal(config.github.enabled, true);
+  assert.equal(config.github.repo, 'owner/from-remote');
+  assert.deepEqual(config.github.labels, { 'priority/P0': { priority: 'P0' }, 'type/defect': { type: 'defect' }, 'phase/2': { phase: 'P2' } });
+  assert.match(out, /enabled GitHub sync/);
+});
+
+test('init --gh --repo overrides origin discovery', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  mkdirSync(join(root, '.git'));
+  writeFileSync(join(root, '.git', 'config'), '[remote "origin"]\n\turl = https://github.com/wrong/repo.git\n');
+  initWithGh(root, { gh: true, repo: 'right/repo' }, () => ({ stdout: '', status: 0 }));
+  assert.equal(JSON.parse(readFileSync(join(root, '.gatewright', 'config.json'))).github.repo, 'right/repo');
+});
+
+test('init --gh leaves a working tracker with GitHub disabled when gh is unavailable', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  const out = initWithGh(root, { gh: true, repo: 'owner/repo' }, () => { const error = new Error('missing'); error.code = 'ENOENT'; throw error; });
+  assert.ok(existsSync(join(root, '.gatewright', 'items.jsonl')));
+  assert.equal(JSON.parse(readFileSync(join(root, '.gatewright', 'config.json'))).github.enabled, false);
+  assert.match(out, /not installed.*gh auth login/i);
+});
+
+test('init --gh can enable GitHub on an existing tracker', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  initWithGh(root, {}, () => { throw new Error('not called'); });
+  initWithGh(root, { gh: true, repo: 'owner/repo' }, () => ({ stdout: '', status: 0 }));
+  assert.equal(JSON.parse(readFileSync(join(root, '.gatewright', 'config.json'))).github.enabled, true);
+});
+
+test('the usage text advertises --gh now that P3-08 has landed', () => {
   const help = run(['--help'], mkdtempSync(join(tmpdir(), 'gw-init-')));
-  assert.ok(!help.includes('--gh'), 'a listed flag that errors is worse than not listing it');
+  assert.ok(help.includes('--gh'));
 });
