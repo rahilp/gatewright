@@ -13,11 +13,14 @@ export const spec = {
 export function run(ctx) { return 0; } // undefined also means 0
 ```
 
-`ctx` is `{ flags, positionals, store, root, actor, env, stdout, stderr }`.
+`ctx` is `{ flags, positionals, store, root, actor, env, cwd, stdout, stderr }`.
 `flags` and `positionals` are parsed by `parseArgs`. `store` is `createStore(root)` when
 `needsRoot` is true, otherwise `null`; `root` is likewise the repository root or `null`.
-`actor` is `--by`, then `GW_ACTOR`, then `human:$USER` (or `$USERNAME`). Use the supplied
-output streams rather than `process.stdout` and `process.stderr`.
+`actor` is `--by`, then `GW_ACTOR`, then `human:$USER` (or `$USERNAME`). `cwd` is the working
+directory the router was invoked with (`process.cwd()` unless overridden through the router's
+options); commands that create the root, such as `init`, use it instead of calling
+`process.cwd()` themselves. Use the supplied output streams rather than `process.stdout`
+and `process.stderr`.
 
 Exit codes are 0 success, 1 rule violation, 2 usage error, and 3 I/O or unexpected error.
 Throw `UsageError`, `RuleError`, or `IOError` from `lib/cli/errors.js` to select codes 2, 1,

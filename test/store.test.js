@@ -157,6 +157,12 @@ test('a lock left behind by a dead process is broken, not waited on forever', ()
   assert.equal(store.withLock(() => 'ran', { giveUpMs: 500, pollMs: 10 }), 'ran');
 });
 
+test('paths cover every on-disk file, including the prompt template', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-'));
+  const store = createStore(root);
+  assert.equal(store.paths.prompt, join(root, '.gatewright', 'prompt.md'));
+});
+
 test('concurrent read-modify-writes from separate processes lose nothing', async () => {
   const store = freshStore();
   const worker = fileURLToPath(new URL('./fixtures/claim-worker.mjs', import.meta.url));

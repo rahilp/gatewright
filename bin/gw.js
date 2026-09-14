@@ -10,11 +10,12 @@ import { findRoot, actor } from '../lib/cli/root.js';
 
 const PKG = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
 
+// `init --gh` returns with P3-08 (v0.3, GitHub sync); do not list it in the usage until it works.
 const USAGE = `gw — evidence-gated work tracking for coding agents
 
 usage: gw <command> [options]
 
-  init [--gh] [--force]                 create .gatewright/ and the agent instruction block
+  init [--force]                        create .gatewright/ and the agent instruction block
   brief [--me <owner>] [--json]         what is in flight, blocked, owned, and next
   add "<title>" [--parent ID] ...       create an item, print its id
   edit <id> [--title ...] [--scope ...] change item fields
@@ -55,7 +56,7 @@ export async function runRouter(argv, { cwd = process.cwd(), env = process.env, 
     const { flags, positionals } = parseArgs(argv.slice(1), command.spec);
     const needsRoot = command.spec.needsRoot !== false;
     const root = needsRoot ? findRoot(cwd, env) : null;
-    const ctx = { flags, positionals, store: needsRoot ? createStore(root) : null, root, actor: actor(flags, env), env, stdout, stderr };
+    const ctx = { flags, positionals, store: needsRoot ? createStore(root) : null, root, actor: actor(flags, env), env, cwd, stdout, stderr };
     return (await command.run(ctx)) ?? 0;
   } catch (error) {
     const known = error instanceof UsageError || error instanceof RuleError || error instanceof IOError;

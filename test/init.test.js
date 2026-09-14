@@ -95,3 +95,26 @@ test('init fails cleanly on a malformed AGENTS.md without creating .gatewright/'
     assert.ok(!existsSync(join(root, '.gatewright')), 'nothing must be created when AGENTS.md is malformed');
   }
 });
+
+test('init creates the root at ctx.cwd, not at process.cwd()', async () => {
+  const { runRouter } = await import('../bin/gw.js');
+  const target = mkdtempSync(join(tmpdir(), 'gw-init-cwd-'));
+  const elsewhere = mkdtempSync(join(tmpdir(), 'gw-init-elsewhere-'));
+  let out = '';
+  const previousCwd = process.cwd();
+  process.chdir(elsewhere); // even a wrong process.cwd() must not become the root
+  try {
+    const code = await runRouter(['init'], { cwd: target, env: {}, stdout: { write: (s) => { out += s; } }, stderr: { write: () => {} } });
+    assert.equal(code, 0);
+  } finally {
+    process.chdir(previousCwd);
+  }
+  assert.ok(existsSync(join(target, '.gatewright')), 'the root must be created at ctx.cwd');
+  assert.ok(!existsSync(join(elsewhere, '.gatewright')), 'process.cwd() must never be used');
+  assert.match(out, /initialized/);
+});
+
+test('the usage text does not advertise --gh before P3-08 lands', () => {
+  const help = run(['--help'], mkdtempSync(join(tmpdir(), 'gw-init-')));
+  assert.ok(!help.includes('--gh'), 'a listed flag that errors is worse than not listing it');
+});

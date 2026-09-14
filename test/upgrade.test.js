@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -10,12 +10,19 @@ import { readTemplate } from '../lib/templates.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const DATA = ['.gatewright/items.jsonl', '.gatewright/events.jsonl', '.gatewright/stages.json', '.gatewright/config.json', '.gatewright/prompt.md', '.gatewright/.digest'];
+const MIRRORS = ['CLAUDE.md', join('.cursor', 'rules', 'gatewright.mdc'), join('.github', 'copilot-instructions.md')];
 
 const run = (args, cwd) => execFileSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, GW_ROOT: '' } });
 const digest = (root, files) => files.map((f) => {
   const path = join(root, f);
   return existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : 'missing';
 });
+const walk = (dir, prefix = '') => readdirSync(dir, { withFileTypes: true })
+  .flatMap((entry) => {
+    const rel = prefix ? join(prefix, entry.name) : entry.name;
+    return entry.isDirectory() ? walk(join(dir, entry.name), rel) : [rel];
+  })
+  .sort();
 
 // An initialized repo with one item, a custom prompt template, a stale board,
 // and an AGENTS.md carrying an outdated block — the state upgrade must fix the
@@ -64,14 +71,48 @@ test('upgrade --templates replaces prompt.md and says so loudly', () => {
   assert.match(out, /prompt\.md REPLACED/);
 });
 
-test('upgrade creates the board and the AGENTS.md block when they are missing', () => {
+test('upgrade refreshes every mirrored instruction block and creates no new files', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-upgrade-'));
+  writeFileSync(join(root, 'CLAUDE.md'), '# Claude rules\n\nBe terse.\n');
+  mkdirSync(join(root, '.cursor', 'rules'), { recursive: true });
+  mkdirSync(join(root, '.github'));
+  run(['init'], root);
+
+  for (const file of ['AGENTS.md', ...MIRRORS]) {
+    const path = join(root, file);
+    writeFileSync(path, readFileSync(path, 'utf8').replace(readTemplate('agents-block.md'), '<!-- gatewright:start -->\nstale wording from an older release\n<!-- gatewright:end -->\n'));
+  }
+  const before = walk(root).filter((f) => f !== join('.gatewright', 'board.html')); // the board is gatewright-owned and may be regenerated
+
+  const out = run(['upgrade'], root);
+
+  assert.deepEqual(walk(root).filter((f) => f !== join('.gatewright', 'board.html')), before, 'upgrade must not create (or remove) any file');
+  for (const file of ['AGENTS.md', ...MIRRORS]) {
+    const text = readFileSync(join(root, file), 'utf8');
+    assert.ok(text.includes(readTemplate('agents-block.md')), `${file} must carry the shipped block again`);
+    assert.ok(!text.includes('stale wording'), `${file} must not keep last version's instructions`);
+  }
+  for (const file of ['AGENTS.md', ...MIRRORS]) assert.match(out, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'upgrade must name every file it refreshed');
+});
+
+test('upgrade regenerates a missing board but never creates instruction files', () => {
   const root = repo();
+  writeFileSync(join(root, 'AGENTS.md'), '# Agent rules\n\nProse with no block yet.\n');
   writeFileSync(join(root, '.gatewright', 'board.html'), '');
-  const staleAgents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
-  writeFileSync(join(root, 'AGENTS.md'), staleAgents.replace(readTemplate('agents-block.md'), ''));
+  run(['upgrade'], root);
+
+  assert.match(readFileSync(join(root, '.gatewright', 'board.html'), 'utf8'), /^<!-- gatewright board v1 -->/);
+  assert.ok(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes(readTemplate('agents-block.md')), 'an existing AGENTS.md is refreshed');
+
+  rmSync(join(root, 'AGENTS.md'));
+  writeFileSync(join(root, '.gatewright', 'board.html'), '');
+  const before = walk(root);
 
   run(['upgrade'], root);
 
   assert.match(readFileSync(join(root, '.gatewright', 'board.html'), 'utf8'), /^<!-- gatewright board v1 -->/);
-  assert.ok(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes(readTemplate('agents-block.md')));
+  assert.deepEqual(walk(root), before.filter((f) => f !== 'AGENTS.md'), 'no instruction file may be created');
+  assert.ok(!existsSync(join(root, 'CLAUDE.md')));
+  assert.ok(!existsSync(join(root, '.cursor')));
+  assert.ok(!existsSync(join(root, '.github')));
 });
