@@ -289,7 +289,8 @@
   #gw-panel dl { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
   #gw-panel dt { color: var(--text-dim); }
   #gw-panel dd { margin: 0; }
-  #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
+  #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; align-items: flex-start; }
+  #gw-panel .stage-button-wrap { display: flex; flex-direction: column; gap: 0.2rem; max-width: 13rem; }
   #gw-panel .stage-buttons button {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -299,10 +300,111 @@
     color: var(--text-faint);
     cursor: not-allowed;
   }
-  #gw-panel .stage-buttons button[title] { }
+  #gw-panel .stage-buttons button:not([disabled]) {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+    cursor: pointer;
+  }
+  #gw-panel .stage-reason { font-size: 0.7rem; color: var(--text-dim); }
+  #gw-panel .stage-refusal:empty { display: none; }
+  .refusal {
+    color: var(--danger);
+    background: var(--danger-bg);
+    border: 1px solid var(--danger);
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.76rem;
+    margin: 0.3rem 0;
+    font-family: var(--mono);
+  }
   #gw-panel h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 1rem 0 0.35rem; }
   #gw-panel .event-line { display: flex; gap: 0.5rem; font-size: 0.76rem; padding: 0.2rem 0; border-bottom: 1px dashed var(--border); }
   #gw-panel .event-line time { color: var(--text-faint); white-space: nowrap; }
+  #gw-panel .panel-actions { margin: 0.6rem 0; }
+  #gw-panel .panel-actions button {
+    border: 1px solid var(--accent);
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  #gw-panel .evidence-list { list-style: none; margin: 0.3rem 0; padding: 0; }
+  #gw-panel .evidence-list li.evidence-chip { font-family: var(--mono); font-size: 0.78rem; padding: 0.15rem 0; }
+  #gw-panel .evidence-add, #gw-panel .note-add { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.8rem; }
+  #gw-panel .evidence-add input, #gw-panel .note-add textarea {
+    flex: 1;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  #gw-panel .evidence-add button, #gw-panel .note-add button, #gw-panel #save-fields-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  #gw-panel dd input { width: 100%; background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text); border-radius: 0.3rem; padding: 0.2rem 0.4rem; font-size: 0.8rem; }
+  #gw-panel .field-refusal:empty { display: none; }
+  #gw-panel .notes-body { white-space: pre-wrap; font-size: 0.8rem; background: var(--bg-sunken); border-radius: 0.35rem; padding: 0.5rem 0.6rem; margin: 0.3rem 0; }
+  #gw-panel #panel-error:empty { display: none; }
+  .create-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.8rem; }
+  .create-form label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--text-dim); }
+  .create-form input, .create-form select, .create-form textarea {
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  .create-form button[type="submit"] {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  .card-actions { margin-top: 0.4rem; }
+  .card-actions button {
+    border: 1px solid var(--accent);
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-radius: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  .tag.badge-queued { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+  #gw-pause-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text);
+    border-radius: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  #gw-pause-banner {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-bottom: 1px solid var(--warn);
+    padding: 0.45rem 1.25rem;
+    font-size: 0.82rem;
+    text-align: center;
+  }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -311,7 +413,9 @@
     <h1>gatewright</h1>
     <span class="meta" id="gw-snapshot-meta"></span>
     <span class="totals" id="gw-totals"></span>
+    <button id="gw-pause-btn" class="hidden"></button>
   </header>
+  <div id="gw-pause-banner" class="hidden" role="status"></div>
 
   <nav id="gw-tabs">
     <button data-view="overview" class="active">Overview</button>
@@ -329,6 +433,7 @@
     <select id="f-flag"><option value="">flag: all</option></select>
     <input type="search" id="f-search" placeholder="search id / title / scope">
     <button class="clear-filters" id="f-clear">clear</button>
+    <button class="clear-filters hidden" id="f-new">+ new item</button>
   </div>
 
   <main id="gw-view"></main>
@@ -406,7 +511,46 @@
     view: 'overview',
     filters: { phase: '', gate: '', type: '', stage: '', flag: '', search: '' },
     sort: { key: 'updated', dir: 'desc' },
+    pendingEvidence: {},
+    creatingItem: false,
   };
+
+  // -- write path: every request goes through /api/*, then the existing poll
+  // loop re-fetches /api/state. There is no second state model.
+  const Inflight = new Set();
+  let pollTimer = null;
+
+  function schedulePoll(delay) {
+    if (pollTimer) window.clearTimeout(pollTimer);
+    pollTimer = window.setTimeout(poll, delay);
+  }
+
+  async function refreshNow() {
+    if (pollTimer) { window.clearTimeout(pollTimer); pollTimer = null; }
+    await poll();
+  }
+
+  async function apiWrite(path, body) {
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      let data = null;
+      try { data = await res.json(); } catch { /* no body */ }
+      return { ok: res.ok, status: res.status, data };
+    } catch (error) {
+      return { ok: false, status: 0, data: { error: error.message || 'network error' } };
+    }
+  }
+
+  function isDispatched(id) {
+    const relevant = State.events.filter((e) => e.item === id && (e.type === 'dispatch' || e.type === 'cancel'));
+    if (!relevant.length) return false;
+    relevant.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    return relevant[relevant.length - 1].type === 'dispatch';
+  }
 
   async function loadState() {
     const items = readBlock('gw-items');
@@ -488,6 +632,26 @@
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
     document.getElementById('gw-totals').innerHTML =
       '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
+    renderPauseUI();
+    document.getElementById('f-new').classList.toggle('hidden', !State.live);
+  }
+
+  function renderPauseUI() {
+    const btn = document.getElementById('gw-pause-btn');
+    const banner = document.getElementById('gw-pause-banner');
+    if (!State.live) { btn.classList.add('hidden'); banner.classList.add('hidden'); return; }
+    btn.classList.remove('hidden');
+    const paused = Boolean(State.config && State.config.runner && State.config.runner.paused);
+    btn.textContent = paused ? 'resume' : 'pause';
+    btn.title = paused
+      ? 'Resume: let the scheduler start eligible work again once v0.4 ships a runner. Nothing runs in v0.2 either way.'
+      : 'Pause: stop the scheduler from starting new work once v0.4 ships a runner. Nothing runs in v0.2 either way.';
+    if (paused) {
+      banner.classList.remove('hidden');
+      banner.textContent = 'Paused — no new work will be started until resumed.';
+    } else {
+      banner.classList.add('hidden');
+    }
   }
 
   function liveAge() {
@@ -524,15 +688,20 @@
 
   function cardMarkup(it, moved) {
     const evCount = (it.evidence || []).length;
+    const dispatched = isDispatched(it.id);
+    const actions = State.live ? '<div class="card-actions">' + (dispatched
+      ? '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch. There is no runner in v0.2, so this only clears the queue entry — nothing was running to stop.">Stop</button>'
+      : '<button data-play="' + escapeHtml(it.id) + '" title="Queues this item for an agent — the same as gw brief surfacing it as dispatched. Nothing starts running: v0.2 has no runner yet.">Play</button>') + '</div>' : '';
     return '<div class="card' + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
       '<span class="tag">' + escapeHtml(it.type || '?') + '</span>' +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
+      (dispatched ? '<span class="tag badge-queued">queued</span>' : '') +
       (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
       '<span class="tag mono">ev:' + evCount + '</span>' +
-      '</div></div>';
+      '</div>' + actions + '</div>';
   }
 
   function renderBoard(container) {
@@ -621,12 +790,32 @@
   function openPanel(id) {
     const it = State.items.find((i) => i.id === id);
     if (!it) return;
-    const panel = document.getElementById('gw-panel');
-    const overlay = document.getElementById('gw-overlay');
-    const itemEvents = State.events.filter((e) => e.item === id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    State.activePanelId = id;
+    State.creatingItem = false;
+    if (!State.pendingEvidence[id]) State.pendingEvidence[id] = [];
+    renderPanel(it);
+    document.getElementById('gw-overlay').classList.add('open');
+  }
 
+  function closePanel() {
+    State.activePanelId = null;
+    State.creatingItem = false;
+    document.getElementById('gw-overlay').classList.remove('open');
+  }
+
+  function showPanelError(msg) {
+    const el = document.getElementById('panel-error');
+    if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '</div>';
+  }
+
+  function renderPanel(it) {
+    const panel = document.getElementById('gw-panel');
+    const itemEvents = State.events.filter((e) => e.item === it.id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+
+    const pendingEv = State.pendingEvidence[it.id] || [];
+    const allEvidence = [...(it.evidence || []), ...pendingEv];
     const target = nextStageId(State.stages, it.stage);
-    const evalResult = target ? evaluateRequires(it, target, State) : null;
+    const evalResult = target ? evaluateRequires({ ...it, evidence: allEvidence }, target, State) : null;
 
     const banner = State.live
       ? ''
@@ -634,22 +823,68 @@
         (target ? ' &middot; to advance this item run: <code>gw move ' + escapeHtml(it.id) + ' ' + escapeHtml(target) + ' --evidence &lt;commit&gt;</code>' : '') +
         '</div>';
 
-    const stageButtons = stageList(State.stages).slice(0, (stageList(State.stages).length)).map((s) => {
+    const dispatched = isDispatched(it.id);
+    const playStop = State.live
+      ? '<div class="panel-actions">' + (dispatched
+        ? '<button id="panel-stop" title="Cancels the queued dispatch. There is no runner in v0.2, so this only clears the queue entry — nothing was running to stop.">Stop (cancel dispatch)</button>'
+        : '<button id="panel-play" title="Queues this item for an agent — the same as gw brief surfacing it as dispatched. Nothing starts running: v0.2 has no runner yet.">Play (queue for an agent)</button>') + '</div>'
+      : '';
+
+    const stageButtonsHtml = stageList(State.stages).map((s) => {
       if (s.id === it.stage) return '';
       const isNext = s.id === target;
       let reason = '';
-      if (!isNext) reason = 'use `gw move --force` to skip stages';
-      else if (evalResult && !evalResult.ok) reason = evalResult.failures.join('; ');
-      return '<button disabled title="' + escapeHtml(reason || 'read-only snapshot') + '">' + escapeHtml(s.label) + '</button>';
+      let disabled = true;
+      if (!State.live) {
+        reason = 'read-only snapshot';
+      } else if (!isNext) {
+        reason = 'use `gw move --force` to skip stages';
+      } else if (evalResult && !evalResult.ok) {
+        reason = evalResult.failures.join('; ');
+      } else {
+        disabled = false;
+      }
+      return '<div class="stage-button-wrap">' +
+        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') + (reason ? ' title="' + escapeHtml(reason) + '"' : '') + '>' + escapeHtml(s.label) + '</button>' +
+        (reason && State.live ? '<div class="stage-reason">' + escapeHtml(reason) + '</div>' : '') +
+        '<div class="stage-refusal" id="move-fail-' + escapeHtml(s.id) + '"></div>' +
+        '</div>';
     }).join('');
 
-    const fields = ['id', 'title', 'phase', 'priority', 'gate', 'type', 'stage', 'flag', 'owner', 'scope', 'deps', 'evidence', 'notes', 'refs', 'parent', 'created_by', 'gh', 'created', 'updated'];
-    const dl = fields.map((f) => {
+    const evidenceHtml = allEvidence.length
+      ? allEvidence.map((e, idx) => '<li class="evidence-chip">' + escapeHtml(e) + (idx >= (it.evidence || []).length ? ' <span class="meta">(pending &middot; sent with the next stage move)</span>' : '') + '</li>').join('')
+      : '<li class="meta">none</li>';
+    const evidenceEditor = State.live
+      ? '<div class="evidence-add"><input type="text" id="evidence-input" placeholder="commit SHA, test path, PR/CI URL"><button id="evidence-add-btn">add evidence</button></div>'
+      : '';
+
+    const notesEditor = State.live
+      ? '<div class="note-add"><textarea id="note-input" rows="2" placeholder="append a note"></textarea><button id="note-add-btn">add note</button></div>'
+      : '';
+
+    const editableFields = ['title', 'scope', 'priority', 'type', 'phase', 'gate', 'deps', 'refs'];
+    const ghOwned = new Set(['title', 'scope', 'priority', 'type', 'phase', 'gate']);
+    const linked = Boolean(it.gh);
+    const fieldRows = editableFields.map((f) => {
+      const raw = it[f];
+      const value = Array.isArray(raw) ? raw.join(', ') : (raw == null ? '' : raw);
+      if (!State.live) {
+        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '">' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
+      }
+      const lockedNote = linked && ghOwned.has(f)
+        ? ' <span class="meta">(GitHub-owned on this linked item &mdash; edits are refused; edit the issue instead)</span>'
+        : '';
+      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + '>' + lockedNote +
+        '<div class="field-refusal" id="field-fail-' + f + '"></div></dd>';
+    }).join('');
+    const saveBtn = State.live ? '<button id="save-fields-btn">save fields</button>' : '';
+
+    const readonlyFields = ['id', 'stage', 'flag', 'owner', 'parent', 'created_by', 'gh', 'created', 'updated'];
+    const readonlyDl = readonlyFields.map((f) => {
       let v = it[f];
-      if (Array.isArray(v)) v = v.length ? v.join(', ') : '(none)';
-      else if (v && typeof v === 'object') v = JSON.stringify(v);
+      if (v && typeof v === 'object') v = JSON.stringify(v);
       else if (v == null || v === '') v = '(none)';
-      return '<dt>' + f + '</dt><dd class="' + (f === 'id' || f === 'evidence' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
+      return '<dt>' + f + '</dt><dd class="' + (f === 'id' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
     }).join('');
 
     const eventsHtml = itemEvents.length
@@ -658,22 +893,199 @@
 
     panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
       '<p>' + escapeHtml(it.title) + '</p>' +
-      banner +
-      '<div class="stage-buttons">' + stageButtons + '</div>' +
-      '<dl>' + dl + '</dl>' +
+      '<div id="panel-error"></div>' +
+      banner + playStop +
+      '<h3>Stage</h3><div class="stage-buttons">' + stageButtonsHtml + '</div>' +
+      '<h3>Evidence</h3><ul class="evidence-list">' + evidenceHtml + '</ul>' + evidenceEditor +
+      '<h3>Fields</h3><dl>' + fieldRows + '</dl>' + saveBtn +
+      '<dl>' + readonlyDl + '</dl>' +
+      '<h3>Notes</h3><pre class="notes-body">' + escapeHtml(it.notes || '(none)') + '</pre>' + notesEditor +
       '<h3>Event history</h3>' + eventsHtml;
 
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
-    State.activePanelId = id;
+    wirePanelActions(it);
+  }
+
+  function wirePanelActions(it) {
+    const panel = document.getElementById('gw-panel');
+
+    panel.querySelectorAll('[data-move]').forEach((btn) => {
+      btn.addEventListener('click', () => onMoveClick(it.id, btn.dataset.move, btn));
+    });
+
+    const playBtn = panel.querySelector('#panel-play');
+    if (playBtn) playBtn.addEventListener('click', () => onDispatchClick(it.id, 'dispatch', playBtn));
+    const stopBtn = panel.querySelector('#panel-stop');
+    if (stopBtn) stopBtn.addEventListener('click', () => onDispatchClick(it.id, 'cancel', stopBtn));
+
+    const evBtn = panel.querySelector('#evidence-add-btn');
+    if (evBtn) evBtn.addEventListener('click', () => {
+      const input = panel.querySelector('#evidence-input');
+      const value = input.value.trim();
+      if (!value) return;
+      if (!State.pendingEvidence[it.id]) State.pendingEvidence[it.id] = [];
+      State.pendingEvidence[it.id].push(value);
+      const fresh = State.items.find((i) => i.id === it.id) || it;
+      renderPanel(fresh);
+    });
+
+    const noteBtn = panel.querySelector('#note-add-btn');
+    if (noteBtn) noteBtn.addEventListener('click', () => onNoteSubmit(it.id, noteBtn));
+
+    const saveBtn = panel.querySelector('#save-fields-btn');
+    if (saveBtn) saveBtn.addEventListener('click', () => onSaveFields(it, saveBtn));
+  }
+
+  async function onMoveClick(id, to, btn) {
+    const key = 'move:' + id + ':' + to;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const evidence = State.pendingEvidence[id] || [];
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/move', { to, evidence });
+    Inflight.delete(key);
+    if (result.ok) {
+      State.pendingEvidence[id] = [];
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      const failures = (result.data && result.data.failures && result.data.failures.length)
+        ? result.data.failures
+        : [(result.data && result.data.error) || 'request failed'];
+      const box = document.getElementById('move-fail-' + to);
+      if (box) box.innerHTML = failures.map((f) => '<div class="refusal">' + escapeHtml(f) + '</div>').join('');
+    }
+  }
+
+  async function onDispatchClick(id, action, btn) {
+    const key = action + ':' + id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/' + action, {});
+    Inflight.delete(key);
+    if (result.ok) {
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      showPanelError((result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  async function onNoteSubmit(id, btn) {
+    const panel = document.getElementById('gw-panel');
+    const input = panel.querySelector('#note-input');
+    const text = input.value.trim();
+    if (!text) return;
+    const key = 'note:' + id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/note', { text });
+    Inflight.delete(key);
+    if (result.ok) {
+      input.value = '';
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      showPanelError((result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  async function onSaveFields(it, btn) {
+    const panel = document.getElementById('gw-panel');
+    const inputs = panel.querySelectorAll('[data-field]');
+    const body = {};
+    inputs.forEach((input) => {
+      const field = input.dataset.field;
+      const raw = it[field];
+      const original = Array.isArray(raw) ? raw.join(', ') : (raw == null ? '' : String(raw));
+      const value = input.value;
+      if (value !== original) {
+        body[field] = (field === 'deps' || field === 'refs')
+          ? value.split(',').map((v) => v.trim()).filter(Boolean).join(',')
+          : value;
+      }
+    });
+    if (!Object.keys(body).length) return;
+    const key = 'edit:' + it.id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    panel.querySelectorAll('.field-refusal').forEach((el) => { el.innerHTML = ''; });
+    const result = await apiWrite('/api/items/' + encodeURIComponent(it.id), body);
+    Inflight.delete(key);
+    btn.disabled = false;
+    if (result.ok) {
+      await refreshNow();
+    } else if (result.status === 409) {
+      const failures = (result.data && result.data.failures && result.data.failures.length)
+        ? result.data.failures
+        : [(result.data && result.data.error) || 'refused'];
+      const message = (result.data && result.data.error) || failures.join('; ');
+      showPanelError(message);
+      Object.keys(body).forEach((field) => {
+        const el = document.getElementById('field-fail-' + field);
+        if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(message) + '</div>';
+      });
+    } else {
+      showPanelError((result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  function openCreatePanel() {
+    const panel = document.getElementById('gw-panel');
+    const overlay = document.getElementById('gw-overlay');
+    State.activePanelId = null;
+    State.creatingItem = true;
+    const vocab = (State.config && State.config.vocab) || {};
+    function options(list) {
+      return '<option value="">(none)</option>' + (list || []).map((v) => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+    }
+    panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
+      '<div id="panel-error"></div>' +
+      '<form id="create-form" class="create-form">' +
+      '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
+      '<label>Phase<select name="phase">' + options(vocab.phase) + '</select></label>' +
+      '<label>Type<select name="type">' + options(vocab.type) + '</select></label>' +
+      '<label>Priority<select name="priority">' + options(vocab.priority) + '</select></label>' +
+      '<label>Gate<select name="gate">' + options(vocab.gate) + '</select></label>' +
+      '<label>Scope<textarea name="scope" rows="3"></textarea></label>' +
+      '<label>Parent<input type="text" name="parent" placeholder="item id, optional"></label>' +
+      '<button type="submit">create</button>' +
+      '</form>';
+    panel.querySelector('#panel-close').addEventListener('click', closePanel);
+    panel.querySelector('#create-form').addEventListener('submit', onCreateSubmit);
     overlay.classList.add('open');
   }
 
-  function closePanel() {
-    State.activePanelId = null;
-    document.getElementById('gw-overlay').classList.remove('open');
+  async function onCreateSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    if (Inflight.has('create')) return;
+    Inflight.add('create');
+    btn.disabled = true;
+    const data = new FormData(form);
+    const body = {};
+    for (const [k, v] of data.entries()) {
+      const trimmed = String(v).trim();
+      if (trimmed !== '') body[k] = trimmed;
+    }
+    const result = await apiWrite('/api/items', body);
+    Inflight.delete('create');
+    btn.disabled = false;
+    if (result.ok) {
+      State.creatingItem = false;
+      closePanel();
+      await refreshNow();
+    } else {
+      const failures = (result.data && result.data.failures && result.data.failures.length) ? result.data.failures.join('; ') : null;
+      showPanelError(failures || (result.data && result.data.error) || 'request failed');
+    }
   }
 
-  function updateBoardInPlace(previousItems) {
+  function updateBoardInPlace(previousItems, priorDispatch) {
     const board = document.getElementById('board');
     if (!board) { renderView(); return; }
     const oldById = new Map(previousItems.map((item) => [item.id, item]));
@@ -686,10 +1098,11 @@
       const fragment = document.createDocumentFragment();
       for (const item of items) {
         const prior = oldById.get(item.id); const moved = prior && prior.stage !== item.stage;
+        const dispatchChanged = priorDispatch.has(item.id) && priorDispatch.get(item.id) !== isDispatched(item.id);
         let card = cards.get(item.id);
         if (!card || moved) {
           const holder = document.createElement('div'); holder.innerHTML = cardMarkup(item, moved); card = holder.firstChild;
-        } else if (JSON.stringify(prior) !== JSON.stringify(item)) {
+        } else if (JSON.stringify(prior) !== JSON.stringify(item) || dispatchChanged) {
           const holder = document.createElement('div'); holder.innerHTML = cardMarkup(item, false);
           const replacement = holder.firstChild; card.replaceWith(replacement); card = replacement;
         }
@@ -710,17 +1123,18 @@
       const res = await fetch('/api/state' + since);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json(); const previous = State.items;
+      const priorDispatch = new Map(previous.map((item) => [item.id, isDispatched(item.id)]));
       State.items = data.items || []; mergeEvents(data.events || []);
       State.stages = data.stages || State.stages; State.config = data.config || State.config;
       State.generatedAt = data.generatedAt || new Date().toISOString();
       State.lastLiveUpdate = Date.now(); State.liveError = null; State.pollingDelay = 2000;
       populateFilterOptions(); renderHeader();
-      if (State.view === 'board') updateBoardInPlace(previous); else renderView();
+      if (State.view === 'board') updateBoardInPlace(previous, priorDispatch); else renderView();
       if (State.activePanelId) openPanel(State.activePanelId);
     } catch (error) {
       State.liveError = error.message || 'server unavailable'; State.pollingDelay = Math.min(State.pollingDelay * 2, 30000); renderHeader();
     }
-    window.setTimeout(poll, State.pollingDelay);
+    schedulePoll(State.pollingDelay);
   }
 
   function wireStatic() {
@@ -746,6 +1160,10 @@
     });
 
     document.getElementById('gw-view').addEventListener('click', (e) => {
+      const playBtn = e.target.closest('[data-play]');
+      if (playBtn) { e.stopPropagation(); onDispatchClick(playBtn.dataset.play, 'dispatch', playBtn); return; }
+      const stopBtn = e.target.closest('[data-stop]');
+      if (stopBtn) { e.stopPropagation(); onDispatchClick(stopBtn.dataset.stop, 'cancel', stopBtn); return; }
       const card = e.target.closest('[data-id]');
       if (card) openPanel(card.dataset.id);
     });
@@ -764,6 +1182,21 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closePanel();
     });
+
+    document.getElementById('f-new').addEventListener('click', openCreatePanel);
+
+    document.getElementById('gw-pause-btn').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const key = 'pauseToggle';
+      if (Inflight.has(key)) return;
+      const paused = Boolean(State.config && State.config.runner && State.config.runner.paused);
+      Inflight.add(key);
+      btn.disabled = true;
+      const result = await apiWrite(paused ? '/api/resume' : '/api/pause', {});
+      Inflight.delete(key);
+      btn.disabled = false;
+      if (result.ok) await refreshNow();
+    });
   }
 
   async function boot() {
@@ -775,7 +1208,7 @@
     renderView();
     if (location.protocol.indexOf('http') === 0) {
       State.live = true; State.lastLiveUpdate = Date.now(); renderHeader();
-      window.setTimeout(poll, 2000);
+      schedulePoll(2000);
       window.setInterval(() => { if (State.live) renderHeader(); }, 1000);
     }
   }
