@@ -457,6 +457,51 @@ POST /api/pause  /api/resume        global
 GET  /api/runs/:run/log?tail=200    (v0.4)
 ```
 
+### 8.1 Writes invoke the CLI command modules
+
+A write endpoint does not reimplement its command, and does not "use the store
+the same way". It loads the same module in `lib/commands/` that the CLI loads
+and calls its `run(ctx)` with a synthesized ctx — flags and positionals built
+from the request body, stdout and stderr captured. One implementation, therefore
+one behaviour: every rule the CLI enforces the board enforces, and every refusal
+the CLI gives the board can show. The one-write-path property stops being a
+discipline anyone can erode and becomes a fact about the code.
+
+Errors map by class, so the board can react to each meaningfully:
+
+| thrown | status | body |
+|---|---|---|
+| `RuleError` | 409 | `{ error, failures: [...] }` — the board shows each unmet rule on the card |
+| `UsageError` | 400 | `{ error }` |
+| `IOError` or anything else | 500 | `{ error }` |
+
+A 409 is the interesting one: it is not a failure of the request, it is the
+board working. "needs at least 1 evidence entry" belongs next to the stage
+button that refused, in the same words the CLI would have used.
+
+### 8.2 Guarding writes
+
+`serve` binds loopback and has no auth, which is fine while every request is a
+GET. It is not fine once writes exist: any page you visit can send a
+cross-origin `POST` to `127.0.0.1:7777`. The browser hides the response from the
+attacker, but the write has already happened, and the attacker does not need to
+read it — moving someone's cards is damage enough.
+
+Every state-changing request (anything not GET or HEAD) must therefore satisfy
+all three:
+
+1. `Host` is loopback. This is what defeats DNS rebinding, where an attacker's
+   domain resolves to 127.0.0.1: the Host header still carries their name.
+2. `Origin` is present AND loopback. Browsers always send `Origin` on
+   cross-origin POSTs, so a **missing** Origin on a write is rejected rather than
+   waved through — the permissive reading is the one that gets exploited.
+3. `Content-Type: application/json`. A form POST cannot set that header without
+   triggering a CORS preflight, and the preflight will fail. This is belt and
+   braces on top of the Origin check, and it costs one line.
+
+No CORS headers are ever sent in response. There is no legitimate cross-origin
+caller.
+
 All writes go through the same module the CLI uses. There is one write path.
 
 ## 9. GitHub sync (v0.3)
