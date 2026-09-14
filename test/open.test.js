@@ -31,7 +31,11 @@ function extractBlock(html, id) {
   return JSON.parse(match[1]);
 }
 
-function waitFor(predicate, timeout = 5000) {
+// 15s, not 5: this polls for its condition and returns the instant it is true,
+// so a longer deadline costs nothing when the machine is idle. It only matters
+// under load — node --test runs files in parallel, and a shared CI runner makes
+// a 5s deadline a false failure rather than a real one.
+function waitFor(predicate, timeout = 15000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {

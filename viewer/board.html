@@ -473,34 +473,10 @@
     } catch { return iso; }
   }
 
-  // -- rules, mirrored from lib/rules.js so the panel can explain a disabled
-  // stage button the same way `gw move` would refuse the command.
   function stageList(stages) { return [...(stages.stages || []), ...(stages.extra || [])]; }
-  function stageIndexOf(stages, id) { return (stages.stages || []).findIndex((s) => s.id === id); }
   function nextStageId(stages, id) {
-    const i = stageIndexOf(stages, id);
+    const i = (stages.stages || []).findIndex((s) => s.id === id);
     return i >= 0 ? (stages.stages[i + 1] ? stages.stages[i + 1].id : null) : null;
-  }
-  function evaluateRequires(item, targetId, ctx) {
-    const target = stageList(ctx.stages).find((s) => s.id === targetId);
-    const requires = target && target.requires;
-    if (!requires) return { ok: true, failures: [] };
-    const failures = [];
-    if (requires.owner && !item.owner) failures.push('needs an owner: run `gw claim ' + item.id + '`');
-    if (requires.evidence_min && (item.evidence || []).length < requires.evidence_min) {
-      failures.push('needs at least ' + requires.evidence_min + ' evidence entr' + (requires.evidence_min === 1 ? 'y' : 'ies') + ': run `gw move ' + item.id + ' ' + targetId + ' --evidence <e>`');
-    }
-    if (requires.evidence_match) {
-      const re = new RegExp(requires.evidence_match);
-      if (!(item.evidence || []).some((e) => re.test(e))) failures.push('needs matching evidence: run `gw move ' + item.id + ' ' + targetId + ' --evidence <e>`');
-    }
-    if (requires.deps_at_least) {
-      const boundary = stageIndexOf(ctx.stages, requires.deps_at_least);
-      const byId = new Map(ctx.items.map((c) => [c.id, c]));
-      const bad = (item.deps || []).filter((id) => { const dep = byId.get(id); return !dep || stageIndexOf(ctx.stages, dep.stage) < boundary; });
-      if (bad.length) failures.push('dependencies must be at least ' + requires.deps_at_least + ': ' + bad.join(', ') + '. Move them with `gw move <id> ' + requires.deps_at_least + '`.');
-    }
-    return { ok: failures.length === 0, failures };
   }
 
   const STAGE_LABEL_FALLBACK = (id) => id;
@@ -508,6 +484,7 @@
   const State = {
     items: [], events: [], stages: { stages: [], extra: [] }, config: {}, generatedAt: null, live: false,
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
+    transitions: {}, transitionLoading: {}, transitionErrors: {},
     view: 'overview',
     filters: { phase: '', gate: '', type: '', stage: '', flag: '', search: '' },
     sort: { key: 'updated', dir: 'desc' },
@@ -795,6 +772,7 @@
     if (!State.pendingEvidence[id]) State.pendingEvidence[id] = [];
     renderPanel(it);
     document.getElementById('gw-overlay').classList.add('open');
+    if (State.live) refreshTransitions(id);
   }
 
   function closePanel() {
@@ -808,6 +786,25 @@
     if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '</div>';
   }
 
+  async function refreshTransitions(id) {
+    if (State.transitionLoading[id]) return;
+    State.transitionLoading[id] = true;
+    delete State.transitionErrors[id];
+    try {
+      const res = await fetch('/api/items/' + encodeURIComponent(id) + '/transitions');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      State.transitions[id] = await res.json();
+    } catch (error) {
+      State.transitionErrors[id] = error.message || 'request failed';
+    } finally {
+      State.transitionLoading[id] = false;
+      if (State.activePanelId === id) {
+        const current = State.items.find((item) => item.id === id);
+        if (current) renderPanel(current);
+      }
+    }
+  }
+
   function renderPanel(it) {
     const panel = document.getElementById('gw-panel');
     const itemEvents = State.events.filter((e) => e.item === it.id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
@@ -815,7 +812,6 @@
     const pendingEv = State.pendingEvidence[it.id] || [];
     const allEvidence = [...(it.evidence || []), ...pendingEv];
     const target = nextStageId(State.stages, it.stage);
-    const evalResult = target ? evaluateRequires({ ...it, evidence: allEvidence }, target, State) : null;
 
     const banner = State.live
       ? ''
@@ -832,15 +828,24 @@
 
     const stageButtonsHtml = stageList(State.stages).map((s) => {
       if (s.id === it.stage) return '';
-      const isNext = s.id === target;
+      const transitions = State.transitions[it.id];
+      const transition = transitions && transitions[s.id];
       let reason = '';
       let disabled = true;
       if (!State.live) {
         reason = 'read-only snapshot';
-      } else if (!isNext) {
+      } else if (!transitions) {
+        reason = State.transitionErrors[it.id]
+          ? 'unable to check transition rules'
+          : 'checking transition rules…';
+      } else if (!transition) {
         reason = 'use `gw move --force` to skip stages';
-      } else if (evalResult && !evalResult.ok) {
-        reason = evalResult.failures.join('; ');
+      } else if (transition.force) {
+        reason = transition.ok
+          ? 'use `gw move --force` to skip stages'
+          : transition.failures.join('; ');
+      } else if (!transition.ok) {
+        reason = transition.failures.join('; ');
       } else {
         disabled = false;
       }
