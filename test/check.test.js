@@ -92,6 +92,8 @@ test('check groups current-stage, missing-dependency, cycle, dropped-dependency,
   const result = ctx(b); assert.equal(run(result.ctx), 1);
   for (const id of ['bad-stage', 'missing', 'cycle-a', 'dropped-dep', 'stale', 'conflict']) assert.match(result.output(), new RegExp(id));
   assert.match(result.output(), /CURRENT STAGE|MISSING DEPENDENC|DEPENDENCY CYCLE|DROPPED DEPENDENC|STALE|CONFLICT/i);
+  assert.match(result.output(), /gw note stale "<note>".*gw release stale/);
+  assert.match(result.output(), /resolve the linked GitHub issue, then run `gw check`/);
 });
 
 test('check --json is machine-readable and the real binary exits 1 for violations', () => {

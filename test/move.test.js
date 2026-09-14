@@ -95,8 +95,11 @@ test('move refuses an out-of-order pipeline target without force but allows side
 test('move rejects unknown items, unknown stages, same stages, and terminal moves', () => {
   const b = board();
   for (const args of [['none', 'building'], ['P1-01', 'none'], ['P1-01', 'backlog']]) assert.throws(() => run(ctx(b, args)), UsageError);
+  assert.throws(() => run(ctx(b, ['P1-01', 'backlog'])), /already in stage backlog; run `gw show P1-01`/);
   const terminal = board([item({ stage: 'verified', evidence: ['a', 'b'] })]);
-  assert.throws(() => run(ctx(terminal, ['P1-01', 'backlog'], { force: true })), UsageError);
+  assert.throws(() => run(ctx(terminal, ['P1-01', 'backlog'], { force: true })), /finished in terminal stage verified.*gw move P1-01 <side-stage> --force/);
+  run(ctx(terminal, ['P1-01', 'paused'], { force: true }));
+  assert.equal(terminal.store.readItems()[0].stage, 'paused');
 });
 
 test('move clears a paused flag and queues a linked GitHub comment without calling gh', () => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runRouter } from '../lib/cli/router.js';
@@ -48,6 +48,10 @@ test('config readers use defaults for absent files and identify malformed filena
   const { readConfig, readStages } = await import('../lib/config.js'); const { IOError } = await import('../lib/cli/errors.js');
   const root = mkdtempSync(join(tmpdir(), 'gw-config-')); const store = { paths: { config: join(root, 'config.json'), stages: join(root, 'stages.json') } };
   assert.equal(readConfig(store).version, 1); assert.equal(readStages(store).stages[0].id, 'backlog');
+  const templateConfig = JSON.parse(readFileSync(new URL('../templates/config.json', import.meta.url), 'utf8'));
+  const templateStages = JSON.parse(readFileSync(new URL('../templates/stages.json', import.meta.url), 'utf8'));
+  assert.deepEqual(readConfig(store), templateConfig);
+  assert.deepEqual(readStages(store), templateStages);
   writeFileSync(store.paths.config, '{'); writeFileSync(store.paths.stages, '{');
   assert.throws(() => readConfig(store), (err) => err instanceof IOError && /config.json/.test(err.message));
   assert.throws(() => readStages(store), (err) => err instanceof IOError && /stages.json/.test(err.message));

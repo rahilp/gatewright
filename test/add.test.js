@@ -26,3 +26,11 @@ test('agent child policy and vocabulary validation are enforced', () => {
   assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01', phase: 'P1', type: 'feature' }, positionals: ['child'], stdout: { write() {} } }), /children/i);
   assert.throws(() => run({ store, root: store.root, actor: 'human:x', flags: { phase: 'P9' }, positionals: ['bad'], stdout: { write() {} } }), /P1/);
 });
+
+test('add uses the shared vocabulary validation message', () => {
+  const { store } = repo({ vocab: { type: ['feature'] } });
+  assert.throws(
+    () => run({ store, root: store.root, actor: 'human:x', flags: { type: 'defect' }, positionals: ['bad'], stdout: { write() {} } }),
+    /invalid --type 'defect'; allowed values: feature/,
+  );
+});
