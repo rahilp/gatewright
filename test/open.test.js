@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +29,36 @@ function extractBlock(html, id) {
   const match = html.match(re);
   assert.ok(match, `expected a ${id} block in the written board.html`);
   return JSON.parse(match[1]);
+}
+
+function waitFor(predicate, timeout = 5000) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      try {
+        if (predicate()) return resolve();
+      } catch (error) {
+        return reject(error);
+      }
+      if (Date.now() - started >= timeout) return reject(new Error('timed out waiting for board update'));
+      setTimeout(check, 25);
+    };
+    check();
+  });
+}
+
+function startWatcher(root) {
+  const child = spawn(process.execPath, [BIN, 'open', '--watch', '--no-browser'], { cwd: root });
+  let output = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => { output += chunk; });
+  return { child, output: () => output };
+}
+
+async function stopWatcher(child) {
+  if (child.exitCode !== null) return;
+  child.kill('SIGTERM');
+  await new Promise((resolve) => child.once('exit', resolve));
 }
 
 test('gw open --no-browser writes .gatewright/board.html with the injected data', () => {
@@ -60,4 +90,70 @@ test('gw open exits 0 and prints the board path on stdout', () => {
   store.writeItems([item()]);
   const out = execFileSync(process.execPath, [BIN, 'open', '--no-browser'], { cwd: root, encoding: 'utf8' });
   assert.match(out.trim(), /board\.html$/);
+});
+
+test('gw open --watch rebuilds after a store change', async () => {
+  const { root, store } = freshRoot();
+  store.writeItems([item()]);
+  const watcher = startWatcher(root);
+  try {
+    await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    store.writeItems([item(), item({ id: 'P1-02', title: 'Watch this board' })]);
+    await waitFor(() => readFileSync(store.paths.board, 'utf8').includes('Watch this board'));
+    await waitFor(() => /Watching items\.jsonl and events\.jsonl/.test(watcher.output()));
+    await waitFor(() => /P1-02 added/.test(watcher.output()));
+    const startup = watcher.output();
+    assert.ok(startup.indexOf('Watching') < startup.indexOf('P1-02 added'));
+    assert.equal(startup.slice(0, startup.indexOf('Watching')).includes('· 1 item'), false);
+    assert.match(watcher.output(), /\d{4}-\d\d-\d\dT.*· 2 items · P1-02 added/);
+  } finally {
+    await stopWatcher(watcher.child);
+  }
+});
+
+test('gw open --watch debounces rapid changes', async () => {
+  const { root, store } = freshRoot();
+  store.writeItems([item()]);
+  const watcher = startWatcher(root);
+  try {
+    await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    for (let i = 0; i < 5; i += 1) store.writeItems([item({ title: `Rapid ${i}` })]);
+    await waitFor(() => readFileSync(store.paths.board, 'utf8').includes('Rapid 4'));
+    await waitFor(() => /\d{4}-\d\d-\d\dT.*· \d+ items? · /.test(watcher.output()));
+    const rebuilds = (watcher.output().match(/\d{4}-\d\d-\d\dT.*· \d+ items? · /g) ?? []).length;
+    assert.ok(rebuilds >= 1);
+    assert.ok(rebuilds < 5, `expected fewer rebuilds than writes, got ${rebuilds}`);
+  } finally {
+    await stopWatcher(watcher.child);
+  }
+});
+
+test('gw open --watch summarizes a stage move', async () => {
+  const { root, store } = freshRoot();
+  store.writeItems([item()]);
+  const watcher = startWatcher(root);
+  try {
+    await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    const moved = item({ stage: 'decided' });
+    store.writeItems([moved]);
+    await waitFor(() => /P1-01 → decided/.test(watcher.output()));
+  } finally {
+    await stopWatcher(watcher.child);
+  }
+});
+
+test('gw open --watch keeps the last good board when JSONL is corrupt', async () => {
+  const { root, store } = freshRoot();
+  store.writeItems([item()]);
+  const watcher = startWatcher(root);
+  try {
+    await waitFor(() => existsSync(store.paths.board) && readFileSync(store.paths.board, 'utf8').includes('Repo scaffold'));
+    const before = readFileSync(store.paths.board, 'utf8');
+    writeFileSync(store.paths.items, '{corrupt\n');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.equal(readFileSync(store.paths.board, 'utf8'), before);
+    assert.equal(watcher.child.exitCode, null);
+  } finally {
+    await stopWatcher(watcher.child);
+  }
 });
