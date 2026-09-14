@@ -43,4 +43,11 @@ or 3. `RuleError(message, failures)` prints its message followed by each failure
 - `findCycles(items)` returns deterministic dependency cycles as ID arrays.
 - `missingDeps(items)` returns `{ id, missing }` entries for unresolved dependency IDs.
 
+`lib/stages.js` resolves stage meaning from the user-owned process definition:
+
+- `resolveRoles(stages)` returns `{ initial, done, dropped, paused }`; each value is a stage ID or `null`.
+- `isDropped(item, roles)` reports whether an item occupies the resolved dropped stage.
+- `isTerminalStage(stageId, stages, roles)` reports configured terminal stages and the resolved dropped stage.
+- `validateStages(stages)` returns actionable process-definition findings without printing or throwing. `check` runs it before reading board items.
+
 Always use `store` for writes. Do not write `.gatewright/` directly.

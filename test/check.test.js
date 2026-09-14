@@ -25,6 +25,23 @@ test('check silently baselines an unknown digest', () => {
   const result = ctx(b); assert.equal(run(result.ctx), 0); assert.doesNotMatch(result.output(), /digest|modified/i); assert.equal(b.store.verifyDigest().status, 'clean');
 });
 
+test('check validates stages before examining items and keeps validation JSON machine-readable', () => {
+  const b = board([item({ stage: 'building' })], {
+    stages: { stages: [{ id: 'backlog', role: 'not-a-role' }], terminal: ['missing'], extra: [] },
+  });
+  const text = ctx(b);
+  assert.equal(run(text.ctx), 1);
+  assert.match(text.output(), /^STAGE DEFINITION\n/m);
+  assert.match(text.output(), /role "not-a-role" is invalid/);
+  assert.match(text.output(), /terminal "missing" does not name a stage/);
+  assert.doesNotMatch(text.output(), /CURRENT STAGE RULE|out-of-band/i);
+
+  const json = ctx(b, { json: true });
+  assert.equal(run(json.ctx), 1);
+  const problems = JSON.parse(json.output()).problems;
+  assert.ok(problems.every((entry) => entry.type === 'stage definition'));
+});
+
 test('check catches a hand-placed verified item with no evidence', () => {
   const b = board();
   writeFileSync(b.store.paths.items, JSON.stringify(item({ stage: 'verified', evidence: [] })) + '\n');
