@@ -56,3 +56,18 @@ or 3. `RuleError(message, failures)` prints its message followed by each failure
 - `validateStages(stages)` returns actionable process-definition findings without printing or throwing. `check` runs it before reading board items.
 
 Always use `store` for writes. Do not write `.gatewright/` directly.
+
+## Runner process boundary
+
+`lib/run/spawn.js` is the only module under `lib/run/` that imports
+`node:child_process`. `createRunner({ spawnFn, dryRun })` returns `{ start }`;
+the scheduler supplies the item, run id, worktree, main repository root, config,
+and run registry. `start` renders `.gatewright/prompt.md`, substitutes provider
+`{prompt}` and `{item}` argv fields, and supplies `GW_ACTOR`, `GW_ITEM`, and a
+main-board `GW_ROOT`. Tests always inject `spawnFn`.
+
+`createRunRegistry({ store })` persists records in `.gatewright/runs/` and
+returns `{ list, record, clear, reconcile }`. A reservation is written before a
+provider is invoked and then updated with its pid. `reconcile` clears dead runs,
+releases their item owner, and appends an error `run_ended` event; malformed
+records are reported but left untouched for manual inspection.
