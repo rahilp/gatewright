@@ -199,6 +199,9 @@
     font-size: 0.8rem;
   }
   .card:hover { border-color: var(--accent); }
+  .card.card-moved { animation: card-moved 1.6s ease-out; }
+  @keyframes card-moved { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } to { border-color: var(--border); box-shadow: none; } }
+  @media (prefers-reduced-motion: reduce) { .card.card-moved { animation: none; border-color: var(--accent); } }
   .card .card-id { font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim); }
   .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; }
   .card .card-meta { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.7rem; color: var(--text-dim); }
@@ -399,6 +402,7 @@
 
   const State = {
     items: [], events: [], stages: { stages: [], extra: [] }, config: {}, generatedAt: null, live: false,
+    lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     view: 'overview',
     filters: { phase: '', gate: '', type: '', stage: '', flag: '', search: '' },
     sort: { key: 'updated', dir: 'desc' },
@@ -476,7 +480,7 @@
 
   function renderHeader() {
     document.getElementById('gw-snapshot-meta').innerHTML = State.live
-      ? '<span class="live-pill">live · gw serve</span>'
+      ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>'
       : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>';
     const total = State.items.length;
     const flagged = State.items.filter((i) => i.flag).length;
@@ -484,6 +488,11 @@
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
     document.getElementById('gw-totals').innerHTML =
       '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
+  }
+
+  function liveAge() {
+    if (!State.lastLiveUpdate) return 'waiting';
+    return Math.max(0, Math.floor((Date.now() - State.lastLiveUpdate) / 1000)) + 's';
   }
 
   function renderOverview(container) {
@@ -513,9 +522,9 @@
       '</div>';
   }
 
-  function cardMarkup(it) {
+  function cardMarkup(it, moved) {
     const evCount = (it.evidence || []).length;
-    return '<div class="card" data-id="' + escapeHtml(it.id) + '">' +
+    return '<div class="card' + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
@@ -531,7 +540,7 @@
     const cols = stageList(State.stages);
     container.innerHTML = '<div id="board">' + cols.map((s) => {
       const inCol = items.filter((i) => i.stage === s.id);
-      return '<div class="column"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
+      return '<div class="column" data-stage="' + escapeHtml(s.id) + '"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
         '<div class="column-body">' + (inCol.map(cardMarkup).join('') || '') + '</div></div>';
     }).join('') + '</div>';
   }
@@ -655,11 +664,63 @@
       '<h3>Event history</h3>' + eventsHtml;
 
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
+    State.activePanelId = id;
     overlay.classList.add('open');
   }
 
   function closePanel() {
+    State.activePanelId = null;
     document.getElementById('gw-overlay').classList.remove('open');
+  }
+
+  function updateBoardInPlace(previousItems) {
+    const board = document.getElementById('board');
+    if (!board) { renderView(); return; }
+    const oldById = new Map(previousItems.map((item) => [item.id, item]));
+    const cards = new Map([...board.querySelectorAll('.card')].map((card) => [card.dataset.id, card]));
+    for (const stage of stageList(State.stages)) {
+      const column = board.querySelector('.column[data-stage="' + CSS.escape(stage.id) + '"]');
+      if (!column) { renderView(); return; }
+      const body = column.querySelector('.column-body');
+      const items = filteredItems().filter((item) => item.stage === stage.id);
+      const fragment = document.createDocumentFragment();
+      for (const item of items) {
+        const prior = oldById.get(item.id); const moved = prior && prior.stage !== item.stage;
+        let card = cards.get(item.id);
+        if (!card || moved) {
+          const holder = document.createElement('div'); holder.innerHTML = cardMarkup(item, moved); card = holder.firstChild;
+        } else if (JSON.stringify(prior) !== JSON.stringify(item)) {
+          const holder = document.createElement('div'); holder.innerHTML = cardMarkup(item, false);
+          const replacement = holder.firstChild; card.replaceWith(replacement); card = replacement;
+        }
+        fragment.appendChild(card);
+      }
+      body.replaceChildren(fragment); column.querySelector('.count').textContent = String(items.length);
+    }
+  }
+
+  function mergeEvents(events) {
+    const seen = new Set(State.events.map((event) => JSON.stringify(event)));
+    State.events.push(...events.filter((event) => !seen.has(JSON.stringify(event))));
+  }
+
+  async function poll() {
+    const since = State.generatedAt ? '?since=' + encodeURIComponent(State.generatedAt) : '';
+    try {
+      const res = await fetch('/api/state' + since);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json(); const previous = State.items;
+      State.items = data.items || []; mergeEvents(data.events || []);
+      State.stages = data.stages || State.stages; State.config = data.config || State.config;
+      State.generatedAt = data.generatedAt || new Date().toISOString();
+      State.lastLiveUpdate = Date.now(); State.liveError = null; State.pollingDelay = 2000;
+      populateFilterOptions(); renderHeader();
+      if (State.view === 'board') updateBoardInPlace(previous); else renderView();
+      if (State.activePanelId) openPanel(State.activePanelId);
+    } catch (error) {
+      State.liveError = error.message || 'server unavailable'; State.pollingDelay = Math.min(State.pollingDelay * 2, 30000); renderHeader();
+    }
+    window.setTimeout(poll, State.pollingDelay);
   }
 
   function wireStatic() {
@@ -712,6 +773,11 @@
     renderHeader();
     wireStatic();
     renderView();
+    if (location.protocol.indexOf('http') === 0) {
+      State.live = true; State.lastLiveUpdate = Date.now(); renderHeader();
+      window.setTimeout(poll, 2000);
+      window.setInterval(() => { if (State.live) renderHeader(); }, 1000);
+    }
   }
 
   // The injected data blocks are appended after this script tag in document
