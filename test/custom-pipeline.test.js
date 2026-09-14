@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { createStore } from '../lib/store.js';
+
+const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
+const foreignStages = {
+  stages: [
+    { id: 'icebox', label: 'Icebox' },
+    { id: 'speccing', label: 'Speccing' },
+    { id: 'coding', label: 'Coding', requires: { owner: true } },
+    { id: 'shipped', label: 'Shipped', requires: { evidence_min: 1 } },
+  ],
+  terminal: ['shipped'],
+  extra: [{ id: 'binned', label: 'Binned', role: 'dropped' }],
+};
+
+function run(root, args) {
+  return execFileSync(process.execPath, [BIN, ...args], { cwd: root, encoding: 'utf8' });
+}
+
+test('the full binary workflow uses a foreign pipeline exclusively', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-custom-pipeline-'));
+  run(root, ['init']);
+  const store = createStore(root);
+  writeFileSync(store.paths.stages, JSON.stringify(foreignStages));
+
+  const output = [];
+  output.push(run(root, ['add', 'Ship the first item']));
+  assert.equal(store.readItems().find((item) => item.id === 'P0-01').stage, 'icebox');
+  output.push(run(root, ['claim', 'P0-01']));
+  output.push(run(root, ['move', 'P0-01', 'speccing']));
+  output.push(run(root, ['move', 'P0-01', 'coding']));
+  assert.throws(
+    () => run(root, ['move', 'P0-01', 'shipped']),
+    (error) => error.status === 1 && /needs at least 1 evidence/.test(error.stderr),
+  );
+  output.push(run(root, ['move', 'P0-01', 'shipped', '--evidence', 'commit:abc123']));
+
+  const markdown = join(root, 'import.md');
+  writeFileSync(markdown, '## P0 — Imported\n- **P0-03** · Checked item · feature · G0 · P0-02 · Done ✅\n');
+  output.push(run(root, ['add', 'Bin the dependency']));
+  output.push(run(root, ['move', 'P0-02', 'binned']));
+  output.push(run(root, ['import', markdown]));
+  const imported = store.readItems().find((item) => item.id === 'P0-03');
+  assert.equal(imported.stage, 'icebox');
+  assert.deepEqual(imported.deps, ['P0-02']);
+
+  let checkFailure;
+  try {
+    run(root, ['check']);
+  } catch (error) {
+    checkFailure = error;
+  }
+  assert.equal(checkFailure?.status, 1);
+  const checkOutput = checkFailure.stdout;
+  assert.match(checkOutput, /P0-03/);
+  assert.match(checkOutput, /P0-02/);
+  output.push(run(root, ['brief']));
+
+  const emitted = output.join('');
+  assert.match(emitted, /source says done, imported to icebox \(shipped needs at least 1 evidence entry\)/);
+  assert.doesNotMatch(emitted, /backlog|verified|dropped/);
+  assert.doesNotMatch(checkOutput, /backlog|verified/);
+  assert.equal(readFileSync(store.paths.stages, 'utf8').includes('paused'), false);
+});
+
+test('a pipeline without a dropped role never reports a dropped dependency', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-no-dropped-role-'));
+  run(root, ['init']);
+  const store = createStore(root);
+  writeFileSync(store.paths.stages, JSON.stringify({ ...foreignStages, extra: [] }));
+  store.writeItems([
+    { id: 'P0-01', title: 'Dependent', stage: 'icebox', flag: null, owner: null, deps: ['P0-02'], evidence: [], updated: new Date().toISOString() },
+    { id: 'P0-02', title: 'Former side state', stage: 'binned', flag: null, owner: null, deps: [], evidence: [], updated: new Date().toISOString() },
+  ]);
+  assert.equal(run(root, ['check']), 'Board is clean.\n');
+});

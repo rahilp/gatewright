@@ -33,12 +33,12 @@ function defaultStages() {
   return readStages({ paths: { stages: join(tmpdir(), `gw-stages-${Date.now()}.json`) } });
 }
 
-test('inferStage defaults to backlog, marks decided and checked scopes verified', () => {
-  assert.equal(inferStage('plain scope'), 'backlog');
-  assert.equal(inferStage('**Decided:** we will do it'), 'verified');
-  assert.equal(inferStage('Scope ends with ✅'), 'verified');
-  assert.equal(inferStage('  **Decided:** padded  '), 'verified');
-  assert.equal(inferStage('Trailing whitespace ✅  '), 'verified');
+test('inferStage returns neutral initial and done markers', () => {
+  assert.equal(inferStage('plain scope'), 'initial');
+  assert.equal(inferStage('**Decided:** we will do it'), 'done');
+  assert.equal(inferStage('Scope ends with ✅'), 'done');
+  assert.equal(inferStage('  **Decided:** padded  '), 'done');
+  assert.equal(inferStage('Trailing whitespace ✅  '), 'done');
 });
 
 test('parseMarkdown returns items, deps, and skipped malformed lines', () => {
@@ -60,8 +60,8 @@ test('parseMarkdown returns items, deps, and skipped malformed lines', () => {
   assert.equal(scopeWithDot, 'The `foo · bar` case.');
 
   assert.equal(items.find((i) => i.id === 'P1-01').title, 'No deps em dash');
-  assert.equal(items.find((i) => i.id === 'P1-06').stage, 'verified');
-  assert.equal(items.find((i) => i.id === 'P1-07').stage, 'verified');
+  assert.equal(items.find((i) => i.id === 'P1-06').stage, 'done');
+  assert.equal(items.find((i) => i.id === 'P1-07').stage, 'done');
 });
 
 test('parseMarkdown round-trips the real tasks.md with 81 items and correct details', () => {
@@ -84,13 +84,13 @@ test('parseMarkdown round-trips the real tasks.md with 81 items and correct deta
   const p101 = items.find((i) => i.id === 'P1-01');
   assert.match(p101.scope, /`package.json`/);
   assert.match(p101.scope, /`node --test`/);
-  assert.equal(p101.stage, 'backlog');
+  assert.equal(p101.stage, 'initial');
 
   const p108a = items.find((i) => i.id === 'P1-08a');
   assert.equal(p108a.scope[0], 'P');
   assert.match(p108a.scope, /^Per `specs.md`/);
 
-  assert.equal(items.find((i) => i.id === 'P0-01').stage, 'verified');
+  assert.equal(items.find((i) => i.id === 'P0-01').stage, 'done');
 });
 
 test('resolveImportStage places verified only when requirements are actually met', () => {

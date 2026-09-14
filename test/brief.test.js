@@ -45,6 +45,12 @@ test('empty board produces a helpful brief', () => {
   assert.ok(out.split('\n').length < 10);
 });
 
+test('brief does not treat a stage as dropped when the pipeline has no dropped role', () => {
+  const foreignStages = { stages: [{ id: 'icebox' }, { id: 'shipped' }], terminal: ['shipped'], extra: [] };
+  const out = renderBrief({ items: [{ ...makeItems(1)[0], stage: 'binned', flag: null }], events: [], stages: foreignStages, config: { brief: { max_lines: 25 } }, git: null });
+  assert.match(out, /^gw · 1 open/m);
+});
+
 test('brief is read-only byte-for-byte', () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-brief-')); const store = createStore(root); store.ensure();
   const items = makeItems(2); store.writeItems(items); writeFileSync(store.paths.events, `${JSON.stringify({ type: 'dispatch', item: items[0].id, by: 'scheduler' })}\n`);

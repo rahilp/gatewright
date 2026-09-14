@@ -109,6 +109,12 @@ test('move clears a paused flag and queues a linked GitHub comment without calli
   const event = b.store.readEvents()[0]; assert.equal(event.type, 'move'); assert.equal(event.queued_comment, true);
 });
 
+test('move preserves a paused flag when leaving a non-paused stage', () => {
+  const b = board([item({ stage: 'specified', flag: 'paused', owner: 'human:test' })]);
+  run(ctx(b, ['P1-01', 'building']));
+  assert.equal(b.store.readItems()[0].flag, 'paused');
+});
+
 test('gw move works through the real binary with the expected exit code', () => {
   const b = board([item({ stage: 'building', owner: 'human:test' })]);
   execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'built', '--evidence', 'abc123'], { cwd: b.root, encoding: 'utf8' });
