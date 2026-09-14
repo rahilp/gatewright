@@ -176,3 +176,14 @@ test('concurrent read-modify-writes from separate processes lose nothing', async
   assert.equal(store.readEvents().length, 8);
   assert.equal(store.verifyDigest().status, 'clean');
 });
+
+test('writeConfig atomically round-trips valid JSON without leaving a temp file', () => {
+  const store = freshStore();
+  const config = { version: 1, github: { last_sync: '2026-09-14T12:00:00Z' } };
+  store.writeItems([item()]);
+  const digestBefore = readFileSync(store.paths.digest, 'utf8');
+  store.writeConfig(config);
+  assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')), config);
+  assert.equal(readFileSync(store.paths.digest, 'utf8'), digestBefore, 'config writes must not rebaseline the items digest');
+  assert.deepEqual(readdirSync(store.dir).filter((file) => file.includes('.tmp')), []);
+});

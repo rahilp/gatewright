@@ -15,7 +15,7 @@ export const spec = {
 export function run(ctx) { return 0; } // undefined also means 0
 ```
 
-`ctx` is `{ flags, positionals, store, root, actor, env, cwd, stdout, stderr }`.
+`ctx` is `{ flags, positionals, store, root, actor, env, cwd, stdout, stderr, ghRun }`.
 `flags` and `positionals` are parsed by `parseArgs`. `store` is `createStore(root)` when
 `needsRoot` is true, otherwise `null`; `root` is likewise the repository root or `null`.
 `actor` is `--by`, then `GW_ACTOR`, then `human:$USER` (or `$USERNAME`). `cwd` is the working
@@ -23,6 +23,11 @@ directory the router was invoked with (`process.cwd()` unless overridden through
 options); commands that create the root, such as `init`, use it instead of calling
 `process.cwd()` themselves. Use the supplied output streams rather than `process.stdout`
 and `process.stderr`.
+
+`ghRun` is an optional executor passed through `runRouter` to commands that use GitHub.
+It receives `gh` argv without the executable name and exists so the sync layer can be
+tested offline with fixture output; production CLI invocations leave it undefined and use
+the committed GitHub wrapper's default executor.
 
 `findRoot(cwd, env, { stopAt })` walks to the filesystem root by default. Tests and other
 callers that must not search past a fixture can pass `stopAt`; that directory is checked but
