@@ -285,6 +285,7 @@ this runs first and exits non-zero on any finding.
     "milestone_to": "gate"
   },
   "runner": {
+    "enabled": false,
     "provider": "claude",
     "providers": {
       "claude": {
@@ -349,34 +350,6 @@ this runs first and exits non-zero on any finding.
     }
   }
 }
-```
-
-`github.sync_interval_min` sets the optional serve GitHub sync interval in minutes; `null` disables scheduled sync (the default).
-
-`id_scheme` selects how ids are assigned. `phase-seq` gives `P2-01`, numbered
-per phase, with children as `P2-01.1`. `seq` gives `T-0001`, numbered across the
-whole board, with children as `T-0001.1`, for teams who would rather an id never
-imply a phase. Any other value is refused at write time, naming the supported
-schemes — a config key that silently accepts a value it does not implement is
-worse than one that does not exist.
-
-New items take their default phase from `vocab.phase[0]` rather than a literal
-`P1`, and no phase at all when no vocabulary is configured.
-
-`vocab.priority` is an **ordered** array, highest priority first. It is the scheduler's pick order (§10) as well as a validation list; the other vocab arrays are validation only.
-
-`policy.max_depth` (default 3) limits child nesting; adding a child beyond that depth is refused.
-
-Staleness is about work that should still be moving, so stages representing finished work are exempt through `check.stale_exempt_stages`.
-
-`memory` is ignored entirely when `enabled` is false; the adapter module is not even loaded. Tokens come from an environment variable named in `token_env`, never from the file.
-
-`{prompt}` and `{item}` are substituted at spawn. The prompt template is a markdown file with `{{title}}`, `{{scope}}`, `{{deps}}`, `{{stage}}`, `{{target_stage}}`, `{{exit}}`, `{{notes}}`, `{{log_tail}}`, `{{prior_context}}`, and `{{capsule}}` placeholders. The last two render empty when memory is disabled. Default template shipped by `init`.
-
-## 6. CLI contract
-
-All commands: exit 0 on success, 1 on rule violation, 2 on usage error, 3 on I/O error. Output is plain text by default; `--json` gives machine output. Every command that writes appends an event.
-
 ```
 gw init [--gh] [--force]
 gw brief [--me <owner>] [--json] [--recall]        (--recall: v0.5, opt-in)

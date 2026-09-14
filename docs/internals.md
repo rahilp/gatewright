@@ -71,3 +71,16 @@ returns `{ list, record, clear, reconcile }`. A reservation is written before a
 provider is invoked and then updated with its pid. `reconcile` clears dead runs,
 releases their item owner, and appends an error `run_ended` event; malformed
 records are reported but left untouched for manual inspection.
+
+`createScheduler({ store, runner, registry, worktree })` has a single `tick()`.
+It is inert unless both `config.runner.enabled === true` and a selected provider
+is configured.  `gw serve` only installs the interval after those two deliberate
+acts. Each tick reads the run registry from disk before it selects work and again
+immediately before invoking the runner, so a restarted server cannot exceed
+`max_concurrent`.
+
+`createWorktree({ git })` owns Git worktree decisions. Its `git` boundary is
+argv-shaped and injectable; it creates `.gatewright/.worktrees/<item-id>` by
+default on `gw/<item-id>`, reuses the same registered worktree, and refuses a
+stray directory or an existing branch without that worktree. `.gatewright/.worktrees/`
+is ignored by the shipped `.gitignore`.

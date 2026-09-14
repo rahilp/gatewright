@@ -58,6 +58,7 @@
     "milestone_to": "gate"
   },
   "runner": {
+    "enabled": false,
     "provider": "claude",
     "providers": {
       "claude": {
