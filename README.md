@@ -10,11 +10,6 @@ Every coding-agent session starts from zero: the agent doesn't know what is in f
 
 ## The 60-second quickstart
 
-> **v0.1, not yet on npm.** The package name is not published yet, so the install
-> line below will 404 for now. Until it is claimed, run from a clone:
-> `git clone <repo> && npm install -g ./gatewright`. Everything after the install
-> line works exactly as shown.
-
 Install once, then use `gw` from anywhere:
 
 ```sh
