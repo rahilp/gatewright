@@ -257,3 +257,38 @@
 {"ts":"2026-09-14T22:23:39.013Z","type":"move","item":"P3-10","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-14T22:23:39.062Z","type":"move","item":"P3-10","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-14T22:23:39.110Z","type":"move","item":"P3-10","from":"building","to":"built","by":"human:rahil","evidence":["0f6c4bc","test/sync-ownership.test.js"]}
+{"ts":"2026-09-14T23:02:02.052Z","type":"claim","item":"P2-09","by":"human:rahil"}
+{"ts":"2026-09-14T23:02:02.104Z","type":"move","item":"P2-09","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:02:02.153Z","type":"move","item":"P2-09","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:02:02.205Z","type":"move","item":"P2-09","from":"building","to":"built","by":"human:rahil","evidence":["https://www.npmjs.com/package/gatewright/v/0.3.0","test/package.test.js"]}
+{"ts":"2026-09-14T23:02:02.258Z","type":"claim","item":"P3-11","by":"human:rahil"}
+{"ts":"2026-09-14T23:02:02.310Z","type":"move","item":"P3-11","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:02:02.359Z","type":"move","item":"P3-11","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:02:02.411Z","type":"move","item":"P3-11","from":"building","to":"built","by":"human:rahil","evidence":["https://www.npmjs.com/package/gatewright/v/0.3.0","test/package.test.js"]}
+{"ts":"2026-09-14T23:10:24.809Z","type":"add","item":"P0-07","by":"human:rahil","parent":null}
+{"ts":"2026-09-14T23:10:28.954Z","type":"claim","item":"P0-07","by":"human:rahil"}
+{"ts":"2026-09-14T23:10:29.005Z","type":"note","item":"P0-07","by":"human:rahil","note":"Implementing release preflight with independent checks, isolated fixtures, CI job, and release checklist."}
+{"ts":"2026-09-14T23:14:45.844Z","type":"move","item":"P0-07","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:14:45.897Z","type":"move","item":"P0-07","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:14:45.949Z","type":"move","item":"P0-07","from":"building","to":"built","by":"human:rahil","evidence":["test/preflight.test.js","npm test (221 passing)"]}
+{"ts":"2026-09-14T23:14:45.999Z","type":"note","item":"P0-07","by":"human:rahil","note":"Preflight implemented and CI wired. npm test passes (221 tests); preflight intentionally reports current README planned-command drift, dirty tree, and existing v0.3.0 tag."}
+{"ts":"2026-09-14T23:16:22.639Z","type":"note","item":"P0-07","by":"human:rahil","note":"Refining preflight: CI-only invariant mode, corrected not-yet command semantics, help/module parity, and --format flag coverage."}
+{"ts":"2026-09-14T23:19:11.855Z","type":"note","item":"P0-07","by":"human:rahil","note":"Refinement complete: preflight:ci runs only local-path, tarball, and placeholder-version invariants; full release gate now respects accurate not-yet rows, verifies help/module parity and advertised import formats. npm test passes (225); preflight:ci passes on this dirty tree."}
+{"ts":"2026-09-14T23:21:22.228Z","type":"note","item":"P0-07","by":"human:rahil","note":"Adding alias-aware duplicate command-entry detection to preflight usage parsing; assessing README/help flag parity without expanding scope."}
+{"ts":"2026-09-14T23:22:02.308Z","type":"note","item":"P0-07","by":"human:rahil","note":"Duplicate usage-command detection added: alias-aware parser counts each command entry and full preflight rejects duplicates. Tests pass (226); CI subset still passes and full gate retains exactly three genuine findings."}
+{"ts":"2026-09-14T23:24:21.706Z","type":"claim","item":"P3-09","by":"human:rahil"}
+{"ts":"2026-09-14T23:24:21.756Z","type":"move","item":"P3-09","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:21.804Z","type":"move","item":"P3-09","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:21.851Z","type":"move","item":"P3-09","from":"building","to":"built","by":"human:rahil","evidence":["54f43c5","test/serve.test.js"]}
+{"ts":"2026-09-14T23:24:21.897Z","type":"claim","item":"P4-01","by":"human:rahil"}
+{"ts":"2026-09-14T23:24:21.947Z","type":"move","item":"P4-01","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:21.994Z","type":"move","item":"P4-01","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:22.045Z","type":"move","item":"P4-01","from":"building","to":"built","by":"human:rahil","evidence":["bb73020","test/brief.test.js"]}
+{"ts":"2026-09-14T23:24:22.092Z","type":"claim","item":"P4-02","by":"human:rahil"}
+{"ts":"2026-09-14T23:24:22.145Z","type":"move","item":"P4-02","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:22.197Z","type":"move","item":"P4-02","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:22.246Z","type":"move","item":"P4-02","from":"building","to":"built","by":"human:rahil","evidence":["bb73020","test/triage.test.js"]}
+{"ts":"2026-09-14T23:24:22.298Z","type":"claim","item":"P4-03","by":"human:rahil"}
+{"ts":"2026-09-14T23:24:22.347Z","type":"move","item":"P4-03","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:22.396Z","type":"move","item":"P4-03","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-14T23:24:22.448Z","type":"move","item":"P4-03","from":"building","to":"built","by":"human:rahil","evidence":["bb73020","test/policy.test.js"]}
