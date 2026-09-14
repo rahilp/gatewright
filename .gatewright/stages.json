@@ -1,0 +1,33 @@
+{
+  "stages": [
+    { "id": "backlog",   "label": "Backlog" },
+    { "id": "specified", "label": "Specified",
+      "exit": "Someone picks it up and starts changing code or the owning document.",
+      "auto": true },
+    { "id": "building",  "label": "Building",
+      "exit": "Change is complete locally with tests passing.",
+      "auto": true,
+      "requires": { "owner": true } },
+    { "id": "built",     "label": "Built",
+      "exit": "Evidence recorded: commit and test path.",
+      "auto": true,
+      "requires": { "evidence_min": 1, "deps_at_least": "built" } },
+    { "id": "in_review", "label": "In review",
+      "exit": "PR opened and reviewer assigned.",
+      "auto": true,
+      "requires": { "evidence_match": "^https://github.com/.+/pull/\\d+" } },
+    { "id": "reviewed",  "label": "Reviewed",
+      "exit": "Reviewer approved.",
+      "auto": false },
+    { "id": "merged",    "label": "Merged",
+      "exit": "PR merged to main.",
+      "auto": false,
+      "requires": { "deps_at_least": "merged" } },
+    { "id": "verified",  "label": "Verified",
+      "exit": "Behaviour confirmed on target; VALIDATION entry linked.",
+      "auto": false,
+      "requires": { "evidence_min": 2 } }
+  ],
+  "terminal": ["verified", "dropped"],
+  "extra": [ { "id": "dropped", "label": "Dropped" }, { "id": "paused", "label": "Paused" } ]
+}

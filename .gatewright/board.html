@@ -1,0 +1,729 @@
+<!-- gatewright board v1 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gatewright</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f3;
+    --bg-raised: #ffffff;
+    --bg-sunken: #ececea;
+    --border: #d8d8d4;
+    --text: #1a1a18;
+    --text-dim: #63635c;
+    --text-faint: #93938a;
+    --accent: #1c5d8c;
+    --accent-bg: #e4eef6;
+    --danger: #9c3b28;
+    --danger-bg: #f6e6e2;
+    --warn: #8a6a1d;
+    --warn-bg: #f6efdd;
+    --ok: #2c6e3f;
+    --ok-bg: #e5f1e8;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --bg-raised: #1f2124;
+      --bg-sunken: #131415;
+      --border: #33363a;
+      --text: #e7e7e4;
+      --text-dim: #a3a39c;
+      --text-faint: #6e6e68;
+      --accent: #6badde;
+      --accent-bg: #1d3245;
+      --danger: #e0806e;
+      --danger-bg: #3a231f;
+      --warn: #d8b458;
+      --warn-bg: #3a3220;
+      --ok: #7fc394;
+      --ok-bg: #1f3527;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 var(--sans);
+    min-height: 100vh;
+  }
+  code, .mono, .ids, td.id, td.evidence, .evidence-list, .event-line time { font-family: var(--mono); }
+  a { color: var(--accent); }
+  button, select, input {
+    font: inherit;
+    color: inherit;
+  }
+  header#gw-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-wrap: wrap;
+  }
+  header#gw-header h1 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  header#gw-header .meta { color: var(--text-dim); font-size: 0.82rem; }
+  header#gw-header .totals { display: flex; gap: 0.9rem; margin-left: auto; font-size: 0.82rem; color: var(--text-dim); }
+  header#gw-header .totals b { color: var(--text); }
+  .snapshot-pill {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    white-space: nowrap;
+  }
+  .live-pill {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    background: var(--ok-bg);
+    color: var(--ok);
+    border: 1px solid var(--ok);
+    white-space: nowrap;
+  }
+  nav#gw-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.4rem 1.25rem 0;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  nav#gw-tabs button {
+    background: none;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  nav#gw-tabs button:hover { color: var(--text); }
+  nav#gw-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  #gw-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.6rem 1.25rem;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+  }
+  #gw-filters select, #gw-filters input[type="search"] {
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  #gw-filters input[type="search"] { min-width: 14rem; flex: 1 1 14rem; }
+  #gw-filters .clear-filters {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  main#gw-view { padding: 1.1rem 1.25rem 3rem; }
+
+  /* Overview */
+  .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  .overview-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.9rem 1rem;
+    box-shadow: var(--shadow);
+  }
+  .overview-card h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 0.6rem; }
+  .count-row { display: flex; justify-content: space-between; padding: 0.2rem 0; font-size: 0.85rem; border-bottom: 1px dashed var(--border); }
+  .count-row:last-child { border-bottom: none; }
+  .count-row .bar { flex: 1; margin: 0 0.6rem; background: var(--bg-sunken); border-radius: 0.2rem; overflow: hidden; height: 0.5rem; align-self: center; }
+  .count-row .bar span { display: block; height: 100%; background: var(--accent); }
+
+  /* Board */
+  #board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+  .column {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    min-width: 240px;
+    max-width: 260px;
+    flex: 0 0 auto;
+  }
+  .column-head {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg-raised);
+    border-radius: 0.5rem 0.5rem 0 0;
+  }
+  .column-head .count { color: var(--text-faint); font-weight: 400; }
+  .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
+  .card {
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .card-id { font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim); }
+  .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; }
+  .card .card-meta { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.7rem; color: var(--text-dim); }
+  .tag {
+    display: inline-block;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.25rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+  }
+  .tag.flag-blocked, .tag.flag-conflict { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+  .tag.flag-needs-triage, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+
+  /* Table */
+  table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+  table.gw-table th, table.gw-table td { text-align: left; padding: 0.45rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+  table.gw-table th { cursor: pointer; user-select: none; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+  table.gw-table th.sorted { color: var(--text); }
+  table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
+  table.gw-table td.id { white-space: nowrap; }
+
+  /* Stages & rules */
+  .stage-rule {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.6rem;
+  }
+  .stage-rule h3 { margin: 0 0 0.25rem; font-size: 0.88rem; }
+  .stage-rule .exit { color: var(--text-dim); font-size: 0.82rem; margin: 0 0 0.4rem; }
+  .stage-rule .requires { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); white-space: pre-wrap; }
+  .stage-rule .flags { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.3rem; }
+
+  /* Export */
+  .export-panel { max-width: 40rem; }
+  .export-panel button { background: var(--accent); color: #fff; border: none; padding: 0.5rem 0.9rem; border-radius: 0.4rem; cursor: pointer; font-size: 0.85rem; }
+
+  /* Empty state */
+  #gw-empty {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--text-dim);
+  }
+  #gw-empty h2 { color: var(--text); }
+  #gw-empty code { background: var(--bg-sunken); padding: 0.1rem 0.4rem; border-radius: 0.3rem; }
+
+  /* Item panel (drawer) */
+  #gw-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: none;
+    z-index: 100;
+  }
+  #gw-overlay.open { display: block; }
+  #gw-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(480px, 100vw);
+    background: var(--bg-raised);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.15s ease;
+    z-index: 101;
+    padding: 1rem 1.25rem 2.5rem;
+  }
+  #gw-overlay.open #gw-panel { transform: translateX(0); }
+  #gw-panel .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+  #gw-panel h2 { margin: 0; font-size: 1.05rem; }
+  #gw-panel .close-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-dim); }
+  #gw-panel .readonly-banner {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.78rem;
+    margin: 0.6rem 0;
+  }
+  #gw-panel .readonly-banner code { font-family: var(--mono); }
+  #gw-panel dl { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
+  #gw-panel dt { color: var(--text-dim); }
+  #gw-panel dd { margin: 0; }
+  #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
+  #gw-panel .stage-buttons button {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.76rem;
+    color: var(--text-faint);
+    cursor: not-allowed;
+  }
+  #gw-panel .stage-buttons button[title] { }
+  #gw-panel h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin: 1rem 0 0.35rem; }
+  #gw-panel .event-line { display: flex; gap: 0.5rem; font-size: 0.76rem; padding: 0.2rem 0; border-bottom: 1px dashed var(--border); }
+  #gw-panel .event-line time { color: var(--text-faint); white-space: nowrap; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <header id="gw-header">
+    <h1>gatewright</h1>
+    <span class="meta" id="gw-snapshot-meta"></span>
+    <span class="totals" id="gw-totals"></span>
+  </header>
+
+  <nav id="gw-tabs">
+    <button data-view="overview" class="active">Overview</button>
+    <button data-view="board">Board</button>
+    <button data-view="table">Table</button>
+    <button data-view="stages">Stages &amp; rules</button>
+    <button data-view="export">Export</button>
+  </nav>
+
+  <div id="gw-filters">
+    <select id="f-phase"><option value="">phase: all</option></select>
+    <select id="f-gate"><option value="">gate: all</option></select>
+    <select id="f-type"><option value="">type: all</option></select>
+    <select id="f-stage"><option value="">stage: all</option></select>
+    <select id="f-flag"><option value="">flag: all</option></select>
+    <input type="search" id="f-search" placeholder="search id / title / scope">
+    <button class="clear-filters" id="f-clear">clear</button>
+  </div>
+
+  <main id="gw-view"></main>
+
+  <div id="gw-empty" class="hidden">
+    <h2>No items yet</h2>
+    <p>Add your first item with <code>gw add "&lt;title&gt;"</code>, then <code>gw open</code> again to refresh this snapshot.</p>
+  </div>
+
+  <div id="gw-overlay">
+    <div id="gw-panel" role="dialog" aria-label="Item detail"></div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  function readBlock(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const text = el.textContent.trim();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return null; }
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  }
+
+  // -- rules, mirrored from lib/rules.js so the panel can explain a disabled
+  // stage button the same way `gw move` would refuse the command.
+  function stageList(stages) { return [...(stages.stages || []), ...(stages.extra || [])]; }
+  function stageIndexOf(stages, id) { return (stages.stages || []).findIndex((s) => s.id === id); }
+  function nextStageId(stages, id) {
+    const i = stageIndexOf(stages, id);
+    return i >= 0 ? (stages.stages[i + 1] ? stages.stages[i + 1].id : null) : null;
+  }
+  function evaluateRequires(item, targetId, ctx) {
+    const target = stageList(ctx.stages).find((s) => s.id === targetId);
+    const requires = target && target.requires;
+    if (!requires) return { ok: true, failures: [] };
+    const failures = [];
+    if (requires.owner && !item.owner) failures.push('needs an owner: run `gw claim ' + item.id + '`');
+    if (requires.evidence_min && (item.evidence || []).length < requires.evidence_min) {
+      failures.push('needs at least ' + requires.evidence_min + ' evidence entr' + (requires.evidence_min === 1 ? 'y' : 'ies') + ': run `gw move ' + item.id + ' ' + targetId + ' --evidence <e>`');
+    }
+    if (requires.evidence_match) {
+      const re = new RegExp(requires.evidence_match);
+      if (!(item.evidence || []).some((e) => re.test(e))) failures.push('needs matching evidence: run `gw move ' + item.id + ' ' + targetId + ' --evidence <e>`');
+    }
+    if (requires.deps_at_least) {
+      const boundary = stageIndexOf(ctx.stages, requires.deps_at_least);
+      const byId = new Map(ctx.items.map((c) => [c.id, c]));
+      const bad = (item.deps || []).filter((id) => { const dep = byId.get(id); return !dep || stageIndexOf(ctx.stages, dep.stage) < boundary; });
+      if (bad.length) failures.push('dependencies must be at least ' + requires.deps_at_least + ': ' + bad.join(', ') + '. Move them with `gw move <id> ' + requires.deps_at_least + '`.');
+    }
+    return { ok: failures.length === 0, failures };
+  }
+
+  const STAGE_LABEL_FALLBACK = (id) => id;
+
+  const State = {
+    items: [], events: [], stages: { stages: [], extra: [] }, config: {}, generatedAt: null, live: false,
+    view: 'overview',
+    filters: { phase: '', gate: '', type: '', stage: '', flag: '', search: '' },
+    sort: { key: 'updated', dir: 'desc' },
+  };
+
+  async function loadState() {
+    const items = readBlock('gw-items');
+    const events = readBlock('gw-events');
+    const stages = readBlock('gw-stages');
+    const config = readBlock('gw-config');
+    const blocksInjected = stages !== null && config !== null;
+
+    if (!blocksInjected && location.protocol.indexOf('http') === 0) {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            items: data.items || [], events: data.events || [],
+            stages: data.stages || { stages: [], extra: [] }, config: data.config || {},
+            generatedAt: data.generatedAt || new Date().toISOString(), live: true,
+          };
+        }
+      } catch { /* no server yet; fall through to whatever was injected */ }
+    }
+
+    return {
+      items: items || [], events: events || [],
+      stages: stages || { stages: [], extra: [] }, config: config || {},
+      generatedAt: (config && config.generatedAt) || null, live: false,
+    };
+  }
+
+  function stageLabel(id) {
+    const s = stageList(State.stages).find((s) => s.id === id);
+    return s ? s.label : STAGE_LABEL_FALLBACK(id);
+  }
+
+  function filteredItems() {
+    const f = State.filters;
+    const q = f.search.trim().toLowerCase();
+    return State.items.filter((it) => {
+      if (f.phase && it.phase !== f.phase) return false;
+      if (f.gate && it.gate !== f.gate) return false;
+      if (f.type && it.type !== f.type) return false;
+      if (f.stage && it.stage !== f.stage) return false;
+      if (f.flag && it.flag !== f.flag) return false;
+      if (q) {
+        const hay = ((it.id || '') + ' ' + (it.title || '') + ' ' + (it.scope || '')).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function populateFilterOptions() {
+    const vocab = (State.config && State.config.vocab) || {};
+    function fill(select, values, current) {
+      const keep = select.querySelector('option[value=""]');
+      select.innerHTML = '';
+      select.appendChild(keep);
+      for (const v of values) {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        if (v === current) opt.selected = true;
+        select.appendChild(opt);
+      }
+    }
+    fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase);
+    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate);
+    fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type);
+    fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
+    fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
+  }
+
+  function renderHeader() {
+    document.getElementById('gw-snapshot-meta').innerHTML = State.live
+      ? '<span class="live-pill">live · gw serve</span>'
+      : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>';
+    const total = State.items.length;
+    const flagged = State.items.filter((i) => i.flag).length;
+    const terminal = new Set(State.stages.terminal || []);
+    const open = State.items.filter((i) => !terminal.has(i.stage)).length;
+    document.getElementById('gw-totals').innerHTML =
+      '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
+  }
+
+  function renderOverview(container) {
+    function counts(key) {
+      const map = new Map();
+      for (const it of State.items) {
+        const k = it[key] || '(none)';
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      return [...map.entries()].sort((a, b) => b[1] - a[1]);
+    }
+    function card(title, rows, labelFor) {
+      const max = Math.max(1, ...rows.map((r) => r[1]));
+      const body = rows.map(([k, n]) =>
+        '<div class="count-row"><span>' + escapeHtml(labelFor ? labelFor(k) : k) + '</span>' +
+        '<span class="bar"><span style="width:' + Math.round((n / max) * 100) + '%"></span></span>' +
+        '<span>' + n + '</span></div>'
+      ).join('');
+      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') + '</div>';
+    }
+    const byStageOrdered = stageList(State.stages).map((s) => [s.id, State.items.filter((i) => i.stage === s.id).length]).filter((r) => r[1] > 0);
+    container.innerHTML = '<div class="overview-grid">' +
+      card('By stage', byStageOrdered, stageLabel) +
+      card('By phase', counts('phase')) +
+      card('By gate', counts('gate')) +
+      card('By type', counts('type')) +
+      '</div>';
+  }
+
+  function cardMarkup(it) {
+    const evCount = (it.evidence || []).length;
+    return '<div class="card" data-id="' + escapeHtml(it.id) + '">' +
+      '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
+      '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
+      '<div class="card-meta">' +
+      '<span class="tag">' + escapeHtml(it.type || '?') + '</span>' +
+      (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
+      (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
+      '<span class="tag mono">ev:' + evCount + '</span>' +
+      '</div></div>';
+  }
+
+  function renderBoard(container) {
+    const items = filteredItems();
+    const cols = stageList(State.stages);
+    container.innerHTML = '<div id="board">' + cols.map((s) => {
+      const inCol = items.filter((i) => i.stage === s.id);
+      return '<div class="column"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
+        '<div class="column-body">' + (inCol.map(cardMarkup).join('') || '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  function renderTable(container) {
+    const items = filteredItems();
+    const cols = [
+      ['id', 'ID'], ['title', 'Title'], ['type', 'Type'], ['phase', 'Phase'], ['gate', 'Gate'],
+      ['priority', 'Priority'], ['stage', 'Stage'], ['flag', 'Flag'], ['owner', 'Owner'], ['updated', 'Updated'],
+    ];
+    const key = State.sort.key, dir = State.sort.dir;
+    const sorted = [...items].sort((a, b) => {
+      const av = a[key] == null ? '' : a[key], bv = b[key] == null ? '' : b[key];
+      const cmp = String(av).localeCompare(String(bv));
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    container.innerHTML = '<table class="gw-table"><thead><tr>' +
+      cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
+        '<td class="id">' + escapeHtml(it.id) + '</td>' +
+        '<td>' + escapeHtml(it.title) + '</td>' +
+        '<td>' + escapeHtml(it.type) + '</td>' +
+        '<td>' + escapeHtml(it.phase) + '</td>' +
+        '<td>' + escapeHtml(it.gate) + '</td>' +
+        '<td>' + escapeHtml(it.priority) + '</td>' +
+        '<td>' + escapeHtml(stageLabel(it.stage)) + '</td>' +
+        '<td>' + (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(it.owner) + '</td>' +
+        '<td>' + escapeHtml(fmtDate(it.updated)) + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table>';
+  }
+
+  function renderStages(container) {
+    const cols = stageList(State.stages);
+    container.innerHTML = cols.map((s) => {
+      const req = s.requires ? JSON.stringify(s.requires, null, 2) : '(no machine rule — advanced manually)';
+      const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', (State.stages.terminal || []).includes(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
+      return '<div class="stage-rule"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' +
+        (s.exit ? '<p class="exit">' + escapeHtml(s.exit) + '</p>' : '') +
+        '<div class="requires">' + escapeHtml(req) + '</div>' +
+        (flags ? '<div class="flags">' + escapeHtml(flags) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  function renderExport(container) {
+    container.innerHTML = '<div class="export-panel"><p>Download this snapshot as JSON — items, events, stages, and config exactly as loaded.</p><button id="export-btn">Download JSON</button></div>';
+    container.querySelector('#export-btn').addEventListener('click', () => {
+      const payload = JSON.stringify({ items: State.items, events: State.events, stages: State.stages, config: State.config, generatedAt: State.generatedAt }, null, 2);
+      const blob = new Blob([payload], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'gatewright-board.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  function renderView() {
+    const container = document.getElementById('gw-view');
+    const empty = document.getElementById('gw-empty');
+    if (State.items.length === 0) {
+      container.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    if (State.view === 'overview') renderOverview(container);
+    else if (State.view === 'board') renderBoard(container);
+    else if (State.view === 'table') renderTable(container);
+    else if (State.view === 'stages') renderStages(container);
+    else if (State.view === 'export') renderExport(container);
+  }
+
+  function openPanel(id) {
+    const it = State.items.find((i) => i.id === id);
+    if (!it) return;
+    const panel = document.getElementById('gw-panel');
+    const overlay = document.getElementById('gw-overlay');
+    const itemEvents = State.events.filter((e) => e.item === id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+
+    const target = nextStageId(State.stages, it.stage);
+    const evalResult = target ? evaluateRequires(it, target, State) : null;
+
+    const banner = State.live
+      ? ''
+      : '<div class="readonly-banner">read-only snapshot' +
+        (target ? ' &middot; to advance this item run: <code>gw move ' + escapeHtml(it.id) + ' ' + escapeHtml(target) + ' --evidence &lt;commit&gt;</code>' : '') +
+        '</div>';
+
+    const stageButtons = stageList(State.stages).slice(0, (stageList(State.stages).length)).map((s) => {
+      if (s.id === it.stage) return '';
+      const isNext = s.id === target;
+      let reason = '';
+      if (!isNext) reason = 'use `gw move --force` to skip stages';
+      else if (evalResult && !evalResult.ok) reason = evalResult.failures.join('; ');
+      return '<button disabled title="' + escapeHtml(reason || 'read-only snapshot') + '">' + escapeHtml(s.label) + '</button>';
+    }).join('');
+
+    const fields = ['id', 'title', 'phase', 'priority', 'gate', 'type', 'stage', 'flag', 'owner', 'scope', 'deps', 'evidence', 'notes', 'refs', 'parent', 'created_by', 'gh', 'created', 'updated'];
+    const dl = fields.map((f) => {
+      let v = it[f];
+      if (Array.isArray(v)) v = v.length ? v.join(', ') : '(none)';
+      else if (v && typeof v === 'object') v = JSON.stringify(v);
+      else if (v == null || v === '') v = '(none)';
+      return '<dt>' + f + '</dt><dd class="' + (f === 'id' || f === 'evidence' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
+    }).join('');
+
+    const eventsHtml = itemEvents.length
+      ? itemEvents.map((e) => '<div class="event-line"><time>' + escapeHtml(fmtDate(e.ts)) + '</time><span>' + escapeHtml(e.type) + (e.from ? ' ' + escapeHtml(e.from) + '→' + escapeHtml(e.to) : '') + ' by ' + escapeHtml(e.by) + '</span></div>').join('')
+      : '<p class="meta">no events recorded</p>';
+
+    panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
+      '<p>' + escapeHtml(it.title) + '</p>' +
+      banner +
+      '<div class="stage-buttons">' + stageButtons + '</div>' +
+      '<dl>' + dl + '</dl>' +
+      '<h3>Event history</h3>' + eventsHtml;
+
+    panel.querySelector('#panel-close').addEventListener('click', closePanel);
+    overlay.classList.add('open');
+  }
+
+  function closePanel() {
+    document.getElementById('gw-overlay').classList.remove('open');
+  }
+
+  function wireStatic() {
+    document.querySelectorAll('#gw-tabs button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#gw-tabs button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        State.view = btn.dataset.view;
+        renderView();
+      });
+    });
+
+    ['phase', 'gate', 'type', 'stage', 'flag'].forEach((key) => {
+      const el = document.getElementById('f-' + key);
+      el.addEventListener('change', () => { State.filters[key] = el.value; renderView(); });
+    });
+    document.getElementById('f-search').addEventListener('input', (e) => { State.filters.search = e.target.value; renderView(); });
+    document.getElementById('f-clear').addEventListener('click', () => {
+      State.filters = { phase: '', gate: '', type: '', stage: '', flag: '', search: '' };
+      document.querySelectorAll('#gw-filters select').forEach((s) => { s.value = ''; });
+      document.getElementById('f-search').value = '';
+      renderView();
+    });
+
+    document.getElementById('gw-view').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-id]');
+      if (card) openPanel(card.dataset.id);
+    });
+    document.getElementById('gw-view').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-key]');
+      if (!th) return;
+      const key = th.dataset.key;
+      if (State.sort.key === key) State.sort.dir = State.sort.dir === 'asc' ? 'desc' : 'asc';
+      else { State.sort.key = key; State.sort.dir = 'asc'; }
+      renderView();
+    });
+
+    document.getElementById('gw-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'gw-overlay') closePanel();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePanel();
+    });
+  }
+
+  async function boot() {
+    const loaded = await loadState();
+    Object.assign(State, loaded);
+    populateFilterOptions();
+    renderHeader();
+    wireStatic();
+    renderView();
+  }
+
+  // The injected data blocks are appended after this script tag in document
+  // order, so they haven't been parsed yet when this script runs. Wait for
+  // DOMContentLoaded so getElementById can find them.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+<script type="application/json" id="gw-items">[{"id":"P0-01","title":"Item ID scheme","phase":"P0","priority":"P0","gate":"G0","type":"decision","stage":"built","flag":null,"owner":"human:rahil","scope":"**Decided:** phase-seq (`P2-01`, children `P2-01.1`); an item that changes phase keeps its ID. Recorded in `specs.md` §2 and `config.json.id_scheme`. ✅","deps":[],"evidence":["2f40a44","PRD.md#decisions-D3"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:10.258Z"},{"id":"P0-02","title":"License","phase":"P0","priority":"P0","gate":"G0","type":"decision","stage":"built","flag":null,"owner":"human:rahil","scope":"**Decided:** MIT. LICENSE lands with P1-01. ✅","deps":[],"evidence":["5f5ce5e","LICENSE"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:10.464Z"},{"id":"P0-03","title":"Package name and domain","phase":"P0","priority":"P0","gate":"G0","type":"decision","stage":"built","flag":null,"owner":"human:rahil","scope":"**Decided:** name `gatewright`, `gatewright.dev` registered, `bin` exposes both `gw` and `gatewright` so a PATH collision on `gw` never blocks anyone. ✅ · **Open:** the npm placeholder is NOT published (needs an npm login; registry returns 404), so the name is unclaimed. Blocks P1-20.","deps":[],"evidence":["ad374d1","PRD.md#decisions-D5"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:10.669Z"},{"id":"P0-04","title":"Default stages for `init`","phase":"P0","priority":"P0","gate":"G0","type":"decision","stage":"built","flag":null,"owner":"human:rahil","scope":"**Decided:** `templates/stages.json` ships the eight-stage default (Backlog → Specified → Building → Built → In review → Reviewed → Merged → Verified) with `auto` flags set per `design.md`. ✅","deps":[],"evidence":["c51b5eb","templates/stages.json"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:10.876Z"},{"id":"P0-05","title":"Read-only board delivery","phase":"P0","priority":"P0","gate":"G0","type":"decision","stage":"built","flag":null,"owner":"human:rahil","scope":"**Decided:** `gw open` writes a snapshot with data inlined as JSON blocks; no `file://` fetch, no File System Access API, `serve` is the only write path. Recorded in `specs.md` §7. ✅","deps":[],"evidence":["f45bcab","PRD.md#decisions-D1"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.077Z"},{"id":"P1-01","title":"Repo scaffold","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"`package.json` with `bin`, no deps, `node --test` runs, CI on push.","deps":["P0-02","P0-03"],"evidence":["5f5ce5e","test/package.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.229Z"},{"id":"P1-02","title":"`store.js`: load/save items, append events","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Atomic write via temp+rename; lock file with retry; unit tests for concurrent appends.","deps":["P0-01"],"evidence":["5f5ce5e","test/store.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.330Z"},{"id":"P1-03","title":"`rules.js`: `requires` evaluation","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"All four rule keys implemented; dep cycle detection; tests for each rule passing and failing.","deps":["P1-02"],"evidence":["221a7aa","test/rules.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.282Z"},{"id":"P1-04","title":"`init`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Creates `.gatewright/` from templates, writes AGENTS.md block (fenced), detects and updates CLAUDE.md, `.cursor/rules`, copilot-instructions. Idempotent. `--force` replaces the block.","deps":["P1-02","P0-04"],"evidence":["c51b5eb","test/init.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.432Z"},{"id":"P1-05","title":"`add`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Assigns ID, validates parent, prints only the ID to stdout, appends event.","deps":["P1-02"],"evidence":["a1ccdb6","test/add.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.383Z"},{"id":"P1-06","title":"`claim` / `release`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Sets/clears owner; refuses claim if owned by someone else without `--force`.","deps":["P1-02"],"evidence":["a1ccdb6","test/claim.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.531Z"},{"id":"P1-07","title":"`move`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Enforces next-stage-only, evaluates target `requires`, prints each failed rule; `--force` bypasses ordering but never `requires`.","deps":["P1-03"],"evidence":["c129ed4","test/move.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.476Z"},{"id":"P1-08","title":"`note`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Appends to notes with timestamp line; event recorded.","deps":["P1-02"],"evidence":["a1ccdb6","test/note.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.635Z"},{"id":"P1-08a","title":"`edit`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Per `specs.md` §6.5: vocab-validated, deps re-checked for cycles, all-or-nothing, one `edit` event listing changed keys. Refuses GitHub-owned fields on a linked item with the issue URL in the message (test with a fixture item carrying `gh`, even though sync is v0.3).","deps":["P1-02"],"evidence":["a1ccdb6","test/edit.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.733Z"},{"id":"P1-09","title":"`brief`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Renders the fixed layout in `specs.md` §6.1; hard cap on lines with `(+n more)`; `--me` filters dispatched/in-flight; `--json` variant.","deps":["P1-02"],"evidence":["1ce4502","test/brief.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.582Z"},{"id":"P1-10","title":"`check`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Reports rule violations, bad deps, cycles, stale owners (`config.check.stale_days`); exit 1 on any.","deps":["P1-03"],"evidence":["c129ed4","test/check.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:13.058Z"},{"id":"P1-10a","title":"Out-of-band write detection","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"`store` writes `.gatewright/.digest` (SHA-256 of `items.jsonl` + ts) after every write; `check` compares, reports `items.jsonl modified outside gw since \u003cts>` once, then re-baselines. Missing digest is written silently, not reported. Tests: hand edit → reported once, clean on the second run; fresh clone with a committed digest → clean.","deps":["P1-02","P1-10"],"evidence":["c129ed4","test/check.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:13.158Z"},{"id":"P1-11","title":"`show` / `list`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Plain and `--json` output.","deps":["P1-02"],"evidence":["1ce4502","test/show.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.131Z"},{"id":"P1-12","title":"`import --format md`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Imports this file's item format with stage, deps, evidence, notes, refs intact; a 100-item fixture round-trips.","deps":["P1-05"],"evidence":["3892a8b","test/import.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.980Z"},{"id":"P1-13","title":"Viewer shell: read-only board and table from injected data","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Reads the four `\u003cscript type=\"application/json\">` blocks per `specs.md` §7 — never fetches. Columns from `stages.json`, filters, item panel read-only with a banner naming the `gw` command, Stages & rules tab, snapshot timestamp in the header, JSON export. No network.","deps":["P1-02"],"evidence":["f45bcab","test/inject.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.030Z"},{"id":"P1-13a","title":"`gw open`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Injects items/events/stages/config into the pinned shell, escapes `\u003c/` inside strings, writes `.gatewright/board.html`, opens the default browser (`--no-browser` skips). Acceptance: `gw open` in a fresh repo renders the board in Chrome, Firefox and Safari with the network disabled; a title containing `\u003c/script>` does not break the page.","deps":["P1-13"],"evidence":["f45bcab","test/open.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.664Z"},{"id":"P1-14","title":"`upgrade`","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"Replaces the viewer shell and refreshes the AGENTS.md block; leaves `prompt.md` alone unless `--templates`; data files byte-identical (test).","deps":["P1-13"],"evidence":["c51b5eb","test/upgrade.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.859Z"},{"id":"P1-15","title":"`GW_ACTOR` env handling","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"built","flag":null,"owner":"human:rahil","scope":"`--by` defaults from env then `human:$USER`.","deps":["P1-05"],"evidence":["a1ccdb6","test/add.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.928Z"},{"id":"P1-16","title":"Test: brief token budget","phase":"P1","priority":"P1","gate":"G0","type":"test","stage":"built","flag":null,"owner":"human:rahil","scope":"On the 100-item fixture, `brief` output ≤25 lines and ≤500 tokens (approximate by chars/4).","deps":["P1-09","P1-12"],"evidence":["1ce4502","test/brief.test.js"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:12.765Z"},{"id":"P1-17","title":"README with 60-second quickstart","phase":"P1","priority":"P1","gate":"G0","type":"doc","stage":"built","flag":null,"owner":"human:rahil","scope":"Install, init, brief, add, move, `gw open`. Screenshot from the fixture data.","deps":["P1-04"],"evidence":["624f5e8","README.md"],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:27:11.827Z"},{"id":"P1-18","title":"Dogfood: Gatewright tracks itself","phase":"P1","priority":"P1","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"This `tasks.md` is imported into `.gatewright/` and used for a full week; gaps filed as items.","deps":["P1-12","P1-13"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P1-19","title":"`import --format csv|json`","phase":"P1","priority":"P1","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Common export shapes from other trackers.","deps":["P1-12"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P1-20","title":"Publish v0.1 to npm","phase":"P1","priority":"P1","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`npx gatewright init` works in a fresh repo; both `gw` and `gatewright` are on PATH after install.","deps":["P1-16","P1-17","P1-18","P1-13a","P1-10a"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-01","title":"`serve`: static viewer + `/api/state`","phase":"P2","priority":"P2","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Loopback only; rejects non-loopback origin; `--open` launches browser.","deps":["P1-13"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-02","title":"Write endpoints through `store`","phase":"P2","priority":"P2","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"add, edit, move, note; move uses `rules.js`; every write appends an event.","deps":["P2-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-03","title":"Viewer: editors enabled under serve","phase":"P2","priority":"P2","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Stage buttons disabled with reason when `requires` fails; evidence/notes editable; create item form.","deps":["P2-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-04","title":"Viewer: Play and Stop on cards","phase":"P2","priority":"P2","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Play appends `dispatch` by `human:\u003cname>`; Stop appends `cancel`. No runner yet; `brief` surfaces dispatched items.","deps":["P2-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-05","title":"Viewer: 2s polling for live state","phase":"P2","priority":"P2","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Changes from CLI appear on the board without reload.","deps":["P2-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-06","title":"Global pause/resume","phase":"P2","priority":"P2","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Toggles `runner.paused` in config; banner on board.","deps":["P2-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-07","title":"Default `prompt.md` template","phase":"P2","priority":"P2","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Shipped by `init` into `.gatewright/prompt.md` (committed, user-editable, untouched by plain `upgrade`); placeholders per `specs.md` §5; documented.","deps":["P1-04"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-08","title":"Test: one write path","phase":"P2","priority":"P2","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"A move via API and via CLI produce identical item and event lines.","deps":["P2-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P2-09","title":"Publish v0.2","phase":"P2","priority":"P2","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P2-03","P2-04","P2-08"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-01","title":"`gh` wrapper with dry-run","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Every `gh` call goes through one function; `--dry-run` prints instead of executing; missing/unauth'd `gh` gives a clear error.","deps":["P1-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-02","title":"Pull: issues → items, GitHub-owned fields only","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Label map from config; milestone → gate; new open issues create backlog items with `created_by: github`; `last_sync` stored.","deps":["P3-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-03","title":"Conflict flag on closed-while-open","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Closed issue with non-terminal item → `flag: conflict`, event, stage untouched; shown in brief and board.","deps":["P3-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-04","title":"`agent/go` → dispatch","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Label produces dispatch event once and is removed.","deps":["P3-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-05","title":"Push: move comments","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"One-line comment per move on linked issues; queued when serve isn't running, flushed on next sync.","deps":["P3-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-06","title":"Push: close on `close_on` stage","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P3-05"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-07","title":"`mirror_children`","phase":"P3","priority":"P3","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Agent-created child of a linked parent gets its own issue with provenance line.","deps":["P3-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-08","title":"`init --gh`","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Enables github block, writes default label map, runs `gh auth status`.","deps":["P3-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-09","title":"Sync in `serve` on interval","phase":"P3","priority":"P3","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Configurable; off by default.","deps":["P2-01","P3-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-10","title":"Test: sync never writes tracker-owned fields","phase":"P3","priority":"P3","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"Fixture with local stage/evidence; sync with changed labels; stage/evidence unchanged.","deps":["P3-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P3-11","title":"Publish v0.3","phase":"P3","priority":"P3","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P3-04","P3-06","P3-10"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-01","title":"Item tree fields: `parent`, `created_by`; brief and board show children","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Children nest under parent on board; brief shows \"n open children\".","deps":["P1-05"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-02","title":"`needs-triage` on agent-created items; `triage --approve|--drop`","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Held items not scheduler-eligible; board has approve/drop; `auto_dispatch_children` bypass.","deps":["P4-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-03","title":"`max_children_per_item` enforcement","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"11th child with cap 10 refused at `add`.","deps":["P4-01"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-04","title":"Scheduler loop: eligibility and pick order","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Implements `specs.md` §10 steps 1–4; unit-tested against fixture states.","deps":["P2-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-05","title":"Worktree create/reuse per item","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`git worktree add` on branch `gw/\u003cid>`; reuse if present; gitignored root.","deps":["P4-04"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-06","title":"Spawn provider with rendered prompt, env, log","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`GW_ACTOR`, `GW_ITEM`, `GW_ROOT` set; stdout+stderr to `runs/`; `run_started`/`run_ended` events.","deps":["P4-05","P2-07"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-07","title":"Stop: SIGTERM → SIGKILL, Paused with last commit","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Hung fake process killed within `stop_timeout_s` in test; worktree intact.","deps":["P4-06"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-08","title":"Resume with log tail","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Prompt contains last N lines; stage restored from `prev_stage`.","deps":["P4-07"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-09","title":"`run_timeout_min`","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Same path as stop, outcome `timeout`.","deps":["P4-06"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-10","title":"`gw stop --all`","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Terminates all runs, sets `paused: true`, works without serve's browser.","deps":["P4-07"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-11","title":"Viewer: run log tail, Resume, triage buttons","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P4-06","P4-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-12","title":"Providers config: claude, codex, custom","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Each spawns correctly in a smoke test with a stub binary.","deps":["P4-06"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-13","title":"Adapter: Claude Code plugin with SessionStart hook","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Installs with one command; `gw brief` runs at session start.","deps":["P1-09"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-14","title":"Adapter: Cursor rules file","phase":"P4","priority":"P4","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P1-04"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-15","title":"Adapter: Codex and generic docs","phase":"P4","priority":"P4","gate":"G1","type":"doc","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P1-04"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-16","title":"`gw gc` for worktrees","phase":"P4","priority":"P4","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Removes worktrees for Merged/Verified/Dropped items.","deps":["P4-05"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-17","title":"Test: overnight queue","phase":"P4","priority":"P4","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"Five eligible items, `max_concurrent: 2`, stub provider; all complete; events consistent; no orphan processes.","deps":["P4-04","P4-10"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-18","title":"Test: runaway guard","phase":"P4","priority":"P4","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"Stub agent that adds children in a loop; board ends with cap-many held items and no auto-runs.","deps":["P4-02","P4-03"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P4-19","title":"Publish v0.4","phase":"P4","priority":"P4","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P4-17","P4-18","P4-13"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-01","title":"Memory transport decision","phase":"P5","priority":"P5","gate":"G0","type":"decision","stage":"backlog","flag":null,"owner":null,"scope":"MCP-over-HTTP client vs plain HTTP API for the Second Brain adapter, recorded in `specs.md` §14.","deps":[],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-02","title":"`memory/provider.js` interface and loader","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`recall`, `remember`, `capsule`; not loaded when disabled; missing module → warning, treated as disabled; 5s timeout wrapper.","deps":["P4-06"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-03","title":"`config.memory` block in templates and validation","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Token read from `token_env` only; config with a literal token is refused by `check`.","deps":["P5-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-04","title":"Recall into dispatch prompt","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`{{prior_context}}` filled from top-k hits, trimmed to `max_chars`; empty when disabled or on failure; run never blocked.","deps":["P5-02","P2-07"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-05","title":"Capsule prefix","phase":"P5","priority":"P5","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`{{capsule}}` from `project_id`; byte-stable across runs.","deps":["P5-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-06","title":"Remember on `run_ended: ok`","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"One deterministic line per §14; tags include repo, type, phase; capped at `max_chars`.","deps":["P5-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-07","title":"Remember on close; canonical for decisions","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"Verified `decision` items stored canonical, volatility durable.","deps":["P5-06"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-08","title":"`brief --recall`","phase":"P5","priority":"P5","gate":"G1","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"\"Related memory\" section within the line cap; plain `brief` makes no calls (test).","deps":["P5-02","P1-09"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-09","title":"Second Brain adapter","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"`adapters/second-brain/memory.js`; configure in under a minute per README; smoke test against a stub server.","deps":["P5-01","P5-02"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-10","title":"Test: memory never blocks","phase":"P5","priority":"P5","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"Stub provider that hangs and one that throws; runs start and end normally; warnings in `runs/memory.log`.","deps":["P5-04","P5-06"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-11","title":"Test: exactly one remember per event","phase":"P5","priority":"P5","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"Fixture run + close → two calls total, content matches template.","deps":["P5-06","P5-07"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-12","title":"Docs: memory section in README, \"what gets stored\" table","phase":"P5","priority":"P5","gate":"G0","type":"doc","stage":"backlog","flag":null,"owner":null,"scope":"Users can tell before enabling what will be written to their brain.","deps":["P5-09"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-13","title":"Dogfood: enable on the Gatewright repo for two weeks","phase":"P5","priority":"P5","gate":"G0","type":"test","stage":"backlog","flag":null,"owner":null,"scope":"Compare recall quality before and after; decide default for `on_run_ok`.","deps":["P5-09"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"},{"id":"P5-14","title":"Publish v0.5","phase":"P5","priority":"P5","gate":"G0","type":"feature","stage":"backlog","flag":null,"owner":null,"scope":"—","deps":["P5-10","P5-11","P5-12","P5-13"],"evidence":[],"notes":"","refs":[],"parent":null,"created_by":"human:rahil","gh":null,"created":"2026-09-14T17:26:15.358Z","updated":"2026-09-14T17:26:15.358Z"}]</script>
+<script type="application/json" id="gw-events">[{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P0-01","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P0-02","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P0-03","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P0-04","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P0-05","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-01","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-02","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-03","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-04","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-05","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-06","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-07","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-08","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-08a","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-09","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-10","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-10a","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-11","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-12","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-13","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-13a","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-14","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-15","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-16","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-17","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-18","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-19","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P1-20","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-01","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-02","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-03","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-04","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-05","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-06","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-07","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-08","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P2-09","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-01","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-02","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-03","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-04","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-05","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-06","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-07","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-08","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-09","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-10","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P3-11","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P4-01","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P4-02","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P4-03","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P4-04","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P4-05","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.360Z","type":"add","item":"P4-06","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-07","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-08","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-09","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-10","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-11","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-12","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-13","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-14","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-15","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-16","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-17","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-18","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P4-19","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-01","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-02","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-03","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-04","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-05","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-06","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-07","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-08","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-09","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-10","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-11","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-12","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-13","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.361Z","type":"add","item":"P5-14","by":"human:rahil","parent":null},{"ts":"2026-09-14T17:26:15.410Z","type":"claim","item":"P1-01","by":"human:rahil"},{"ts":"2026-09-14T17:26:15.458Z","type":"move","item":"P1-01","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:15.508Z","type":"move","item":"P1-01","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:15.605Z","type":"claim","item":"P1-02","by":"human:rahil"},{"ts":"2026-09-14T17:26:15.653Z","type":"move","item":"P1-02","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:15.704Z","type":"move","item":"P1-02","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:15.800Z","type":"claim","item":"P1-03","by":"human:rahil"},{"ts":"2026-09-14T17:26:15.850Z","type":"move","item":"P1-03","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:15.904Z","type":"move","item":"P1-03","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.004Z","type":"claim","item":"P1-04","by":"human:rahil"},{"ts":"2026-09-14T17:26:16.049Z","type":"move","item":"P1-04","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.103Z","type":"move","item":"P1-04","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.200Z","type":"claim","item":"P1-05","by":"human:rahil"},{"ts":"2026-09-14T17:26:16.250Z","type":"move","item":"P1-05","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.300Z","type":"move","item":"P1-05","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.396Z","type":"claim","item":"P1-06","by":"human:rahil"},{"ts":"2026-09-14T17:26:16.447Z","type":"move","item":"P1-06","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.499Z","type":"move","item":"P1-06","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.592Z","type":"claim","item":"P1-07","by":"human:rahil"},{"ts":"2026-09-14T17:26:16.644Z","type":"move","item":"P1-07","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.693Z","type":"move","item":"P1-07","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.793Z","type":"claim","item":"P1-08","by":"human:rahil"},{"ts":"2026-09-14T17:26:16.843Z","type":"move","item":"P1-08","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.889Z","type":"move","item":"P1-08","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:16.985Z","type":"claim","item":"P1-08a","by":"human:rahil"},{"ts":"2026-09-14T17:26:17.034Z","type":"move","item":"P1-08a","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.082Z","type":"move","item":"P1-08a","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.177Z","type":"claim","item":"P1-09","by":"human:rahil"},{"ts":"2026-09-14T17:26:17.226Z","type":"move","item":"P1-09","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.277Z","type":"move","item":"P1-09","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.374Z","type":"claim","item":"P1-10","by":"human:rahil"},{"ts":"2026-09-14T17:26:17.419Z","type":"move","item":"P1-10","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.469Z","type":"move","item":"P1-10","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.569Z","type":"claim","item":"P1-10a","by":"human:rahil"},{"ts":"2026-09-14T17:26:17.618Z","type":"move","item":"P1-10a","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.662Z","type":"move","item":"P1-10a","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.758Z","type":"claim","item":"P1-11","by":"human:rahil"},{"ts":"2026-09-14T17:26:17.808Z","type":"move","item":"P1-11","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.859Z","type":"move","item":"P1-11","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:17.961Z","type":"claim","item":"P1-12","by":"human:rahil"},{"ts":"2026-09-14T17:26:18.012Z","type":"move","item":"P1-12","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.060Z","type":"move","item":"P1-12","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.160Z","type":"claim","item":"P1-13","by":"human:rahil"},{"ts":"2026-09-14T17:26:18.210Z","type":"move","item":"P1-13","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.257Z","type":"move","item":"P1-13","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.349Z","type":"claim","item":"P1-13a","by":"human:rahil"},{"ts":"2026-09-14T17:26:18.395Z","type":"move","item":"P1-13a","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.446Z","type":"move","item":"P1-13a","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.542Z","type":"claim","item":"P1-14","by":"human:rahil"},{"ts":"2026-09-14T17:26:18.591Z","type":"move","item":"P1-14","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.642Z","type":"move","item":"P1-14","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.743Z","type":"claim","item":"P1-15","by":"human:rahil"},{"ts":"2026-09-14T17:26:18.793Z","type":"move","item":"P1-15","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.841Z","type":"move","item":"P1-15","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:18.935Z","type":"claim","item":"P1-16","by":"human:rahil"},{"ts":"2026-09-14T17:26:18.981Z","type":"move","item":"P1-16","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:19.028Z","type":"move","item":"P1-16","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:19.122Z","type":"claim","item":"P1-17","by":"human:rahil"},{"ts":"2026-09-14T17:26:19.171Z","type":"move","item":"P1-17","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:26:19.220Z","type":"move","item":"P1-17","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.105Z","type":"claim","item":"P0-01","by":"human:rahil"},{"ts":"2026-09-14T17:27:10.155Z","type":"move","item":"P0-01","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.206Z","type":"move","item":"P0-01","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.260Z","type":"move","item":"P0-01","from":"building","to":"built","by":"human:rahil","evidence":["2f40a44","PRD.md#decisions-D3"]},{"ts":"2026-09-14T17:27:10.311Z","type":"claim","item":"P0-02","by":"human:rahil"},{"ts":"2026-09-14T17:27:10.362Z","type":"move","item":"P0-02","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.412Z","type":"move","item":"P0-02","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.465Z","type":"move","item":"P0-02","from":"building","to":"built","by":"human:rahil","evidence":["5f5ce5e","LICENSE"]},{"ts":"2026-09-14T17:27:10.515Z","type":"claim","item":"P0-03","by":"human:rahil"},{"ts":"2026-09-14T17:27:10.565Z","type":"move","item":"P0-03","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.614Z","type":"move","item":"P0-03","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.671Z","type":"move","item":"P0-03","from":"building","to":"built","by":"human:rahil","evidence":["ad374d1","PRD.md#decisions-D5"]},{"ts":"2026-09-14T17:27:10.721Z","type":"claim","item":"P0-04","by":"human:rahil"},{"ts":"2026-09-14T17:27:10.771Z","type":"move","item":"P0-04","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.821Z","type":"move","item":"P0-04","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:10.877Z","type":"move","item":"P0-04","from":"building","to":"built","by":"human:rahil","evidence":["c51b5eb","templates/stages.json"]},{"ts":"2026-09-14T17:27:10.929Z","type":"claim","item":"P0-05","by":"human:rahil"},{"ts":"2026-09-14T17:27:10.977Z","type":"move","item":"P0-05","from":"backlog","to":"specified","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:11.025Z","type":"move","item":"P0-05","from":"specified","to":"building","by":"human:rahil","evidence":[]},{"ts":"2026-09-14T17:27:11.079Z","type":"move","item":"P0-05","from":"building","to":"built","by":"human:rahil","evidence":["f45bcab","PRD.md#decisions-D1"]},{"ts":"2026-09-14T17:27:11.231Z","type":"move","item":"P1-01","from":"building","to":"built","by":"human:rahil","evidence":["5f5ce5e","test/package.test.js"]},{"ts":"2026-09-14T17:27:11.332Z","type":"move","item":"P1-02","from":"building","to":"built","by":"human:rahil","evidence":["5f5ce5e","test/store.test.js"]},{"ts":"2026-09-14T17:27:11.385Z","type":"move","item":"P1-05","from":"building","to":"built","by":"human:rahil","evidence":["a1ccdb6","test/add.test.js"]},{"ts":"2026-09-14T17:27:11.434Z","type":"move","item":"P1-04","from":"building","to":"built","by":"human:rahil","evidence":["c51b5eb","test/init.test.js"]},{"ts":"2026-09-14T17:27:11.533Z","type":"move","item":"P1-06","from":"building","to":"built","by":"human:rahil","evidence":["a1ccdb6","test/claim.test.js"]},{"ts":"2026-09-14T17:27:11.583Z","type":"move","item":"P1-09","from":"building","to":"built","by":"human:rahil","evidence":["1ce4502","test/brief.test.js"]},{"ts":"2026-09-14T17:27:11.636Z","type":"move","item":"P1-08","from":"building","to":"built","by":"human:rahil","evidence":["a1ccdb6","test/note.test.js"]},{"ts":"2026-09-14T17:27:11.735Z","type":"move","item":"P1-08a","from":"building","to":"built","by":"human:rahil","evidence":["a1ccdb6","test/edit.test.js"]},{"ts":"2026-09-14T17:27:11.829Z","type":"move","item":"P1-17","from":"building","to":"built","by":"human:rahil","evidence":["624f5e8","README.md"]},{"ts":"2026-09-14T17:27:11.930Z","type":"move","item":"P1-15","from":"building","to":"built","by":"human:rahil","evidence":["a1ccdb6","test/add.test.js"]},{"ts":"2026-09-14T17:27:11.982Z","type":"move","item":"P1-12","from":"building","to":"built","by":"human:rahil","evidence":["3892a8b","test/import.test.js"]},{"ts":"2026-09-14T17:27:12.032Z","type":"move","item":"P1-13","from":"building","to":"built","by":"human:rahil","evidence":["f45bcab","test/inject.test.js"]},{"ts":"2026-09-14T17:27:12.133Z","type":"move","item":"P1-11","from":"building","to":"built","by":"human:rahil","evidence":["1ce4502","test/show.test.js"]},{"ts":"2026-09-14T17:27:12.284Z","type":"move","item":"P1-03","from":"building","to":"built","by":"human:rahil","evidence":["221a7aa","test/rules.test.js"]},{"ts":"2026-09-14T17:27:12.478Z","type":"move","item":"P1-07","from":"building","to":"built","by":"human:rahil","evidence":["c129ed4","test/move.test.js"]},{"ts":"2026-09-14T17:27:12.665Z","type":"move","item":"P1-13a","from":"building","to":"built","by":"human:rahil","evidence":["f45bcab","test/open.test.js"]},{"ts":"2026-09-14T17:27:12.766Z","type":"move","item":"P1-16","from":"building","to":"built","by":"human:rahil","evidence":["1ce4502","test/brief.test.js"]},{"ts":"2026-09-14T17:27:12.861Z","type":"move","item":"P1-14","from":"building","to":"built","by":"human:rahil","evidence":["c51b5eb","test/upgrade.test.js"]},{"ts":"2026-09-14T17:27:13.059Z","type":"move","item":"P1-10","from":"building","to":"built","by":"human:rahil","evidence":["c129ed4","test/check.test.js"]},{"ts":"2026-09-14T17:27:13.160Z","type":"move","item":"P1-10a","from":"building","to":"built","by":"human:rahil","evidence":["c129ed4","test/check.test.js"]}]</script>
+<script type="application/json" id="gw-stages">{"stages":[{"id":"backlog","label":"Backlog"},{"id":"specified","label":"Specified","exit":"Someone picks it up and starts changing code or the owning document.","auto":true},{"id":"building","label":"Building","exit":"Change is complete locally with tests passing.","auto":true,"requires":{"owner":true}},{"id":"built","label":"Built","exit":"Evidence recorded: commit and test path.","auto":true,"requires":{"evidence_min":1,"deps_at_least":"built"}},{"id":"in_review","label":"In review","exit":"PR opened and reviewer assigned.","auto":true,"requires":{"evidence_match":"^https://github.com/.+/pull/\\d+"}},{"id":"reviewed","label":"Reviewed","exit":"Reviewer approved.","auto":false},{"id":"merged","label":"Merged","exit":"PR merged to main.","auto":false,"requires":{"deps_at_least":"merged"}},{"id":"verified","label":"Verified","exit":"Behaviour confirmed on target; VALIDATION entry linked.","auto":false,"requires":{"evidence_min":2}}],"terminal":["verified","dropped"],"extra":[{"id":"dropped","label":"Dropped"},{"id":"paused","label":"Paused"}]}</script>
+<script type="application/json" id="gw-config">{"version":1,"id_scheme":"phase-seq","vocab":{"phase":["P0","P1","P2","P3"],"priority":["P0","P1","P2","P3"],"gate":["G0","G1","G2"],"type":["decision","defect","feature","test","doc"]},"brief":{"max_lines":25},"check":{"stale_days":7,"stale_exempt_stages":["merged"]},"github":{"enabled":false,"repo":null,"dispatch_label":"agent/go","mirror_children":false,"comment_on_move":true,"close_on":"verified","labels":{"priority/P0":{"priority":"P0"},"type/defect":{"type":"defect"},"phase/2":{"phase":"P2"}},"milestone_to":"gate"},"runner":{"provider":"claude","providers":{"claude":{"cmd":["claude","-p","{prompt}","--allowedTools","Edit,Bash"]},"codex":{"cmd":["codex","exec","{prompt}"]},"custom":{"cmd":["./scripts/run-agent.sh","{item}"]}},"prompt_template":".gatewright/prompt.md","tick_s":5,"max_concurrent":1,"stop_timeout_s":30,"run_timeout_min":60,"worktree_root":".gatewright/.worktrees","paused":false},"policy":{"auto_dispatch_children":false,"max_children_per_item":10,"triage_required_for":["agent"]},"memory":{"enabled":false,"provider":"second-brain","providers":{"second-brain":{"url":"https://second-brain.example.workers.dev/mcp","token_env":"SECOND_BRAIN_TOKEN"}},"project_id":null,"recall":{"on_dispatch":true,"top_k":5,"max_chars":2000},"remember":{"on_run_ok":true,"on_close":true,"max_chars":800,"extra_tags":[]}},"generatedAt":"2026-09-14T17:27:19.847Z"}</script>
+</body>
+</html>
