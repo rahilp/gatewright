@@ -33,47 +33,34 @@ test('gw next rejects an unknown item', () => {
   assert.throws(() => run(ctx(b, ['nope'])), UsageError);
 });
 
-test('gw next on a fresh item names specified as reachable and lists side stages, and names the next stage for everything blocked by order', () => {
+test('gw next on a fresh item leads with the immediate next stage and keeps side moves secondary', () => {
   const b = board();
   const c = ctx(b, ['P1-01']);
   run(c);
   assert.equal(c.out, `P1-01  stage: backlog
 
-can move to now:
-  specified: run \`gw move P1-01 specified\`
-  dropped: run \`gw move P1-01 dropped\`
-  paused: run \`gw move P1-01 paused\`
+next: specified (ready): run \`gw move P1-01 specified\`
 
-cannot move to yet:
-  building:
-    - specified: move here first: run \`gw move P1-01 specified\`
-    - Someone must have claimed it
-  built:
-    - specified: move here first (built is 2 stages beyond specified): run \`gw move P1-01 specified\`
-    - Someone must have claimed it
-    - Needs at least one piece of evidence
-  in_review:
-    - specified: move here first (in_review is 3 stages beyond specified): run \`gw move P1-01 specified\`
-    - Someone must have claimed it
-    - Needs at least one piece of evidence
-    - Evidence must include a link to a pull request
-  reviewed:
-    - specified: move here first (reviewed is 4 stages beyond specified): run \`gw move P1-01 specified\`
-    - Someone must have claimed it
-    - Needs at least one piece of evidence
-    - Evidence must include a link to a pull request
-  merged:
-    - specified: move here first (merged is 5 stages beyond specified): run \`gw move P1-01 specified\`
-    - Someone must have claimed it
-    - Needs at least one piece of evidence
-    - Evidence must include a link to a pull request
-  verified:
-    - specified: move here first (verified is 6 stages beyond specified): run \`gw move P1-01 specified\`
-    - Someone must have claimed it
-    - Needs at least one piece of evidence
-    - Evidence must include a link to a pull request
-    - Needs at least two pieces of evidence
+other moves: ready -> dropped, paused
 `);
+});
+
+test('gw next mid-pipeline leads with the blocked next stage, collapses further stages to a count, and puts backward moves in their own section after the answer', () => {
+  const b = board([item({ stage: 'building', owner: 'human:test' })]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.equal(c.out, `P1-01  stage: building
+
+next: built (blocked)
+  - Needs at least one piece of evidence
+  - 4 further stages need this first
+
+other moves: ready -> dropped, paused; needs --force -> backlog, specified
+`);
+
+  const answerLine = c.out.indexOf('next: built');
+  const backwardLine = c.out.indexOf('needs --force -> backlog');
+  assert.ok(answerLine >= 0 && backwardLine > answerLine, 'the answer must appear before the backward/side moves section');
 });
 
 test('gw next --json matches the shape of the live board\'s /transitions endpoint', () => {
@@ -87,10 +74,14 @@ test('gw next --json matches the shape of the live board\'s /transitions endpoin
   assert.deepEqual(parsed.transitions.specified, { ok: true, failures: [], force: true });
 });
 
-test('gw next on a terminal item explains that leaving needs --force, not an unmet rule', () => {
+test('gw next on a terminal item gives one explanation for leaving, not one per side stage', () => {
   const b = board([item({ stage: 'verified', evidence: ['a', 'b'] })]);
   const c = ctx(b, ['P1-01']);
   run(c);
-  assert.match(c.out, /verified is a terminal stage; leaving it needs --force: run `gw move P1-01 dropped --force`/);
-  assert.match(c.out, /verified is a terminal stage; leaving it needs --force: run `gw move P1-01 paused --force`/);
+  assert.equal(c.out, `P1-01  stage: verified
+
+verified is a terminal stage; leaving it needs --force.
+
+other moves: needs --force -> dropped, paused
+`);
 });
