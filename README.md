@@ -259,7 +259,7 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 ## Status
 
-Gatewright is at v0.8.0.
+Gatewright is at v0.9.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only — CSV and JSON return exit 2 today), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
@@ -276,6 +276,8 @@ Shipped in v0.6: Windows support. Path comparison normalises 8.3 short names and
 Shipped in v0.7: `gw config`, so settings can be changed without hand-editing `.gatewright/` — which the instruction block has always told agents never to do. Scripted (`gw config runner.enabled true`) and interactive (`gw config` in a terminal) are the same code path, and interactivity is never required: no TTY, `--yes`, `GW_NO_INPUT` or `CI` all take the non-interactive path, so nothing in an agent or CI pipeline can block on a prompt. `gw serve --host` binds an address other than loopback, and says plainly what that exposes. Also fixes a bug present in every earlier version: piping any command — `gw list | head`, `gw brief | less` — ended in an unhandled `EPIPE` and a Node stack trace.
 
 Shipped in v0.8: `gw init` asks how you work — whether work reaches main directly or through pull requests, how items are numbered, which phases you use, and whether to arm the runner — and writes a pipeline that ends where you actually finish. A stage can now declare `"role": "done"`, and `gw brief` believes it: before this, a board whose pipeline assumed pull requests reported every completed item as still in flight forever, which turned the digest into a list of everything ever done. `gw config` also gained list-valued settings, so the vocabularies are settable without opening a file. Every non-interactive path is unchanged: no TTY, `--yes`, `GW_NO_INPUT` or `CI` all leave `init` byte-identical.
+
+Shipped in v0.9: `gw check` now reports items holding values the vocabulary no longer allows, which was only ever enforced when an item was created — so a direct write, an import, or narrowing a vocabulary later left drift the board called clean. `gw import` accepts CSV and JSON as well as markdown, carrying evidence through so finished work is not silently downgraded. `gw help <command>` and `gw <command> --help` print that command's own flags, rendered from the spec the parser uses. `mirror_children` opens an issue for an agent-created child of a linked parent. The `Specified` stage now requires the scope it is named after. On the live board, a card's button reflects what is actually true of it — nothing on finished work, Cancel on a queued dispatch, Stop run on a run already in progress — and stopping a run no longer blocks the server while it waits out the grace period.
 
 Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 
