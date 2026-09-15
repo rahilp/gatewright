@@ -18,7 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [18, 20, 22]
+        # 18 and 20 are EOL (April 2025 and April 2026). Testing dead runtimes
+        # spent CI on false alarms twice — a shell glob and --test-timeout — while
+        # 24, the current LTS, was not covered at all.
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

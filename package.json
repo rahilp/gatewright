@@ -11,7 +11,7 @@
     "gatewright": "bin/gw.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "files": [
     "bin/",

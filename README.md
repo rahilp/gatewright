@@ -243,4 +243,4 @@ Not built yet:
 - `gw import --format csv|json` — markdown only today; the other two exit 2.
 - Mirroring agent-created child items as GitHub issues (`mirror_children`).
 
-Node 18+. The published package has zero runtime dependencies. MIT.
+Node 22+. The published package has zero runtime dependencies. MIT.

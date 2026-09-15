@@ -826,7 +826,8 @@ Adapters contain no logic. If a provider can't run a command at session start, t
 - `items.jsonl` writes: atomic via temp file + rename.
 - Concurrent CLI writes from multiple runs: advisory lock file `.gatewright/.lock` with 2s retry, 10s give-up.
 - No telemetry. No network except `gh` in `sync` and the loopback server.
-- Node 18+. No native modules. `npm ls --prod` is empty.
+- Node 22+. No native modules. `npm ls --prod` is empty. 18 and 20 are EOL
+  (April 2025 and April 2026); the CI matrix covers the two supported LTS lines.
 
 ## 14. Memory provider (v0.5)
 
