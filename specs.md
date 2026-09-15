@@ -720,6 +720,17 @@ normalisation. `git` reports forward slashes even on Windows while `path.join`
 produces backslashes, and a raw comparison between them fails for no reason a
 user could act on.
 
+Normalisation also expands 8.3 short components (`LONGNA~1`) and corrects
+drive-letter case, via `realpathSync.native`, and that is load-bearing for more
+than comparison: libuv's Windows filesystem-event backend *asserts* that the
+filename `ReadDirectoryChangesW` reports begins with the directory string it
+was given. Handing `fs.watch` an unnormalised path therefore does not produce a
+catchable error — it fail-fasts the process with `0xC0000409` and no message on
+stderr. A short component is ordinary on Windows, since any account name over
+eight characters produces one, so the path passed to `fs.watch` is normalised
+first. Node 22 tolerated the mismatch and Node 24 asserts, which is the kind of
+difference that appears only on the runtime a user happens to have.
+
 ### 10.1 Rules for spawning things
 
 Everything before v0.4 could only lose work. The runner can spend money and

@@ -116,7 +116,7 @@ CI runs windows-latest and 12 of 295 tests fail there. The README promises Node 
 - **P6-03** · Windows process termination · feature · G0 · P6-02 · `taskkill /T` then `/T /F` after `stop_timeout_s`, reaching the whole tree in place of a process group. Graceful-then-forceful preserved as far as Windows allows, per specs §10.2.
 - **P6-04** · Windows liveness and pid-reuse guard · feature · G0 · P6-03 · Liveness from the OS process list; reuse guarded by recorded start time rather than `/proc/<pid>/cwd`. The weaker guarantee is documented, not hidden.
 - **P6-05** · Runner tests pass on Windows · test · G0 · P6-03, P6-04 · overnight, crash-mid-drain and both runaway tests green on windows-latest.
-- **P6-06** · Full suite green on windows-latest · test · G0 · P6-01, P6-02, P6-05 · All three platforms green in CI on Node 18, 20 and 22.
+- **P6-06** · Full suite green on windows-latest · test · G0 · P6-01, P6-02, P6-05 · All three platforms green in CI on Node 22 and 24.
 - **P6-07** · Docs state the platform support honestly · doc · G0 · P6-06 · README names Windows as supported and specs §10.2 records where its guarantees are weaker.
 - **P6-08** · Publish v0.6 · feature · G0 · P6-06, P6-07 · —
 
