@@ -40,10 +40,21 @@ function providerConfig() { return { runner: { provider: 'fixture', prompt_templ
 // regardless of signal name — reaps them just as reliably, without ever invoking an
 // external process. Windows-specific escalation mechanics (real taskkill argv, the
 // pid-reuse identity guard) are covered deterministically by run-lifecycle-windows.test.js.
-function winSafeKill() {
+// `started` should echo whatever the fixture recorded as the run's durable
+// `started` timestamp (see board()/startedStub()'s `started` option). The real
+// windowsProcessStartTime() reports a live process's actual, fixed OS creation
+// time, which the win32 identity guard in lib/run/lifecycle.js compares
+// against the recorded `started` within a small tolerance (see
+// WINDOWS_PID_REUSE_TOLERANCE_MS) to rule out pid reuse. A fixture that
+// deliberately backdates `started` — to fast-forward run_timeout_min without
+// really waiting — needs the stub to agree with that backdated value, or the
+// guard fails closed and the test's own process is never signalled. Fixtures
+// that don't backdate `started` can omit this and get "now", matching the
+// real started time recorded moments earlier.
+function winSafeKill(started) {
   return process.platform !== 'win32' ? {} : {
     taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return { timedOut: false }; },
-    windowsStartTimeFn: () => ({ startTime: Date.now(), timedOut: false }),
+    windowsStartTimeFn: () => ({ startTime: started ? Date.parse(started) : Date.now(), timedOut: false }),
   };
 }
 function startedStub(fixture, source, { started } = {}) {
@@ -97,8 +108,9 @@ test('a dead recorded run is a clean no-op', async () => {
 test('timeout is measured from the durable started record, not this process lifetime', async () => {
   const fixture = board(); const proc = child("process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", fixture.worktree);
   try {
-    fixture.registry.record({ run: 'r-old', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree, started: new Date(Date.now() - 61_000).toISOString() });
-    await createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).enforceTimeouts();
+    const started = new Date(Date.now() - 61_000).toISOString();
+    fixture.registry.record({ run: 'r-old', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree, started });
+    await createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill(started) }).enforceTimeouts();
     assert.equal(await waitGone(proc.pid), true); assert.equal(fixture.store.readEvents().at(-1).outcome, 'timeout');
   } finally { killFinally(proc); }
 });
@@ -129,9 +141,10 @@ test('stop then close writes exactly one cancelled run_ended event', async () =>
 });
 
 test('timeout then close writes exactly one timeout run_ended event', async () => {
-  const fixture = board({ timeout: 0.01 }); const run = startedStub(fixture, "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", { started: new Date(Date.now() - 61_000).toISOString() });
+  const started = new Date(Date.now() - 61_000).toISOString();
+  const fixture = board({ timeout: 0.01 }); const run = startedStub(fixture, "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", { started });
   try {
-    createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).enforceTimeouts();
+    createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill(started) }).enforceTimeouts();
     await onceClose(run.child);
     const ended = fixture.store.readEvents().filter((event) => event.type === 'run_ended');
     assert.deepEqual(ended.map((event) => event.outcome), ['timeout']);

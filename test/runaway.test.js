@@ -22,10 +22,15 @@ import { readConfig, readStages } from '../lib/config.js';
 // treats as an unconditional TerminateProcess, regardless of signal name — reaps it just as
 // reliably, without ever invoking an external process. Windows-specific escalation mechanics
 // are covered deterministically by run-lifecycle-windows.test.js.
-function winSafeKill() {
+// `started`, if given, should echo the fixture's recorded durable `started`
+// timestamp — see test/run-lifecycle.test.js's winSafeKill() for why: a
+// fixture that backdates `started` needs the stub to agree with it, or the
+// win32 pid-reuse guard fails closed. This file's own call site never
+// backdates, so it always gets "now".
+function winSafeKill(started) {
   return process.platform !== 'win32' ? {} : {
     taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return { timedOut: false }; },
-    windowsStartTimeFn: () => ({ startTime: Date.now(), timedOut: false }),
+    windowsStartTimeFn: () => ({ startTime: started ? Date.parse(started) : Date.now(), timedOut: false }),
   };
 }
 

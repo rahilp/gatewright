@@ -19,10 +19,17 @@ import { createRunner } from '../lib/run/spawn.js';
 // TerminateProcess, regardless of signal name — reaps it just as reliably, without ever
 // invoking an external process. Windows-specific escalation mechanics (real taskkill argv,
 // the pid-reuse identity guard) are covered deterministically by run-lifecycle-windows.test.js.
-function winSafeKill() {
+// `started` should echo the fixture's recorded durable `started` timestamp.
+// The real windowsProcessStartTime() reports a live process's actual, fixed
+// OS creation time, compared by the win32 identity guard against the
+// recorded `started` within a small tolerance to rule out pid reuse. A
+// fixture that backdates `started` to fast-forward run_timeout_min needs the
+// stub to agree with that backdated value, or the guard fails closed and the
+// test's own process is never signalled.
+function winSafeKill(started) {
   return process.platform !== 'win32' ? {} : {
     taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return { timedOut: false }; },
-    windowsStartTimeFn: () => ({ startTime: Date.now(), timedOut: false }),
+    windowsStartTimeFn: () => ({ startTime: started ? Date.parse(started) : Date.now(), timedOut: false }),
   };
 }
 
@@ -134,11 +141,12 @@ test('a fresh scheduler instance enforces a timeout from the durable record star
   const store = board({ runner: { paused: true, run_timeout_min: 1, stop_timeout_s: 0.01 } }); const worktree = join(store.root, 'worktree'); mkdirSync(worktree);
   store.writeItems([item('P1-01', { stage: 'backlog', owner: 'agent:r-old' })]);
   const proc = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { detached: true, stdio: 'ignore', cwd: worktree });
-  const registry = createRunRegistry({ store }); registry.record({ run: 'r-old', item: 'P1-01', pid: proc.pid, worktree, started: new Date(Date.now() - 61_000).toISOString() });
+  const started = new Date(Date.now() - 61_000).toISOString();
+  const registry = createRunRegistry({ store }); registry.record({ run: 'r-old', item: 'P1-01', pid: proc.pid, worktree, started });
   try {
     // This is intentionally a newly-created scheduler, modelling a restarted
     // supervisor whose only clock is the durable registry timestamp.
-    const restarted = createScheduler({ store, registry, lifecycle: createRunLifecycle({ store, registry, ...winSafeKill() }) });
+    const restarted = createScheduler({ store, registry, lifecycle: createRunLifecycle({ store, registry, ...winSafeKill(started) }) });
     assert.equal(restarted.tick().status, 'paused');
     // Poll rather than sleep. This waits on a SIGTERM the child ignores, a
     // SIGKILL escalation, and the OS reaping the process; a fixed delay makes
