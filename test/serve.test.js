@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -273,5 +274,74 @@ test('a failed scheduled sync leaves serve alive and retries with backoff', asyn
     const state = await (await fetch(`http://127.0.0.1:${address.port}/api/state`)).json(); assert.equal(state.sync.status, 'failure'); assert.match(state.sync.lastError, /offline/);
     await clock.advance(119 * 1000); assert.equal(calls, 1); await clock.advance(1 * 1000); assert.equal(calls, 2);
     assert.equal((await fetch(`http://127.0.0.1:${address.port}/api/state`)).status, 200);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+// The board's API has no authentication and can start an agent run, so which
+// interface it binds is a security property, not a convenience. The default
+// must stay loopback no matter what else changes around it.
+test('listen binds loopback by default and only leaves it when asked', async () => {
+  const server = createServeServer({ store: createStore(mkdtempSync(join(tmpdir(), 'gw-serve-bind-'))) });
+  try {
+    const address = await listen(server, { port: 0 });
+    assert.equal(address.address, '127.0.0.1', 'default bind must not be reachable off this machine');
+    // Proves the assertion above is about the default rather than the only
+    // thing listen can do: an explicit host is still honoured.
+    await new Promise((resolve) => server.close(resolve));
+    const second = createServeServer({ store: createStore(mkdtempSync(join(tmpdir(), 'gw-serve-bind2-'))) });
+    const wide = await listen(second, { port: 0, host: '0.0.0.0' });
+    assert.equal(wide.address, '0.0.0.0');
+    await new Promise((resolve) => second.close(resolve));
+  } finally {
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+// --host widens the Host/Origin allow-list by this machine's own addresses.
+// It must not become "any host": that allow-list is the CSRF boundary that
+// stops another site driving the board through a visitor's browser.
+//
+// Uses http.request, not fetch: Host is a forbidden header name in fetch, so
+// undici silently drops it and every request goes out as 127.0.0.1 -- which
+// made the first version of this test pass for the wrong reason in both
+// directions.
+function rawRequest(port, { host, origin, method = 'GET', path = '/api/state', body } = {}) {
+  return new Promise((resolve, reject) => {
+    const headers = { host };
+    if (origin) headers.origin = origin;
+    if (body) { headers['content-type'] = 'application/json'; headers['content-length'] = Buffer.byteLength(body); }
+    const req = httpRequest({ host: '127.0.0.1', port, method, path, headers }, (res) => {
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { text += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, text }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+test('an allowed host is served while a foreign host and a foreign origin are still refused', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-serve-host-'));
+  const store = createStore(root); store.ensure(); store.writeItems([item]);
+  const server = createServeServer({ store, allowedHosts: ['192.168.1.37'] });
+  const address = await listen(server, { port: 0, host: '127.0.0.1' });
+  const port = address.port;
+  try {
+    const allowed = await rawRequest(port, { host: `192.168.1.37:${port}` });
+    assert.equal(allowed.status, 200, 'the address --host named is answered');
+
+    const foreign = await rawRequest(port, { host: `10.9.9.9:${port}` });
+    assert.equal(foreign.status, 403, 'an address this server was not bound for is still refused');
+
+    // The dangerous shape: a browser on the LAN, driven by a page that is not
+    // the board, carrying a legitimate Host but an attacker's Origin.
+    const crossOrigin = await rawRequest(port, {
+      host: `192.168.1.37:${port}`, origin: 'http://evil.example',
+      method: 'POST', path: '/api/items', body: JSON.stringify({ title: 'forged' }),
+    });
+    assert.equal(crossOrigin.status, 403, 'a foreign Origin cannot write even from an allowed Host');
+    assert.equal(store.readItems().length, 1, 'and nothing was created');
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });

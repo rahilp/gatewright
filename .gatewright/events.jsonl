@@ -449,3 +449,14 @@
 {"ts":"2026-09-15T09:21:54.769Z","type":"note","item":"P6-08","by":"human:rahil","note":"Published to npm and verified end-to-end: installed globally from the registry into a clean project, drove init/add/claim/move/check/open, and confirmed both refusals still hold in the shipped build (missing evidence and stage skipping each exit 1). Verified normalizePath(store.dir) is present in the installed lib/commands/open.js, so the Windows fs.watch fix is actually in the tarball."}
 {"ts":"2026-09-15T09:22:41.013Z","type":"add","item":"P6-11","by":"human:rahil","parent":null}
 {"ts":"2026-09-15T09:22:41.065Z","type":"add","item":"P6-12","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T09:28:13.588Z","type":"edit","item":"P1-20","by":"human:rahil","fields":["deps"]}
+{"ts":"2026-09-15T09:28:13.634Z","type":"note","item":"P1-20","by":"human:rahil","note":"Dropped the P1-18 dogfood dependency: shipping should never have been gated on a time-based dogfood task. v0.1 published without it, as did every release since, so the gate was fiction the board was carrying."}
+{"ts":"2026-09-15T09:28:34.066Z","type":"move","item":"P1-20","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.1.0","npm view gatewright versions"]}
+{"ts":"2026-09-15T09:28:34.117Z","type":"claim","item":"P5-14","by":"human:rahil"}
+{"ts":"2026-09-15T09:28:34.168Z","type":"move","item":"P5-14","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:28:34.218Z","type":"move","item":"P5-14","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:28:34.316Z","type":"note","item":"P0-06","by":"human:rahil","note":"Dropped: 0.2.0 was never published. npm shows 0.1.0, 0.3.0, 0.4.0, 0.5.0, 0.6.0 — the v0.2 live-board work shipped inside 0.3.0, so this item describes a release that does not exist."}
+{"ts":"2026-09-15T09:28:34.363Z","type":"move","item":"P0-06","from":"backlog","to":"dropped","by":"human:rahil","evidence":[],"queued_comment":true}
+{"ts":"2026-09-15T09:28:44.823Z","type":"edit","item":"P5-14","by":"human:rahil","fields":["deps"]}
+{"ts":"2026-09-15T09:28:44.868Z","type":"note","item":"P5-14","by":"human:rahil","note":"Dropped the P5-13 dogfood dependency for the same reason as P1-20: a two-week time-based task must not gate a release. v0.5 shipped without it."}
+{"ts":"2026-09-15T09:28:44.919Z","type":"move","item":"P5-14","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.5.0","npm view gatewright versions"]}

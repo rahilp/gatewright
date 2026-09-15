@@ -179,7 +179,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw import <file> [--format md]` | Ingest a markdown task list. CSV and JSON are planned but not yet accepted; `--format csv` or `--format json` returns exit 2 today. |
 | `gw open [--no-browser] [--watch]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
-| `gw serve [--port 7777] [--open]` | Serve the live board on loopback with its write API and, when explicitly enabled and configured, its scheduler |
+| `gw serve [--port 7777] [--host H] [--open]` | Serve the live board; loopback unless `--host` says otherwise, with its write API and, when explicitly enabled and configured, its scheduler |
 | `gw sync [--dry-run]` | Pull linked GitHub issues through `gh`; `--dry-run` previews synchronization |
 | `gw stop <id> \| --all` | Stop one recorded run, or all recorded runs from any terminal |
 | `gw resume <id>` | Resume a paused item in its existing worktree with the previous log tail |
