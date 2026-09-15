@@ -447,3 +447,5 @@
 {"ts":"2026-09-15T09:21:54.670Z","type":"move","item":"P6-08","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-15T09:21:54.720Z","type":"move","item":"P6-08","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.6.0","sha512 d732037dc0cd951d7957e6e8a53c91f7547351dc","v0.6.0 3ce0b0b"]}
 {"ts":"2026-09-15T09:21:54.769Z","type":"note","item":"P6-08","by":"human:rahil","note":"Published to npm and verified end-to-end: installed globally from the registry into a clean project, drove init/add/claim/move/check/open, and confirmed both refusals still hold in the shipped build (missing evidence and stage skipping each exit 1). Verified normalizePath(store.dir) is present in the installed lib/commands/open.js, so the Windows fs.watch fix is actually in the tarball."}
+{"ts":"2026-09-15T09:22:41.013Z","type":"add","item":"P6-11","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T09:22:41.065Z","type":"add","item":"P6-12","by":"human:rahil","parent":null}
