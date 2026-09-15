@@ -14,5 +14,15 @@ if (files.length === 0) { console.error('no test files found in test/'); process
 // (a platform difference in signal/kill semantics, an unresponsive external command) must
 // fail with a message, not hang until the CI job itself is killed (see P6-05). Generous
 // enough to clear the suite's own multi-second polling waits with room to spare.
-const result = spawnSync(process.execPath, ['--test', '--test-timeout=60000', ...process.argv.slice(2), ...files], { stdio: 'inherit' });
+// --test-timeout is a backstop against a hung test, but it does not exist
+// before Node 20.11 — passing it unconditionally made Node 18 exit 9 with
+// "bad option" and run nothing at all. Probe for it rather than reasoning from
+// version numbers, which is how it got shipped broken in the first place.
+function supportsTestTimeout() {
+  const probe = spawnSync(process.execPath, ['--test-timeout=1', '-e', ''], { stdio: 'ignore' });
+  return probe.status === 0;
+}
+const backstop = supportsTestTimeout() ? ['--test-timeout=60000'] : [];
+
+const result = spawnSync(process.execPath, ['--test', ...backstop, ...process.argv.slice(2), ...files], { stdio: 'inherit' });
 process.exit(result.status ?? 1);
