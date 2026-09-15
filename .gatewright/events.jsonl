@@ -442,3 +442,8 @@
 {"ts":"2026-09-15T04:30:20.028Z","type":"move","item":"P6-05","from":"building","to":"built","by":"human:rahil","evidence":["d6ecba8","test/runaway.test.js","test/overnight.test.js"]}
 {"ts":"2026-09-15T04:30:20.080Z","type":"move","item":"P6-06","from":"building","to":"built","by":"human:rahil","evidence":["34928803572","01eb098"]}
 {"ts":"2026-09-15T04:30:20.129Z","type":"move","item":"P6-07","from":"building","to":"built","by":"human:rahil","evidence":["README.md","specs.md"]}
+{"ts":"2026-09-15T09:21:54.567Z","type":"claim","item":"P6-08","by":"human:rahil"}
+{"ts":"2026-09-15T09:21:54.621Z","type":"move","item":"P6-08","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:21:54.670Z","type":"move","item":"P6-08","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:21:54.720Z","type":"move","item":"P6-08","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.6.0","sha512 d732037dc0cd951d7957e6e8a53c91f7547351dc","v0.6.0 3ce0b0b"]}
+{"ts":"2026-09-15T09:21:54.769Z","type":"note","item":"P6-08","by":"human:rahil","note":"Published to npm and verified end-to-end: installed globally from the registry into a clean project, drove init/add/claim/move/check/open, and confirmed both refusals still hold in the shipped build (missing evidence and stage skipping each exit 1). Verified normalizePath(store.dir) is present in the installed lib/commands/open.js, so the Windows fs.watch fix is actually in the tarball."}
