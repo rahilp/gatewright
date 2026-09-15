@@ -84,11 +84,11 @@ Overview view:
 
 ![Overview](docs/img/overview.png)
 
-The board is read-only when opened from a snapshot. `gw serve` makes it live, with editors, Play and Stop, global pause, and a 2-second poll for new events.
+The board is read-only when opened from a snapshot. `gw serve` makes it live, with editors, live run logs, triage and resume controls, global pause, and a 2-second poll for new events.
 
 ## Live board
 
-`gw serve` serves the board on loopback and polls the store for new items and events every two seconds. Edits, moves, notes, Play, Stop, and global pause write back through the same rules as the CLI.
+`gw serve` serves the board on loopback and polls the store for new items and events every two seconds. Edits, moves, notes, Play, Stop, triage, resume, and global pause write back through the same rules as the CLI. When the runner is enabled, its scheduler starts eligible dispatched items and the board exposes their live logs.
 
 ```
 $ gw serve --port 17888
@@ -101,7 +101,19 @@ When a move is refused, the card shows the CLI's own refusal inline. For example
 use --force to skip stages
 ```
 
-Play only queues a dispatch event; Stop cancels that queued dispatch. Neither starts an agent. There is no runner until v0.4. Global pause records the scheduler pause state for that future runner; it starts nothing today.
+Play queues a dispatch event. The scheduler can act on that event only when its runner controls permit it. Stop cancels a queued dispatch or stops a recorded run. Global pause stops new dispatches.
+
+## Runner and safety
+
+The runner is a scheduler for dispatched items. Each run gets its own git worktree and `gw/<id>` branch, and its combined output is recorded under `.gatewright/runs/`.
+
+Nothing spawns without two deliberate acts: configure a provider in `runner.providers` and set `runner.enabled: true`. A default install runs nothing; `gw serve` alone never spawns.
+
+Work created by an agent is held with `needs-triage` by default. Held work is invisible to the scheduler until a human approves it with `gw triage <id> --approve`. This prevents a run from filing three items, each of which starts a run that files three more. Use `gw triage <id> --drop` to discard held work.
+
+`max_children_per_item`, `max_depth`, `max_concurrent`, and `run_timeout_min` are enforced before a run starts. The runner also has three kill switches: per-run stop, `gw stop --all`, and global pause. `gw stop --all` works from any terminal with no browser and no `serve` process running, including after `serve` has crashed.
+
+Use `gw resume <id>` to re-dispatch a paused item in its existing worktree with the previous log tail in its prompt. Use `gw gc --dry-run` to see terminal-stage worktrees that can be removed; omit `--dry-run` to remove them, or add `--force` for a dirty worktree.
 
 ## GitHub sync
 
@@ -144,11 +156,12 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw import <file> [--format md]` | Ingest a markdown task list. CSV and JSON are planned but not yet accepted; `--format csv` or `--format json` returns exit 2 today. |
 | `gw open [--no-browser] [--watch]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
-| `gw serve [--port 7777] [--open]` | Serve the live board on loopback with its write API; it has no runner |
+| `gw serve [--port 7777] [--open]` | Serve the live board on loopback with its write API and, when explicitly enabled and configured, its scheduler |
 | `gw sync [--dry-run]` | Pull linked GitHub issues through `gh`; `--dry-run` previews synchronization |
-| `gw stop <id> \| --all` | Stop a run, or stop all runs — **not yet, v0.4** |
-| `gw resume <id>` | Resume a paused run with the log tail in the prompt — **not yet, v0.4** |
-| `gw triage <id> --approve \| --drop` | Approve or drop an agent-created item — **not yet, v0.4** |
+| `gw stop <id> \| --all` | Stop one recorded run, or all recorded runs from any terminal |
+| `gw resume <id>` | Resume a paused item in its existing worktree with the previous log tail |
+| `gw triage <id> --approve \| --drop` | Approve or drop an agent-created item held for review |
+| `gw gc [--dry-run] [--force]` | Remove terminal-stage worktrees; dry-run previews and force permits dirty worktrees |
 
 The full contract, including field ownership, the move algorithm, and the brief layout, is in `specs.md`.
 
@@ -167,7 +180,9 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 <!-- gatewright:end -->
 ```
 
-The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly, never reads GitHub, and never sees the scheduler. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item.
+The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item.
+
+Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief`; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
 
 ## Stages and gates
 
@@ -188,17 +203,18 @@ with `paused` and `dropped` as side states. Each stage has:
 
 ## Status
 
-Gatewright is at v0.3.0.
+Gatewright is at v0.4.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only — CSV and JSON return exit 2 today), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
-Shipped in v0.2: `gw serve`: a live board with write-back, editing, Play/Stop queuing, and global pause. Play queues work and Stop cancels that queue; neither starts an agent. There is no runner until v0.4.
+Shipped in v0.2: `gw serve`: a live board with write-back, editing, Play/Stop queuing, and global pause.
 
 Shipped in v0.3: `gw sync`: GitHub issue pull/push, the `agent/go` dispatch label, comments on move, conflict flagging, and `init --gh`.
 
+Shipped in v0.4: the runner and scheduler; one git worktree, branch, and log per run; `stop`, `resume`, `triage`, and `gc`; pre-spawn concurrency, depth, child-count, and timeout limits; held agent-created work; global and offline kill switches; Claude Code, Cursor, and Codex adapters; and live board run logs, triage, and resume.
+
 Coming:
 
-- v0.4 — scheduler, git worktrees per run, runner, stop and resume, triage gate, kill switch, provider adapters.
 - v0.5 — optional memory backend: recall prior context into dispatch prompts, remember on completion. Off by default; off means no network calls.
 
 Node 18+. The published package has zero runtime dependencies. MIT.
