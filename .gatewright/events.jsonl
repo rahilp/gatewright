@@ -460,3 +460,15 @@
 {"ts":"2026-09-15T09:28:44.823Z","type":"edit","item":"P5-14","by":"human:rahil","fields":["deps"]}
 {"ts":"2026-09-15T09:28:44.868Z","type":"note","item":"P5-14","by":"human:rahil","note":"Dropped the P5-13 dogfood dependency for the same reason as P1-20: a two-week time-based task must not gate a release. v0.5 shipped without it."}
 {"ts":"2026-09-15T09:28:44.919Z","type":"move","item":"P5-14","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.5.0","npm view gatewright versions"]}
+{"ts":"2026-09-15T09:49:37.210Z","type":"add","item":"P7-01","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T09:49:37.261Z","type":"add","item":"P7-02","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T09:49:37.313Z","type":"add","item":"P7-03","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T09:49:37.366Z","type":"add","item":"P7-04","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T09:50:46.273Z","type":"claim","item":"P7-01","by":"human:rahil"}
+{"ts":"2026-09-15T09:50:46.321Z","type":"move","item":"P7-01","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:50:46.375Z","type":"move","item":"P7-01","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:50:46.426Z","type":"claim","item":"P7-03","by":"human:rahil"}
+{"ts":"2026-09-15T09:50:46.477Z","type":"move","item":"P7-03","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:50:46.530Z","type":"move","item":"P7-03","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T09:51:21.017Z","type":"move","item":"P7-01","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/config.js","lib/settings.js","test/config.test.js"]}
+{"ts":"2026-09-15T09:51:21.073Z","type":"move","item":"P7-03","from":"building","to":"built","by":"human:rahil","evidence":["bin/gw.js","gw list | head no longer prints a stack trace"]}
