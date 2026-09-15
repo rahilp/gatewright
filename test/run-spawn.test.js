@@ -88,3 +88,23 @@ test('a child with no pipes leaves no zero-byte log behind', async () => {
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.equal(existsSync(result.log), false, 'nothing could be captured, so nothing is written');
 });
+
+// spawn reports an unexecutable provider asynchronously. Unhandled, that is an
+// uncaught exception killing the supervisor, and the durable reservation made
+// before the spawn would survive it -- wedging the scheduler at at_capacity.
+test('a provider that cannot be executed fails the run, not the supervisor', async () => {
+  const root = board(); const worktree = join(root, 'worktree'); mkdirSync(worktree);
+  const child = new PassThrough(); child.pid = 5150;
+  const handlers = {};
+  child.once = (event, fn) => { handlers[event] = fn; return child; };
+  const ended = []; let warned = '';
+  const registry = { record: (record) => record };
+  const runner = createRunner({ spawnFn: () => child, stderr: { write: (text) => { warned += text; } } });
+  runner.start({ config: config(), item, run: 'r-13', worktree, root, registry, onExit: (record, info) => ended.push({ record, info }) });
+
+  handlers.error(Object.assign(new Error('spawn agent ENOENT'), { code: 'ENOENT' }));
+  assert.match(warned, /run r-13 could not start \(ENOENT\)/);
+  assert.equal(ended.length, 1, 'the run is ended so its capacity slot is released');
+  assert.notEqual(ended[0].info.code, 0, 'it is ended as a failure, not a success');
+  assert.equal(ended[0].record.run, 'r-13');
+});

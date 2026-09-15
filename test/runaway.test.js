@@ -88,9 +88,16 @@ function assertTick(store, registry, { held }) {
 async function reap(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch { return; } }
+  // Wait for 'close', not 'exit'. 'exit' fires first, but the runner's own
+  // completion handler is registered on 'close' and writes the run's ending
+  // through store.withLock. Resolving on 'exit' let this fixture delete its
+  // temp root in the gap between the two, and the lock file write then landed
+  // as an ENOENT after the test had ended -- failing the whole file while
+  // every subtest passed. lib/run/spawn.js attached its handler first, so by
+  // the time this one runs those durable writes are already done.
   await new Promise((resolve) => {
     const done = setTimeout(resolve, 5000);
-    child.once('exit', () => { clearTimeout(done); resolve(); });
+    child.once('close', () => { clearTimeout(done); resolve(); });
   });
 }
 
