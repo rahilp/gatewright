@@ -139,7 +139,11 @@ test('P4-18 stop --all pauses a live stub runaway and prevents later ticks from 
     assert.equal(registry.list().records.length, 0); assert.equal(subject.store.readItems().filter((entry) => entry.owner != null).length, 0);
     assert.equal(existsSync(join(subject.traps, 'INVOKED')), false, 'PATH traps prove no real provider was invoked');
   } finally {
-    if (live) for (const child of live.children.values()) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch {} } }
+    // Kill the REAL detached children, not the synthetic EventEmitter stubs.
+    // `children` holds fakes with invented pids (50001+); signalling those does
+    // nothing useful and could hit an unrelated process group that happens to
+    // own that pid. The spawned processes live in `processes`.
+    if (live) for (const child of live.processes) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch {} } }
     process.env.PATH = priorPath; rmSync(subject.root, { recursive: true, force: true }); rmSync(subject.traps, { recursive: true, force: true });
   }
 });
