@@ -99,11 +99,21 @@ $ gw serve --port 17888
 Gatewright live board: http://127.0.0.1:17888/
 ```
 
-When a move is refused, the card shows the CLI's own refusal inline. For example, a skipped-stage move returned:
+Cards drag between columns. A column that would refuse the move says so while you drag rather than letting the card snap back, and a backward move — correcting a mis-drag — is offered separately and styled differently so it is never done by accident.
+
+A refused move is explained in English rather than in rule syntax, and where the board can clear the condition itself it offers the action instead of a command to type:
 
 ```
-use --force to skip stages
+Not met yet:
+  Someone must have claimed it     [Claim]
+  Needs at least one piece of evidence
 ```
+
+Stages, gates and settings are editable from the board. "Stages & rules" adds, renames, reorders and removes stages, and builds a gate from a form — evidence counts, an owner requirement, a dependency stage — showing the same English read-back the board uses when it refuses a move. The Settings view is generated from the same schema `gw config` validates against, so the two cannot drift.
+
+**Those three are loopback only.** Moving a card is available wherever the board is reachable, which is what `--host` is for; changing the rules of the board is not. Off loopback the controls are not drawn at all rather than offered and refused, and there is no authentication to configure — reachability is the whole mechanism.
+
+Finished columns collapse to a count with the most recent items visible, so a board that is mostly archive still shows the work that is live.
 
 Play queues a dispatch event. The scheduler can act on that event only when its runner controls permit it. Stop cancels a queued dispatch or stops a recorded run. Global pause stops new dispatches.
 

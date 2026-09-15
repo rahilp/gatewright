@@ -695,3 +695,18 @@
 {"ts":"2026-09-15T22:05:46.570Z","type":"move","item":"P8-12","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: Built collapsed at 119 with Show all; all six columns fit, Dropped no longer cut off"]}
 {"ts":"2026-09-15T22:05:46.625Z","type":"move","item":"P8-18","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","lib/serve/server.js","verified live: backward drag marked drop-back and persisted building->backlog"]}
 {"ts":"2026-09-15T22:05:46.683Z","type":"move","item":"P8-15","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","lib/serve/server.js","verified live: 'Someone must have claimed it' + a Claim button that recorded a claim event"]}
+{"ts":"2026-09-15T23:27:12.554Z","type":"claim","item":"P8-13","by":"human:rahil"}
+{"ts":"2026-09-15T23:27:12.613Z","type":"move","item":"P8-13","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:12.676Z","type":"move","item":"P8-13","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:12.730Z","type":"claim","item":"P8-14","by":"human:rahil"}
+{"ts":"2026-09-15T23:27:12.786Z","type":"move","item":"P8-14","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:12.848Z","type":"move","item":"P8-14","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:12.906Z","type":"claim","item":"P8-16","by":"human:rahil"}
+{"ts":"2026-09-15T23:27:12.964Z","type":"move","item":"P8-16","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:13.015Z","type":"move","item":"P8-16","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:13.074Z","type":"claim","item":"P8-17","by":"human:rahil"}
+{"ts":"2026-09-15T23:27:13.128Z","type":"move","item":"P8-17","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:13.193Z","type":"move","item":"P8-17","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:13.249Z","type":"claim","item":"P8-27","by":"human:rahil"}
+{"ts":"2026-09-15T23:27:13.307Z","type":"move","item":"P8-27","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:27:13.370Z","type":"move","item":"P8-27","from":"specified","to":"building","by":"human:rahil","evidence":[]}

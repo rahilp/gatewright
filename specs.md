@@ -494,7 +494,7 @@ Hard cap from `config.brief.max_lines`. Sections are truncated with `(+n more)` 
 ### 6.2 move
 
 1. Load item and target stage.
-2. If target is not the next stage in order and `--force` is absent → exit 1, "use --force to skip stages".
+2. If target is not the next stage in order and `--force` is absent → exit 1, naming the stage that must be passed through first and the command to get there: `specified: move here first: run \`gw move P1-01 specified\``. A backward target says so and names `--force`, which is the only lawful way to move backward. The refusal must never answer with `--force` alone: the shipped AGENTS.md block tells agents not to use it, so a message offering nothing else leaves a compliant agent stuck.
 3. Evaluate target's `requires`. Any failure → exit 1 with each failed rule on its own line.
 4. Update `stage`, `updated`; append provided evidence; clear `flag` if it was `paused`.
 5. Append `move` event.
