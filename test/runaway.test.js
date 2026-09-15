@@ -81,6 +81,19 @@ function assertTick(store, registry, { held }) {
   }
 }
 
+// Fire-and-forget killing is a race: a detached child that has not finished
+// starting can outlive the signal, and the leaked process then fails the whole
+// FILE on a strict runner while every individual test passes. Wait for the
+// exit we asked for.
+async function reap(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch { return; } }
+  await new Promise((resolve) => {
+    const done = setTimeout(resolve, 5000);
+    child.once('exit', () => { clearTimeout(done); resolve(); });
+  });
+}
+
 test('P4-18 runaway guard holds agent-created children, refuses caps at add time, and stabilizes', async () => {
   const subject = fixture({ autoDispatch: false }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}${delimiter}${priorPath}`;
   try {
@@ -120,7 +133,7 @@ test('P4-18 auto-dispatch is an explicit bounded policy choice and stop --all pa
 
     assert.equal(existsSync(join(subject.traps, 'INVOKED')), false, 'PATH traps prove no real provider was invoked');
   } finally {
-    if (live) for (const child of live.processes) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch {} } }
+    if (live) await Promise.all(live.processes.map(reap));
     process.env.PATH = priorPath; rmSync(subject.root, { recursive: true, force: true }); rmSync(subject.traps, { recursive: true, force: true });
   }
 });
@@ -143,7 +156,7 @@ test('P4-18 stop --all pauses a live stub runaway and prevents later ticks from 
     // `children` holds fakes with invented pids (50001+); signalling those does
     // nothing useful and could hit an unrelated process group that happens to
     // own that pid. The spawned processes live in `processes`.
-    if (live) for (const child of live.processes) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch {} } }
+    if (live) await Promise.all(live.processes.map(reap));
     process.env.PATH = priorPath; rmSync(subject.root, { recursive: true, force: true }); rmSync(subject.traps, { recursive: true, force: true });
   }
 });
