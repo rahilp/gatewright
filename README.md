@@ -109,6 +109,16 @@ The runner is a scheduler for dispatched items. Each run gets its own git worktr
 
 Nothing spawns without two deliberate acts: configure a provider in `runner.providers` and set `runner.enabled: true`. A default install runs nothing; `gw serve` alone never spawns.
 
+Turning it on, without editing files by hand:
+
+```sh
+gw config runner.provider claude   # must match a key in runner.providers
+gw config runner.enabled true
+# restart `gw serve` — config is read once, at startup
+```
+
+Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. Settings that are lists rather than single values — `runner.providers`, the vocabularies, the stage pipeline — are still edited in `.gatewright/config.json` directly.
+
 Work created by an agent is held with `needs-triage` by default. Held work is invisible to the scheduler until a human approves it with `gw triage <id> --approve`. This prevents a run from filing three items, each of which starts a run that files three more. Use `gw triage <id> --drop` to discard held work.
 
 `max_children_per_item`, `max_depth`, `max_concurrent`, and `run_timeout_min` are enforced before a run starts. The runner also has three kill switches: per-run stop, `gw stop --all`, and global pause. `gw stop --all` works from any terminal with no browser and no `serve` process running, including after `serve` has crashed.
@@ -176,6 +186,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw show <id> [--json]` | Print one item and its events |
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
 | `gw check [--json]` | Report rule violations and out-of-band writes; exit 1 on any report |
+| `gw config [<key> [<value>]] [--list]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script |
 | `gw import <file> [--format md]` | Ingest a markdown task list. CSV and JSON are planned but not yet accepted; `--format csv` or `--format json` returns exit 2 today. |
 | `gw open [--no-browser] [--watch]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
