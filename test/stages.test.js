@@ -68,3 +68,21 @@ test('the shipped pipeline is unchanged by the role rule', () => {
   assert.equal(isTerminalStage('verified', shipped), true);
   assert.equal(isTerminalStage('built', shipped), false);
 });
+
+// A stage named "Specified" that asks for nothing means nothing: it is
+// traversed in the same breath as claiming and building, so the board reports
+// a scoping step that never happened.
+test('the shipped specified stage requires the scope it is named after', async () => {
+  const { evaluateRequires } = await import('../lib/rules.js');
+  const stages = shipped;
+  const unscoped = evaluateRequires({ id: 'P1-01', scope: '', owner: null, deps: [], evidence: [] }, 'specified', { items: [], stages });
+  assert.equal(unscoped.ok, false);
+  assert.match(unscoped.failures[0], /needs a scope: run `gw edit P1-01 --scope/);
+
+  const scoped = evaluateRequires({ id: 'P1-01', scope: 'what done looks like', owner: null, deps: [], evidence: [] }, 'specified', { items: [], stages });
+  assert.equal(scoped.ok, true);
+
+  // Whitespace is not a scope.
+  const blank = evaluateRequires({ id: 'P1-01', scope: '   \n ', owner: null, deps: [], evidence: [] }, 'specified', { items: [], stages });
+  assert.equal(blank.ok, false);
+});

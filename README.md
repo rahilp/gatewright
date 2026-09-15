@@ -189,9 +189,10 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw note <id> "<text>" [--by <who>]` | Append a timestamped line to the item's notes |
 | `gw show <id> [--json]` | Print one item and its events |
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
-| `gw check [--json]` | Report rule violations and out-of-band writes; exit 1 on any report |
+| `gw check [--json]` | Report rule violations, vocabulary drift, and out-of-band writes; exit 1 on any report |
+| `gw help <command>`, `gw <command> --help` | Print that command's own usage and flags |
 | `gw config [<key> [<value>]] [--list]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script |
-| `gw import <file> [--format md]` | Ingest a markdown task list. CSV and JSON are planned but not yet accepted; `--format csv` or `--format json` returns exit 2 today. |
+| `gw import <file> [--format md\|csv\|json] [--dry-run]` | Ingest a task list. The format is inferred from the extension. CSV needs `id` and `title` columns and understands common aliases; JSON takes a bare array or an `items` wrapper. A source stage is honoured only if the item's evidence actually earns it, and every downgrade is reported |
 | `gw open [--no-browser] [--watch]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
 | `gw serve [--port 7777] [--host H] [--open]` | Serve the live board; loopback unless `--host` says otherwise, with its write API and, when explicitly enabled and configured, its scheduler |
@@ -276,9 +277,6 @@ Shipped in v0.7: `gw config`, so settings can be changed without hand-editing `.
 
 Shipped in v0.8: `gw init` asks how you work — whether work reaches main directly or through pull requests, how items are numbered, which phases you use, and whether to arm the runner — and writes a pipeline that ends where you actually finish. A stage can now declare `"role": "done"`, and `gw brief` believes it: before this, a board whose pipeline assumed pull requests reported every completed item as still in flight forever, which turned the digest into a list of everything ever done. `gw config` also gained list-valued settings, so the vocabularies are settable without opening a file. Every non-interactive path is unchanged: no TTY, `--yes`, `GW_NO_INPUT` or `CI` all leave `init` byte-identical.
 
-Not built yet:
-
-- `gw import --format csv|json` — markdown only today; the other two exit 2.
-- Mirroring agent-created child items as GitHub issues (`mirror_children`).
+Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 
 Node 22+, on Linux, macOS and Windows. The published package has zero runtime dependencies. MIT.

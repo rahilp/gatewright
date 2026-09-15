@@ -11,7 +11,9 @@ import { run } from '../lib/commands/check.js';
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const stages = { stages: [{ id: 'backlog' }, { id: 'specified' }, { id: 'building', requires: { owner: true } }, { id: 'built', requires: { evidence_min: 1 } }, { id: 'in_review', requires: { evidence_match: '^https://github.com/.+/pull/\\d+' } }, { id: 'reviewed' }, { id: 'merged' }, { id: 'verified', requires: { evidence_min: 2 } }], terminal: ['verified', 'dropped'], extra: [{ id: 'dropped' }, { id: 'paused' }] };
 const item = (over = {}) => ({ id: 'P1-01', title: 'test', stage: 'backlog', owner: null, deps: [], evidence: [], updated: new Date().toISOString(), gh: null, flag: null, ...over });
-function board(items = [item()], { stages: boardStages = stages, config = {} } = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(boardStages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'], ...config } })); return { root, store }; }
+// `config` is merged into the check block; `vocab` is top level, because that
+// is where readConfig looks for it.
+function board(items = [item()], { stages: boardStages = stages, config = {}, vocab } = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(boardStages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'], ...config }, ...(vocab ? { vocab } : {}) })); return { root, store }; }
 function ctx(b, flags = {}) { let output = ''; return { output: () => output, ctx: { flags, positionals: [], store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write(s) { output += s; } }, stderr: { write(s) { output += s; } } } }; }
 
 test('check reports an out-of-band edit once then rebaselines it', () => {
@@ -124,4 +126,39 @@ test('check refuses a literal memory token and tells the user to use token_env',
   writeFileSync(b.store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'] }, memory: { enabled: true, provider: 'second-brain', providers: { 'second-brain': { token: 'not-in-git' } } } }));
   const result = ctx(b); assert.equal(run(result.ctx), 1);
   assert.match(result.output(), /literal memory token/i); assert.match(result.output(), /environment variable/i); assert.match(result.output(), /token_env/);
+});
+
+// Vocabulary was enforced only at creation time, so a direct file write, an
+// import, or simply narrowing a vocabulary later left items holding values the
+// config no longer allows -- and check reported the board clean. This repo's
+// own board carried 33 such items while claiming to be clean.
+test('check reports items holding values the vocabulary no longer allows', () => {
+  const b = board([
+    item({ id: 'P1-01', priority: 'P4' }),
+    item({ id: 'P1-02', priority: 'P4' }),
+    item({ id: 'P1-03', priority: 'P1' }),
+    item({ id: 'P1-04', type: 'chore' }),
+  ], { vocab: { priority: ['P0', 'P1'], type: ['feature', 'defect'] } });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /VOCABULARY/);
+  // Grouped by value, not one line per item: 33 near-identical lines would
+  // bury every other finding in the report.
+  assert.match(result.output(), /2 items have priority "P4"/);
+  assert.match(result.output(), /1 item have type "chore"|1 item has type "chore"/);
+  assert.doesNotMatch(result.output(), /P1-01|P1-02/, 'items are counted, not enumerated');
+  // Both remedies, because only the user knows whether the vocabulary is too
+  // narrow or the items are wrong.
+  assert.match(result.output(), /gw config vocab\.priority "P0,P1,P4"/);
+  assert.match(result.output(), /gw edit <id> --priority <value>/);
+});
+
+test('a null field and an unconfigured vocabulary are not drift', () => {
+  const b = board([
+    item({ id: 'P1-01', priority: null, type: null }),
+    item({ id: 'P1-02', priority: 'anything' }),
+  ], { vocab: { type: ['feature'] } });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'an absent value is not a wrong value, and a vocabulary nobody configured constrains nothing');
+  assert.match(result.output(), /clean/i);
 });
