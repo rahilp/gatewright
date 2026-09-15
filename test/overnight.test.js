@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { run as check } from '../lib/commands/check.js';
 import { createRunRegistry } from '../lib/run/registry.js';
 import { createRunner } from '../lib/run/spawn.js';
 import { createScheduler } from '../lib/run/scheduler.js';
+import { pathValue } from './fixtures/env.js';
 
 const stages = { stages: [{ id: 'backlog' }, { id: 'specified', auto: true }, { id: 'done' }], terminal: ['done'] };
 
@@ -34,7 +35,7 @@ function immediateRunner() {
   const children = new Map();
   const runner = createRunner({ spawnFn(argv, options) {
     assert.equal(argv[0], 'claude');
-    assert.match(options.env.PATH, /gw-provider-traps-/);
+    assert.match(pathValue(options.env), /gw-provider-traps-/);
     const child = new EventEmitter(); child.pid = ++pid;
     children.set(options.env.GW_ITEM, child);
     return child;
@@ -71,7 +72,7 @@ function assertTerminalBoard(store, registry) {
 }
 
 test('P4-17 overnight queue drains five dispatched items, releases capacity after completion, and records one ordered terminal event each', async () => {
-  const subject = fixture(); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}:${priorPath}`;
+  const subject = fixture(); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}${delimiter}${priorPath}`;
   try {
     const registry = createRunRegistry({ store: subject.store }); const { runner, children } = immediateRunner();
     const scheduler = schedulerFor(subject.store, registry, runner, ['01', '02', '03', '04', '05']);
@@ -98,7 +99,7 @@ test('P4-17 overnight queue drains five dispatched items, releases capacity afte
 });
 
 test('P4-17 crash-mid-drain reconciles durable records and drains the remaining queue without double-runs', async () => {
-  const subject = fixture(); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}:${priorPath}`;
+  const subject = fixture(); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}${delimiter}${priorPath}`;
   try {
     const registry = createRunRegistry({ store: subject.store }); const first = immediateRunner();
     let scheduler = schedulerFor(subject.store, registry, first.runner, ['01', '02', '03', '04', '05']);

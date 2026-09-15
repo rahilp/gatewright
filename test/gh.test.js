@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { createGh } from '../lib/sync/gh.js';
 
 function stub({ stdout = '[]', status = 0 } = {}) {
@@ -70,7 +70,7 @@ test('createGh\'s default run really bounds a wedged real gh process, not just t
   writeFileSync(fakeGh, '#!/bin/sh\nsleep 5\n');
   chmodSync(fakeGh, 0o755);
   const priorPath = process.env.PATH;
-  process.env.PATH = `${traps}:${priorPath}`;
+  process.env.PATH = `${traps}${delimiter}${priorPath}`;
   try {
     const gh = createGh({ repo: 'o/r', timeoutMs: 200 });
     const started = Date.now();

@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { run as add } from '../lib/commands/add.js';
 import { isSchedulable } from '../lib/policy.js';
@@ -13,6 +13,7 @@ import { createRunRegistry } from '../lib/run/registry.js';
 import { createRunner } from '../lib/run/spawn.js';
 import { createScheduler } from '../lib/run/scheduler.js';
 import { readConfig, readStages } from '../lib/config.js';
+import { pathValue } from './fixtures/env.js';
 
 // createRunLifecycle defaults to process.platform, so on real Windows CI stopAll() below
 // would otherwise shell out to the real taskkill.exe/powershell.exe from lib/run/spawn.js
@@ -51,7 +52,7 @@ function fixture({ autoDispatch }) {
 function runawayRunner(store, { longRunning = false } = {}) {
   let pid = 50_000; const children = new Map(); const processes = []; const refused = [];
   const runner = createRunner({ spawnFn(argv, options) {
-    assert.equal(argv[0], 'claude'); assert.match(options.env.PATH, /gw-provider-traps-/);
+    assert.equal(argv[0], 'claude'); assert.match(pathValue(options.env), /gw-provider-traps-/);
     const parent = options.env.GW_ITEM;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
@@ -81,7 +82,7 @@ function assertTick(store, registry, { held }) {
 }
 
 test('P4-18 runaway guard holds agent-created children, refuses caps at add time, and stabilizes', async () => {
-  const subject = fixture({ autoDispatch: false }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}:${priorPath}`;
+  const subject = fixture({ autoDispatch: false }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}${delimiter}${priorPath}`;
   try {
     const registry = createRunRegistry({ store: subject.store }); const stub = runawayRunner(subject.store); const scheduler = schedulerFor(subject.store, registry, stub.runner);
     const started = scheduler.tick(); assert.equal(started.status, 'started'); assertTick(subject.store, registry, { held: true });
@@ -99,7 +100,7 @@ test('P4-18 runaway guard holds agent-created children, refuses caps at add time
 });
 
 test('P4-18 auto-dispatch is an explicit bounded policy choice and stop --all pauses the runaway', async () => {
-  const subject = fixture({ autoDispatch: true }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}:${priorPath}`;
+  const subject = fixture({ autoDispatch: true }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}${delimiter}${priorPath}`;
   let live;
   try {
     const registry = createRunRegistry({ store: subject.store }); const stub = runawayRunner(subject.store); const scheduler = schedulerFor(subject.store, registry, stub.runner);
@@ -125,7 +126,7 @@ test('P4-18 auto-dispatch is an explicit bounded policy choice and stop --all pa
 });
 
 test('P4-18 stop --all pauses a live stub runaway and prevents later ticks from spawning', async () => {
-  const subject = fixture({ autoDispatch: true }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}:${priorPath}`;
+  const subject = fixture({ autoDispatch: true }); const priorPath = process.env.PATH; process.env.PATH = `${subject.traps}${delimiter}${priorPath}`;
   let live;
   try {
     const registry = createRunRegistry({ store: subject.store }); live = runawayRunner(subject.store, { longRunning: true }); const scheduler = schedulerFor(subject.store, registry, live.runner);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { createMemory } from '../lib/memory/provider.js';
 import { createProvider } from '../adapters/second-brain/memory.js';
 import { createRunner } from '../lib/run/spawn.js';
@@ -103,7 +103,7 @@ test('adapter imports no packages and PATH traps prove no binary is invoked', as
   const invoked = join(trap, 'INVOKED'); const binary = join(trap, 'curl');
   writeFileSync(binary, `#!/bin/sh\ntouch ${invoked}\n`); chmodSync(binary, 0o755);
   const memory = provider(async () => recordedRecall);
-  const priorPath = process.env.PATH; process.env.PATH = `${trap}:${priorPath}`;
+  const priorPath = process.env.PATH; process.env.PATH = `${trap}${delimiter}${priorPath}`;
   try { await memory.recall('offline only', 1); } finally { process.env.PATH = priorPath; }
   assert.equal(existsSync(invoked), false, 'PATH trap proves the adapter did not invoke a binary');
 });
