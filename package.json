@@ -21,7 +21,7 @@
     "adapters/"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node scripts/test.mjs",
     "preflight": "node scripts/preflight.mjs",
     "preflight:ci": "node scripts/preflight.mjs --ci"
   },
