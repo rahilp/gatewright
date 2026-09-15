@@ -14,7 +14,15 @@ function read(root, file) {
 
 function command(root, program, args) {
   try {
-    return { ok: true, output: execFileSync(program, args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+    // On Windows, npm (and any other .cmd-shimmed program) cannot be
+    // launched directly by execFileSync without a shell — Windows'
+    // CreateProcess does not consult PATHEXT the way a shell does, so
+    // `execFileSync('npm', ...)` fails with ENOENT there. `git` ships as a
+    // real .exe and does not need this. Node quotes `args` correctly for the
+    // platform shell when `shell: true`, so this does not change behaviour
+    // elsewhere.
+    const shell = process.platform === 'win32' && program === 'npm';
+    return { ok: true, output: execFileSync(program, args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell }) };
   } catch (error) {
     return { ok: false, output: `${error.stdout ?? ''}${error.stderr ?? ''}`.trim(), error };
   }

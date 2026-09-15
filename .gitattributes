@@ -1,0 +1,17 @@
+# Byte-exact comparisons run in this repo (templates/*, the AGENTS.md block,
+# and specs.md's fenced code blocks are diffed byte-for-byte against each
+# other in test/templates.test.js) so every text file must check out with the
+# same bytes on every platform. `text=auto eol=lf` normalizes line endings to
+# LF in the working tree on all platforms and stores LF in the repo, which is
+# simpler and safer than enumerating "contractual" files: that list has
+# already proven easy to under-specify (specs.md itself is the oracle for the
+# template comparisons and is easy to forget when hand-picking paths), and
+# under-specifying it silently reintroduces the exact bug this file exists to
+# prevent — CRLF written into a board that gets committed and shared with a
+# Linux machine.
+* text=auto eol=lf
+
+# Binary assets: never touched by line-ending conversion, but declared
+# explicitly so git's heuristic detection is never the only thing preventing
+# corruption.
+*.png binary

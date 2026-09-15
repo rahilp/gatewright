@@ -64,11 +64,11 @@ test('parseMarkdown returns items, deps, and skipped malformed lines', () => {
   assert.equal(items.find((i) => i.id === 'P1-07').stage, 'done');
 });
 
-test('parseMarkdown round-trips the real tasks.md with 81 items and correct details', () => {
+test('parseMarkdown round-trips the real tasks.md with 89 items and correct details', () => {
   const text = readFileSync(TASKS_MD, 'utf8');
   const { items, skipped } = parseMarkdown(text);
   assert.equal(skipped.length, 0);
-  assert.equal(items.length, 81);
+  assert.equal(items.length, 89); // hand-counted; bump deliberately when tasks.md gains items
 
   const ids = new Set(items.map((i) => i.id));
   for (const id of ['P0-01', 'P1-01', 'P1-08a', 'P1-20', 'P4-01', 'P5-14']) {

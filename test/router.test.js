@@ -41,7 +41,11 @@ test('root lookup warns when an ancestor root is outside the enclosing git repos
   mkdirSync(join(base, '.gatewright')); mkdirSync(nested, { recursive: true });
   const streams = io();
   assert.equal(findRoot(nested, {}, { stderr: streams.stderr, getGitRoot: () => gitRoot }), base);
-  assert.match(streams.err, new RegExp(`outside this git repository: ${base}`));
+  // `base` is an OS path; embedding it raw in a RegExp is unsafe on Windows
+  // (its backslashes are escape introducers there, not literal separators,
+  // so the compiled pattern silently loses them and never matches). A plain
+  // substring check needs no escaping.
+  assert.equal(streams.err.includes(`outside this git repository: ${base}`), true);
 });
 
 test('config readers use defaults for absent files and identify malformed filenames', async () => {

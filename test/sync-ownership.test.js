@@ -170,7 +170,9 @@ function jsFiles(dir) {
 test('sync shelling out is structurally confined to lib/sync/gh.js', () => {
   const syncDir = fileURLToPath(new URL('../lib/sync/', import.meta.url));
   for (const path of jsFiles(syncDir)) {
-    if (path.endsWith('/gh.js')) continue;
+    // `join` reports OS-native separators (backslashes on Windows), so a
+    // forward-slash suffix check would silently never match there.
+    if (path.replace(/\\/g, '/').endsWith('/gh.js')) continue;
     const source = readFileSync(path, 'utf8');
     assert.doesNotMatch(source, /node:child_process|child_process|execFile|spawn|fork/, path);
   }
