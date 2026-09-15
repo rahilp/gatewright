@@ -25,7 +25,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: no runtime dependencies
-        # node, not shell: Windows runners default to PowerShell and a
-        # bash one-liner here failed the job before npm test ever ran.
-        run: node -e "const d=require('./package.json').dependencies||{};const k=Object.keys(d);if(k.length){console.error('runtime dependencies are not allowed: '+k.join(', '));process.exit(1)}"
+        # node, not shell: Windows runners default to PowerShell, and a bash
+        # one-liner here failed the job before npm test ever ran.
+        run: |
+          node -e "const d=require('./package.json').dependencies||{};const k=Object.keys(d);if(k.length){console.error('runtime dependencies are not allowed - '+k.join(', '));process.exit(1)}"
       - run: npm test
