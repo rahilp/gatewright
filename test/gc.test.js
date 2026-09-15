@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { run as gc } from '../lib/commands/gc.js';
+import { normalizePath } from '../lib/util/paths.js';
 
 function repo() {
   const root = mkdtempSync(join(tmpdir(), 'gw-gc-'));
@@ -43,14 +44,15 @@ test('gc refuses dirty worktrees with file list, then force removes them', () =>
   assert.match(refused.stderr.text, /unfinished\.txt/); assert.equal(existsSync(path), true);
   const forced = ctx(board, { force: true }); gc(forced);
   assert.equal(existsSync(path), false);
-  // board.root is an OS path (backslashes on Windows); git always reports
-  // forward slashes. Comparing either raw against the other fails: a
-  // substring check would miss the separator difference, and embedding a
-  // backslash-bearing path straight into a RegExp is unsafe (a backslash
-  // there is an escape introducer, not a literal separator). Normalize both
-  // to forward slashes first, then it's a plain substring check.
+  // board.root is an OS path (backslashes on Windows, and on Windows CI a
+  // short 8.3 form like `RUNNER~1` with whatever drive-letter case the OS
+  // handed us); git always reports forward slashes in long form with
+  // corrected case. Comparing either raw against the other fails for
+  // reasons that have nothing to do with gc's correctness, so both sides go
+  // through the same canonicalisation gc itself relies on.
   const slash = (s) => s.replace(/\\/g, '/');
-  assert.equal(slash(board.git(['worktree', 'list', '--porcelain'])).includes(slash(board.root)), true);
+  const canonicalRoot = slash(normalizePath(board.root));
+  assert.equal(slash(board.git(['worktree', 'list', '--porcelain'])).includes(canonicalRoot), true);
 });
 
 test('gc honors declared terminal stages in a custom pipeline', () => {
