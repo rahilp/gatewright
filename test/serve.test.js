@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
@@ -43,6 +43,20 @@ function configureGithub(store, over = {}) {
   const config = readConfig(store);
   config.github = { ...config.github, enabled: true, repo: 'owner/repo', sync_interval_min: 1, ...over };
   writeFileSync(store.paths.config, JSON.stringify(config));
+}
+
+function configureRunner(store, over = {}) {
+  const config = readConfig(store);
+  config.runner = { ...config.runner, ...over };
+  writeFileSync(store.paths.config, JSON.stringify(config));
+}
+
+// Fabricates a run record the way lib/run/registry.js would have -- never by
+// spawning anything. Tests must not spawn real agents.
+function writeRun(store, record) {
+  const dir = join(store.dir, 'runs');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${record.run}.json`), JSON.stringify(record));
 }
 
 function write(url, path, body) {
@@ -157,6 +171,98 @@ test('scheduled sync waits for its first tick and reports success, failure, and 
     clock.jump(60 * 1000);
     const stale = await (await fetch(`http://127.0.0.1:${address.port}/api/state`)).json(); assert.equal(stale.sync.status, 'stale');
   } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('state reports active runs from the registry and an honest scheduler status', async () => {
+  await withServer(async ({ store, url }) => {
+    const off = await (await fetch(url + '/api/state')).json();
+    assert.deepEqual(off.runs, []);
+    assert.equal(off.scheduler.status, 'disabled');
+
+    configureRunner(store, { enabled: true, paused: true });
+    const paused = await (await fetch(url + '/api/state')).json();
+    assert.equal(paused.scheduler.status, 'paused');
+
+    configureRunner(store, { enabled: true, paused: false });
+    writeRun(store, { run: 'r-1', item: 'P1-01', pid: 999999, provider: 'claude', worktree: '/tmp/wt', started: '2026-01-03T00:00:00Z', log: null });
+    const running = await (await fetch(url + '/api/state')).json();
+    assert.deepEqual(running.runs, [{ item: 'P1-01', run: 'r-1', provider: 'claude', started: '2026-01-03T00:00:00Z' }]);
+    assert.equal(running.scheduler.status, 'at_capacity', 'default max_concurrent is 1 and a run is recorded');
+  });
+});
+
+test('unconfigured runner is reported distinctly from a disabled one', async () => {
+  await withServer(async ({ store, url }) => {
+    configureRunner(store, { enabled: true, provider: 'nope' });
+    const state = await (await fetch(url + '/api/state')).json();
+    assert.equal(state.scheduler.status, 'unconfigured');
+  });
+});
+
+test('GET /api/runs/:run/log tails the recorded log file and never builds a path from the run id', async () => {
+  await withServer(async ({ store, url }) => {
+    const dir = join(store.dir, 'runs'); mkdirSync(dir, { recursive: true });
+    const logPath = join(dir, 'r-1.log');
+    writeFileSync(logPath, Array.from({ length: 5 }, (_, i) => `line ${i}`).join('\n') + '\n');
+    writeRun(store, { run: 'r-1', item: 'P1-01', pid: 999999, provider: 'claude', worktree: '/tmp/wt', started: '2026-01-03T00:00:00Z', log: logPath });
+
+    const full = await (await fetch(url + '/api/runs/r-1/log?tail=200')).json();
+    assert.equal(full.item, 'P1-01');
+    assert.equal(full.log, 'line 0\nline 1\nline 2\nline 3\nline 4');
+
+    const tailed = await (await fetch(url + '/api/runs/r-1/log?tail=2')).json();
+    assert.equal(tailed.log, 'line 3\nline 4');
+
+    for (const evil of ['../../etc/passwd', '..%2f..%2fetc%2fpasswd', String(logPath)]) {
+      const res = await fetch(url + '/api/runs/' + encodeURIComponent(evil) + '/log');
+      assert.equal(res.status, 404, `expected 404 for run id ${evil}`);
+    }
+
+    assert.equal((await fetch(url + '/api/runs/no-such-run/log')).status, 404);
+  });
+});
+
+test('GET /api/runs/:run/log tolerates a run with no log yet', async () => {
+  await withServer(async ({ store, url }) => {
+    writeRun(store, { run: 'r-2', item: 'P1-01', pid: 999999, provider: 'claude', worktree: '/tmp/wt', started: '2026-01-03T00:00:00Z', log: null });
+    const body = await (await fetch(url + '/api/runs/r-2/log')).json();
+    assert.equal(body.log, '');
+  });
+});
+
+test('POST /api/items/:id/triage approves or drops a held item through lib/commands/triage.js', async () => {
+  const held = { ...item, flag: 'needs-triage', created_by: 'agent' };
+  await withServer(async ({ store, url }) => {
+    const bad = await write(url, '/api/items/P1-01/triage', { action: 'sideways' });
+    assert.equal(bad.status, 400);
+
+    const res = await write(url, '/api/items/P1-01/triage', { action: 'approve' });
+    assert.equal(res.status, 200);
+    const state = await (await fetch(url + '/api/state')).json();
+    assert.equal(state.items[0].flag, null);
+  }, { items: [held] });
+
+  await withServer(async ({ url }) => {
+    const notHeld = await write(url, '/api/items/P1-01/triage', { action: 'drop' });
+    assert.equal(notHeld.status, 409);
+  });
+});
+
+test('POST /api/items/:id/resume clears a paused item and dispatches it again', async () => {
+  const paused = { ...item, flag: 'paused', prev_stage: 'building' };
+  await withServer(async ({ url }) => {
+    const res = await write(url, '/api/items/P1-01/resume', {});
+    assert.equal(res.status, 200);
+    const state = await (await fetch(url + '/api/state')).json();
+    assert.equal(state.items[0].flag, null);
+    assert.equal(state.items[0].stage, 'building');
+    assert.ok(state.events.some((e) => e.type === 'dispatch' && e.item === 'P1-01'));
+  }, { items: [paused] });
+
+  await withServer(async ({ url }) => {
+    const res = await write(url, '/api/items/missing/resume', {});
+    assert.equal(res.status, 400);
+  });
 });
 
 test('a failed scheduled sync leaves serve alive and retries with backoff', async () => {
