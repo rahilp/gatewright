@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -53,4 +53,38 @@ test('only spawn.js owns child_process under lib/run', () => {
     if (file === 'spawn.js') assert.match(source, /node:child_process/);
     else assert.doesNotMatch(source, /node:child_process/);
   }
+});
+
+// A run log that cannot be opened must never take the supervisor down with it.
+// An unhandled 'error' on the WriteStream would rethrow as an uncaught
+// exception and kill `gw serve`, ending every *other* live run too.
+test('an unwritable run log degrades to a warning and never kills the supervisor', async () => {
+  const root = board(); const worktree = join(root, 'worktree'); mkdirSync(worktree);
+  // A *directory* occupying the log's own path. Opening a directory for
+  // writing fails on every platform, which a chmod-based setup would not --
+  // Windows ignores mode bits. This is the portable stand-in for a read-only
+  // checkout or a directory pulled out from under a live run.
+  mkdirSync(join(root, '.gatewright', 'runs', 'P1-01-r-9.log'), { recursive: true });
+  const child = new PassThrough(); child.pid = 4242; child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.once = (event, fn) => { if (event === 'close') child.on(event, fn); return child; };
+  let warned = '';
+  const runner = createRunner({ spawnFn: () => child, stderr: { write: (text) => { warned += text; } } });
+  const result = runner.start({ config: config(), item, run: 'r-9', worktree, root });
+  assert.equal(result.child.pid, 4242, 'the run still starts; only its transcript is lost');
+  child.stdout.write('work continues\n');
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.match(warned, /run r-9 log unavailable/);
+  // The child must not be left with a stalled, unread pipe after the unpipe.
+  assert.equal(child.stdout.isPaused(), false, 'output keeps draining so the agent never blocks on a full pipe');
+  child.emit('close', 0);
+});
+
+test('a child with no pipes leaves no zero-byte log behind', async () => {
+  const root = board(); const worktree = join(root, 'worktree'); mkdirSync(worktree);
+  const child = new PassThrough(); child.pid = 77; child.once = () => child;
+  const result = createRunner({ spawnFn: () => child }).start({ config: config(), item, run: 'r-7', worktree, root });
+  // createWriteStream opens asynchronously, so checking straight away would
+  // pass even if the stream had been created. Give the open a chance to land.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(existsSync(result.log), false, 'nothing could be captured, so nothing is written');
 });
