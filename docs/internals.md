@@ -60,7 +60,7 @@ Always use `store` for writes. Do not write `.gatewright/` directly.
 ## Runner process boundary
 
 `lib/run/spawn.js` is the only module under `lib/run/` that imports
-`node:child_process`. `createRunner({ spawnFn, dryRun })` returns `{ start }`;
+`node:child_process`. `createRunner({ spawnFn, dryRun })` returns `{ start, startWithMemory }`;
 the scheduler supplies the item, run id, worktree, main repository root, config,
 and run registry. `start` renders `.gatewright/prompt.md`, substitutes provider
 `{prompt}` and `{item}` argv fields, and supplies `GW_ACTOR`, `GW_ITEM`, and a
@@ -78,6 +78,19 @@ is configured.  `gw serve` only installs the interval after those two deliberate
 acts. Each tick reads the run registry from disk before it selects work and again
 immediately before invoking the runner, so a restarted server cannot exceed
 `max_concurrent`.
+
+## Optional memory boundary
+
+`createMemory({ config, transport, log })` returns `{ recall, remember,
+capsule, enabled }`. With `config.memory.enabled: false` it is a no-op and does
+not dynamically import an adapter. When enabled, the named provider is loaded
+dynamically and receives the injected `transport`; nothing under `lib/memory/`
+creates an HTTP client. Calls have a five-second timeout, log a warning to
+`.gatewright/runs/memory.log`, and return an empty result on failure.
+
+`startWithMemory` is used only on the enabled scheduler path. It renders the
+existing `{{prior_context}}` and `{{capsule}}` placeholders after recall; normal
+runner start stays synchronous and performs no memory work.
 
 `createWorktree({ git })` owns Git worktree decisions. Its `git` boundary is
 argv-shaped and injectable; it creates `.gatewright/.worktrees/<item-id>` by
