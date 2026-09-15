@@ -7,6 +7,7 @@ import { createStore } from '../lib/store.js';
 import { createRunRegistry } from '../lib/run/registry.js';
 import { createScheduler } from '../lib/run/scheduler.js';
 import { spawn } from 'node:child_process';
+import { createRunner } from '../lib/run/spawn.js';
 
 const stages = { stages: [{ id: 'backlog' }, { id: 'specified', auto: true, requires: { deps_at_least: 'specified' } }, { id: 'done', auto: false }], terminal: ['done'] };
 
@@ -108,4 +109,18 @@ test('a fresh scheduler instance enforces a timeout from the durable record star
     assert.throws(() => process.kill(proc.pid, 0), { code: 'ESRCH' });
     assert.equal(store.readEvents().at(-1).outcome, 'timeout');
   } finally { try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { process.kill(proc.pid, 'SIGKILL'); } catch {} } }
+});
+
+test('a normally completed run frees capacity so the next tick starts the next queued item', async () => {
+  const first = item('P1-01'); const second = item('P1-02', { updated: '2026-01-03T00:00:00.000Z' });
+  const store = board({ items: [first, second], events: [{ type: 'dispatch', item: first.id }, { type: 'dispatch', item: second.id }] });
+  const firstTree = join(store.root, 'first'); const secondTree = join(store.root, 'second'); mkdirSync(firstTree); mkdirSync(secondTree);
+  let sequence = 0;
+  const runner = createRunner({ spawnFn: (_argv, options) => spawn(process.execPath, ['-e', 'process.exit(0)'], options) });
+  const subject = createScheduler({ store, runner, makeRunId: () => `r-${++sequence}`, worktree: { ensure: ({ item: candidate }) => ({ path: candidate.id === first.id ? firstTree : secondTree }) } });
+  const initial = subject.tick(); await new Promise((resolve) => initial.started.child.once('close', resolve));
+  assert.equal(createRunRegistry({ store }).list().records.length, 0); assert.equal(store.readItems().find((entry) => entry.id === first.id).owner, null);
+  const next = subject.tick();
+  assert.equal(next.status, 'started'); assert.equal(next.item, second.id);
+  await new Promise((resolve) => next.started.child.once('close', resolve));
 });

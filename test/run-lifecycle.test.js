@@ -22,6 +22,14 @@ function board({ timeout = 0.02 } = {}) {
 function child(source, cwd) { return spawn(process.execPath, ['-e', source], { detached: true, stdio: 'ignore', cwd }); }
 function waitGone(pid, tries = 40) { return new Promise((resolve) => { const tick = () => { try { process.kill(pid, 0); } catch { resolve(true); return; } if (!tries--) { resolve(false); return; } setTimeout(tick, 10); }; tick(); }); }
 function killFinally(proc) { try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { process.kill(proc.pid, 'SIGKILL'); } catch {} } }
+function providerConfig() { return { runner: { provider: 'fixture', prompt_template: '.gatewright/prompt.md', providers: { fixture: { cmd: ['fixture', '{prompt}'] } } } }; }
+function startedStub(fixture, source, { started } = {}) {
+  writeFileSync(fixture.store.paths.prompt, '{{title}}');
+  const lifecycle = createRunLifecycle({ store: fixture.store, registry: fixture.registry });
+  const run = createRunner({ spawnFn: (_argv, options) => spawn(process.execPath, ['-e', source], options) }).start({ config: providerConfig(), item: fixture.store.readItems()[0], run: 'r-1', worktree: fixture.worktree, root: fixture.root, registry: fixture.registry, onExit: lifecycle.finish });
+  if (started) fixture.registry.record({ ...run.record, started });
+  return run;
+}
 
 test('stop SIGTERMs a recorded process, pauses the item, retains its worktree, and records cancellation', async () => {
   const fixture = board(); const proc = child('setInterval(() => {}, 1000)', fixture.worktree);
@@ -68,6 +76,41 @@ test('timeout is measured from the durable started record, not this process life
     await createRunLifecycle({ store: fixture.store, registry: fixture.registry }).enforceTimeouts();
     assert.equal(await waitGone(proc.pid), true); assert.equal(fixture.store.readEvents().at(-1).outcome, 'timeout');
   } finally { killFinally(proc); }
+});
+
+test('normal exit writes ok, releases ownership, clears capacity, and survives unavailable git metadata', async () => {
+  const fixture = board(); writeFileSync(fixture.store.paths.prompt, '{{title}}');
+  const lifecycle = createRunLifecycle({ store: fixture.store, registry: fixture.registry, gitHead: () => { throw new Error('no git'); } });
+  const run = createRunner({ spawnFn: (_argv, options) => spawn(process.execPath, ['-e', 'process.exit(0)'], options) }).start({ config: providerConfig(), item: fixture.store.readItems()[0], run: 'r-ok', worktree: fixture.worktree, root: fixture.root, registry: fixture.registry, onExit: lifecycle.finish });
+  await new Promise((resolve) => run.child.once('close', resolve));
+  const event = fixture.store.readEvents().at(-1);
+  assert.equal(event.outcome, 'ok'); assert.equal(event.last_commit, null); assert.equal(fixture.store.readItems()[0].owner, null); assert.equal(fixture.registry.list().records.length, 0);
+});
+
+test('non-zero exit writes error and releases ownership', async () => {
+  const fixture = board(); const run = startedStub(fixture, 'process.exit(7)');
+  await new Promise((resolve) => run.child.once('close', resolve));
+  assert.equal(fixture.store.readEvents().at(-1).outcome, 'error'); assert.equal(fixture.store.readItems()[0].owner, null); assert.equal(fixture.registry.list().records.length, 0);
+});
+
+test('stop then close writes exactly one cancelled run_ended event', async () => {
+  const fixture = board({ timeout: 0.01 }); const run = startedStub(fixture, 'setInterval(() => {}, 1000)');
+  try {
+    createRunLifecycle({ store: fixture.store, registry: fixture.registry }).stopItem('P4-07');
+    await new Promise((resolve) => run.child.once('close', resolve));
+    const ended = fixture.store.readEvents().filter((event) => event.type === 'run_ended');
+    assert.deepEqual(ended.map((event) => event.outcome), ['cancelled']);
+  } finally { killFinally(run.child); }
+});
+
+test('timeout then close writes exactly one timeout run_ended event', async () => {
+  const fixture = board({ timeout: 0.01 }); const run = startedStub(fixture, "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", { started: new Date(Date.now() - 61_000).toISOString() });
+  try {
+    createRunLifecycle({ store: fixture.store, registry: fixture.registry }).enforceTimeouts();
+    await new Promise((resolve) => run.child.once('close', resolve));
+    const ended = fixture.store.readEvents().filter((event) => event.type === 'run_ended');
+    assert.deepEqual(ended.map((event) => event.outcome), ['timeout']);
+  } finally { killFinally(run.child); }
 });
 
 test('resume dispatches its stopped-run log tail into the next dry-run rendered prompt', () => {
