@@ -558,3 +558,10 @@
 {"ts":"2026-09-15T11:02:04.559Z","type":"move","item":"P7-07","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-15T11:02:04.610Z","type":"move","item":"P7-07","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-15T11:02:04.665Z","type":"move","item":"P7-07","from":"building","to":"built","by":"human:rahil","evidence":["lib/run/lifecycle.js","lib/serve/server.js","test/run-lifecycle.test.js"]}
+{"ts":"2026-09-15T11:06:18.718Z","type":"claim","item":"P1-18","by":"human:rahil"}
+{"ts":"2026-09-15T11:06:18.770Z","type":"move","item":"P1-18","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:06:18.822Z","type":"move","item":"P1-18","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:06:18.873Z","type":"note","item":"P1-18","by":"human:rahil","note":"Satisfied by use, not by ceremony. Every item in v0.6 through v0.9 was tracked on this board, and the board itself surfaced three defects no test had: brief reporting 91 finished items as in flight, the in_review column being unreachable for a trunk repo, and card buttons offering Play on finished work and on runs already in progress."}
+{"ts":"2026-09-15T11:06:18.928Z","type":"move","item":"P1-18","from":"building","to":"built","by":"human:rahil","evidence":["PR #3, #4, #5","P6-11, P6-12, P7-06 were all found by using this board"]}
+{"ts":"2026-09-15T11:06:18.981Z","type":"note","item":"P5-13","by":"human:rahil","note":"Dropped rather than closed: the acceptance criterion is two weeks of elapsed use and this is one session, so moving it to built would be claiming a stage it has not earned. The dependency it once imposed on P5-14 was already removed — a time-based task must not gate a release. Re-open it if calendar-based soak time is genuinely wanted."}
+{"ts":"2026-09-15T11:06:19.035Z","type":"move","item":"P5-13","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
