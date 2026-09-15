@@ -657,6 +657,38 @@ Scheduler loop in `serve`, every `tick_s` (default 5):
 
 The agent inside a run uses the normal CLI. `GW_ROOT` points it at the main repo's `.gatewright/`, not the worktree's copy, so all runs write to one board.
 
+### 10.2 Windows
+
+The runner's controls are POSIX constructs: SIGTERM, process groups, and
+`/proc`. Windows has none of them, so the behaviour is reproduced rather than
+translated, and where it cannot be reproduced exactly the difference is
+documented instead of hidden.
+
+**Termination.** Node's `process.kill` on Windows terminates immediately at any
+signal name — there is no graceful stop. The escalation is therefore
+`taskkill /PID <pid> /T` (request close, whole tree) followed after
+`stop_timeout_s` by `taskkill /PID <pid> /T /F` (force, whole tree). `/T` is what
+replaces the process group: it reaches the children an agent spawned, which is
+the property that matters, since an orphaned child keeps costing money.
+
+**Liveness and pid reuse.** `/proc/<pid>/cwd` cannot be consulted. Liveness uses
+the OS process list; the pid-reuse guard compares the recorded start time
+against the live process's start time rather than its working directory. That is
+a weaker guard than the POSIX path — it cannot prove the process is *ours*, only
+that it is the same process that was recorded — and the weakening is stated here
+rather than discovered by someone reading the source.
+
+**Line endings.** Files whose bytes are part of a contract — the templates and
+the instruction block — are LF in the repository and written as LF by `init` on
+every platform. A board is git-tracked and frequently shared between machines;
+a file that changes bytes depending on who ran `init` would make `gw check`
+report an out-of-band write after an innocent checkout.
+
+**Paths.** Anything compared against a path the OS produced is compared after
+normalisation. `git` reports forward slashes even on Windows while `path.join`
+produces backslashes, and a raw comparison between them fails for no reason a
+user could act on.
+
 ### 10.1 Rules for spawning things
 
 Everything before v0.4 could only lose work. The runner can spend money and

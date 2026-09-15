@@ -107,6 +107,19 @@ All closed 2026-09-14. Rationale in `PRD.md` § Decisions.
 - **P5-13** · Dogfood: enable on the Gatewright repo for two weeks · test · G0 · P5-09 · Compare recall quality before and after; decide default for `on_run_ok`.
 - **P5-14** · Publish v0.5 · feature · G0 · P5-10, P5-11, P5-12, P5-13 · —
 
+## P6 — v0.6 · Windows support
+
+CI runs windows-latest and 12 of 295 tests fail there. The README promises Node 18+ with no OS caveat, so either the promise or the support has to change; we are changing the support.
+
+- **P6-01** · Line endings are contractual · feature · G0 · — · `.gitattributes` forces LF for templates and the instruction block; `init` writes LF on every platform; the byte-exact template tests pass on Windows. Done when a board initialised on Windows and checked out on Linux produces no `gw check` out-of-band report.
+- **P6-02** · Path comparison is normalised · feature · G0 · — · Every comparison against an OS-produced path normalises first (git emits forward slashes on Windows; `path.join` emits backslashes). Covers worktree reuse, root discovery and the structural greps.
+- **P6-03** · Windows process termination · feature · G0 · P6-02 · `taskkill /T` then `/T /F` after `stop_timeout_s`, reaching the whole tree in place of a process group. Graceful-then-forceful preserved as far as Windows allows, per specs §10.2.
+- **P6-04** · Windows liveness and pid-reuse guard · feature · G0 · P6-03 · Liveness from the OS process list; reuse guarded by recorded start time rather than `/proc/<pid>/cwd`. The weaker guarantee is documented, not hidden.
+- **P6-05** · Runner tests pass on Windows · test · G0 · P6-03, P6-04 · overnight, crash-mid-drain and both runaway tests green on windows-latest.
+- **P6-06** · Full suite green on windows-latest · test · G0 · P6-01, P6-02, P6-05 · All three platforms green in CI on Node 18, 20 and 22.
+- **P6-07** · Docs state the platform support honestly · doc · G0 · P6-06 · README names Windows as supported and specs §10.2 records where its guarantees are weaker.
+- **P6-08** · Publish v0.6 · feature · G0 · P6-06, P6-07 · —
+
 ## Parking lot (not scheduled)
 
 - **Markdown import assumes `## P<n>` phase headings.** Deliberate: the parser implements Gatewright's own documented `tasks.md` format, and accepting arbitrary phase tokens would turn a format contract into config-aware parsing. A mismatched file now exits 2 with the expected format rather than importing nothing in silence. Revisit only if people are actually importing from boards with other phase vocabularies.
