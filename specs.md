@@ -798,3 +798,23 @@ Rules:
 - Secrets never enter memory text: evidence entries are commit SHAs, paths, and URLs only.
 
 Second Brain adapter (`adapters/second-brain/memory.js`): MCP client over HTTP to the configured `url`, bearer token from `token_env`. Maps `recall` → `recall` tool, `remember` → `remember` with `source: "gatewright"`, `capsule` → `get_prompt_capsule` with `kind: "project"`.
+
+**Transport (P5-01, decided).** MCP over plain HTTP — JSON-RPC POSTs built with
+`fetch`, no SDK. An MCP SDK would be the first runtime dependency in the project
+and would arrive in every install to serve a feature that is off by default;
+R7's zero-dependency promise is worth more than the convenience. MCP rather than
+a bespoke HTTP API because it is the interface the backend already exposes and
+the one other backends are most likely to speak, so the adapter stays thin and
+replaceable.
+
+**The interface is injectable and no test touches the network.** The provider
+takes its transport as a parameter, exactly as `gh` and the runner's spawn do.
+The suite proves the default install makes zero network calls, and the adapter's
+own tests run against recorded responses. This is the third subsystem built this
+way; by now it is the house pattern rather than a precaution.
+
+**A memory failure is never fatal.** Every call has a 5s timeout and a failure
+logs to `runs/memory.log` and returns empty. A run starts without prior context,
+a move completes without a memory being written, a brief renders. The tracker's
+job does not depend on a service it does not own — and a memory backend that can
+block the board would be worse than no memory backend.
