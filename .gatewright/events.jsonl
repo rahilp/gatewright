@@ -472,3 +472,22 @@
 {"ts":"2026-09-15T09:50:46.530Z","type":"move","item":"P7-03","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-15T09:51:21.017Z","type":"move","item":"P7-01","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/config.js","lib/settings.js","test/config.test.js"]}
 {"ts":"2026-09-15T09:51:21.073Z","type":"move","item":"P7-03","from":"building","to":"built","by":"human:rahil","evidence":["bin/gw.js","gw list | head no longer prints a stack trace"]}
+{"ts":"2026-09-15T10:14:53.989Z","type":"claim","item":"P6-11","by":"human:rahil"}
+{"ts":"2026-09-15T10:14:54.046Z","type":"move","item":"P6-11","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:14:54.099Z","type":"move","item":"P6-11","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:14:54.151Z","type":"claim","item":"P7-02","by":"human:rahil"}
+{"ts":"2026-09-15T10:14:54.204Z","type":"move","item":"P7-02","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:14:54.255Z","type":"move","item":"P7-02","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:14:54.305Z","type":"claim","item":"P7-04","by":"human:rahil"}
+{"ts":"2026-09-15T10:14:54.355Z","type":"move","item":"P7-04","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:14:54.408Z","type":"move","item":"P7-04","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:17:53.921Z","type":"note","item":"P6-11","by":"human:rahil","note":"isTerminalStage now honours an explicit role:'done' stage. Deliberately does NOT honour the inferred default (last pipeline stage), which would silently reclassify the final stage of every existing board."}
+{"ts":"2026-09-15T10:17:53.970Z","type":"note","item":"P7-04","by":"human:rahil","note":"gw config gains list-valued settings: vocab.phase, vocab.priority, vocab.gate, vocab.type. Duplicates and empty lists refused."}
+{"ts":"2026-09-15T10:17:54.022Z","type":"note","item":"P7-02","by":"human:rahil","note":"init walkthrough built: workflow shape (trunk vs PR), id scheme, phases, runner opt-in. Runs only with a real terminal; --yes, CI, GW_NO_INPUT and no-TTY all leave init byte-identical."}
+{"ts":"2026-09-15T10:22:22.010Z","type":"move","item":"P6-11","from":"building","to":"built","by":"human:rahil","evidence":["lib/stages.js","test/stages.test.js","brief on this board: 91 in flight to 3"]}
+{"ts":"2026-09-15T10:22:22.062Z","type":"move","item":"P7-04","from":"building","to":"built","by":"human:rahil","evidence":["lib/settings.js","test/config.test.js"]}
+{"ts":"2026-09-15T10:22:22.111Z","type":"move","item":"P7-02","from":"building","to":"built","by":"human:rahil","evidence":["lib/tui/setup.js","test/setup.test.js","README.md"]}
+{"ts":"2026-09-15T10:22:40.311Z","type":"claim","item":"P6-12","by":"human:rahil"}
+{"ts":"2026-09-15T10:22:40.366Z","type":"move","item":"P6-12","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:22:40.469Z","type":"move","item":"P6-12","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T10:22:40.519Z","type":"move","item":"P6-12","from":"building","to":"built","by":"human:rahil","evidence":["lib/tui/setup.js","init offers a trunk pipeline"]}

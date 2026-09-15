@@ -26,6 +26,10 @@ gw open
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
+In a terminal, `init` then asks a few questions — how work reaches main, how items are numbered, which phases you use, and whether to enable the runner — and writes the answers. Anywhere without a terminal, and with `--yes`, `GW_NO_INPUT` or `CI` set, it skips all of that and installs the defaults unchanged, so agents and CI see exactly what they always did.
+
+The first question is the one that matters most. If you commit straight to main, the pipeline ends at **Built**, and Built is the finish line. If you work through pull requests, it continues into In review, Reviewed, Merged and Verified, and advancing past Built needs a PR URL as evidence. Choosing the wrong one is not fatal — a tracker whose last stage is never reachable simply reports finished work as though it were still in flight.
+
 `init` creates `.gatewright/` (items, events, stages, config, prompt) and writes an instruction block to `AGENTS.md`. The first store write — your first `gw add` or `gw move` — creates `.digest`. `gw open` writes `board.html`. The CLI and the live board's write API are the only write paths; the snapshot board is written on demand.
 
 ## The refusal
@@ -117,7 +121,7 @@ gw config runner.enabled true
 # restart `gw serve` — config is read once, at startup
 ```
 
-Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. Settings that are lists rather than single values — `runner.providers`, the vocabularies, the stage pipeline — are still edited in `.gatewright/config.json` directly.
+Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
 
 Work created by an agent is held with `needs-triage` by default. Held work is invisible to the scheduler until a human approves it with `gw triage <id> --approve`. This prevents a run from filing three items, each of which starts a run that files three more. Use `gw triage <id> --drop` to discard held work.
 
@@ -217,6 +221,12 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item.
 
 Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief`; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
+
+## Choosing a workflow shape
+
+A stage may declare `"role": "done"`, which marks it as the finish line: work standing there is finished, and `gw brief` stops counting it as in flight. The shipped pipeline ends at Verified and does not need it. A trunk pipeline that ends at Built does, and `gw init` writes it for you when you say you commit straight to main.
+
+To move an existing board, truncate `stages.json` after the stage you actually finish at and give that stage `"role": "done"`. Without it every completed item is reported as still in flight forever, which is how `gw brief` degrades from a digest into a list of everything ever done. Only an explicit role counts — the last stage in a pipeline is not assumed to be an ending, because plenty of pipelines end in a waiting room.
 
 ## Stages and gates
 
