@@ -638,7 +638,19 @@ Scheduler loop in `serve`, every `tick_s` (default 5):
 3. Candidates: items where the next stage has `auto: true`, `flag` is null, deps satisfy the next stage's `deps_at_least`, and either a `dispatch` event exists with no later `run_ended`/`cancel`, or the stage before is `auto` (continuation).
 4. Pick by index in `config.vocab.priority` (position 0 first), then oldest `updated`. An item whose `priority` is absent from that array, or null, sorts after every item whose priority is in it — an unclassified item never jumps the queue.
 5. Start: create worktree `git worktree add <root>/<id> -b gw/<id>` (reuse if exists). If `memory.enabled` and `recall.on_dispatch`: call `memory.recall("<title>. <scope>", top_k)`, trim to `max_chars`, fill `{{prior_context}}`; if `project_id` is set, fill `{{capsule}}`. A memory failure logs a warning and leaves both empty; it never blocks the run. Render prompt, spawn provider `cmd` with `cwd` = worktree and env `GW_ACTOR=agent:<run>`, `GW_ITEM=<id>`, `GW_ROOT=<repo>/.gatewright`. Pipe stdout+stderr to `runs/<id>-<run>.log`. Append `run_started`. Set `owner`.
-6. On exit: append `run_ended` with outcome and `git -C <worktree> rev-parse HEAD`. Clear `owner` if outcome is not `ok`. If outcome is `ok` and `memory.remember.on_run_ok`: write one memory (see §14).
+6. On exit — **normal exit included, which is the common case** — append `run_ended`
+   with the outcome (`ok` when the process exits 0, otherwise `error`) and
+   `git -C <worktree> rev-parse HEAD`, clear the registry record, and release
+   `owner`. Exactly one `run_ended` per run: a run that was stopped or timed out
+   has already written one, and the exit handler must not write a second.
+   **The owner is released on every outcome, not only on failure.** `owner` means
+   "someone is working on this now", and when the process is gone nobody is; the
+   event log keeps the attribution. Leaving a finished run's owner in place would
+   also make the item look stale to `check` and keep it out of the scheduler's
+   sight for no reason.
+   Without this step the runner starts `max_concurrent` runs and then reports
+   `at_capacity` forever, which no unit test notices because each mechanism works
+   in isolation — only ticking the scheduler after a completed run reveals it. If outcome is `ok` and `memory.remember.on_run_ok`: write one memory (see §14).
 7. On `cancel` event for a running item: SIGTERM, wait `stop_timeout_s`, SIGKILL. Set `flag: paused`, store `prev_stage` and `last_commit` on the item. Append `run_ended` with `cancelled`.
 8. On `resume`: clear flag, restore stage, append `dispatch`; next tick starts with `{{log_tail}}` filled from the last log.
 9. `run_timeout_min` exceeded → same as cancel with outcome `timeout`.
