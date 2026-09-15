@@ -409,3 +409,219 @@ test('the poll loop cannot wipe a half-filled stages or settings form', () => {
   assert.match(settingsRender[0], /State\.formDirty = false;/, 'rendering the settings form clears the dirty flag');
   assert.match(SHELL, /State\.admin = data\.admin \|\| \{ allowed: false \};/, 'every poll re-reads whether this browser may still change the rules');
 });
+
+// --------------------------------------------------------------------------
+// P8-12: a terminal column (Built holding 103 of 113 cards on a real board)
+// squeezed the columns that matter off to the left and pushed Dropped off the
+// right edge entirely. terminalStageIds() is the one place "terminal" is
+// decided in this file (P8-10 fixed that twice already); the collapse must
+// read from it rather than inventing a second notion.
+
+function liftConstLine(name) {
+  const source = SHELL.match(new RegExp(`\\n  const ${name} = [^\\n]+;`));
+  assert.ok(source, `expected a const ${name} = ... in viewer/board.html`);
+  return source[0];
+}
+
+test('a collapsed terminal column previews the most recently touched items, an expanded one keeps the family tree', () => {
+  const src = `
+    ${liftHelper('hierarchicalOrder')}
+    ${liftHelper('mostRecentFirst')}
+    ${liftConstLine('COLLAPSED_PREVIEW_COUNT')}
+    ${liftHelper('columnBodyItems')}
+    return columnBodyItems(stageId, inCol, expanded);
+  `;
+  const columnBodyItems = new Function('stageId', 'inCol', 'expanded', src);
+
+  const items = [
+    { id: 'a', updated: '2024-01-01' },
+    { id: 'b', updated: '2024-01-05' },
+    { id: 'c', updated: '2024-01-03' },
+    { id: 'd', updated: '2024-01-04' },
+    { id: 'e', updated: '2024-01-02' },
+    { id: 'f', updated: '2024-01-06' },
+  ];
+
+  const collapsed = columnBodyItems('built', items, false);
+  assert.equal(collapsed.length, 5, 'a collapsed column previews a small, fixed number of items, never the whole archive');
+  assert.deepEqual(
+    collapsed.map((i) => i.id),
+    ['f', 'b', 'd', 'c', 'e'],
+    'the preview is the most recently touched items, most recent first',
+  );
+
+  const parent = { id: 'p', updated: '2024-01-01' };
+  const child = { id: 'k', parent: 'p', updated: '2024-01-02' };
+  const other = { id: 'q', updated: '2024-01-03' };
+  const expanded = columnBodyItems('backlog', [other, child, parent], true);
+  assert.deepEqual(
+    expanded.map((i) => i.id),
+    ['q', 'p', 'k'],
+    'an expanded column keeps a child directly after its parent, exactly as an ungrouped column already did -- root order otherwise follows the input',
+  );
+});
+
+test('a terminal column collapses by default and stays open across a poll once a human opens it', () => {
+  assert.match(
+    SHELL,
+    /expandedStages: new Set\(\),/,
+    'the expanded/collapsed choice must live on State, not be recomputed from the payload, so a 2-second poll cannot reset it',
+  );
+  // renderBoard and updateBoardInPlace (the poll-driven path) must derive
+  // "expanded" the same way: terminal, unless this stage id is in the set.
+  const renderBoard = SHELL.match(/function renderBoard\(container\) \{[\s\S]*?\n  \}/);
+  const updateBoardInPlace = SHELL.match(/function updateBoardInPlace\([\s\S]*?\n  \}/);
+  assert.ok(renderBoard && updateBoardInPlace);
+  for (const [name, fn] of [['renderBoard', renderBoard], ['updateBoardInPlace', updateBoardInPlace]]) {
+    assert.match(
+      fn[0],
+      /const expanded = !isTerminal \|\| State\.expandedStages\.has\(/,
+      `${name} must default a terminal stage to collapsed and honor an explicit expansion`,
+    );
+  }
+  // The poll path must not rebuild the whole board (which would drop the
+  // in-flight animation classes and any scroll position) just to reflect a
+  // toggle -- it updates the same column element's class and count in place.
+  assert.match(updateBoardInPlace[0], /column\.classList\.toggle\('collapsed', isTerminal && !expanded\);/);
+  assert.match(updateBoardInPlace[0], /column\.querySelector\('\.count'\)\.textContent = String\(inCol\.length\);/, 'the count is always the true total, never the preview length');
+});
+
+test('the collapse toggle is one click, and the count is always in the header', () => {
+  assert.match(SHELL, /data-toggle-stage="/, 'a terminal column carries a toggle affordance');
+  assert.match(
+    SHELL,
+    /const toggleBtn = e\.target\.closest\('\[data-toggle-stage\]'\);\n\s*if \(toggleBtn\) \{/,
+    'the toggle is wired through the one delegated click handler like every other board action',
+  );
+  assert.match(
+    SHELL,
+    /if \(State\.expandedStages\.has\(stageId\)\) State\.expandedStages\.delete\(stageId\);\n\s*else State\.expandedStages\.add\(stageId\);/,
+    'one click flips the state; there is no second confirmation step',
+  );
+  // columnHeadHtml puts the count in the same header element as the toggle,
+  // for every column, whether or not it is terminal.
+  const columnHeadHtml = SHELL.match(/function columnHeadHtml\([\s\S]*?\n  \}/);
+  assert.ok(columnHeadHtml);
+  assert.match(columnHeadHtml[0], /<span class="count">/, 'the count is rendered unconditionally, collapsed or not');
+});
+
+// --------------------------------------------------------------------------
+// P8-18: a human could not drag a card back to the column it came from, and
+// `gw move <id> backlog` without --force was the only path the CLI offered --
+// which is not a path a mouse has. A backward move is force:true by
+// definition (stageOrderMessage in lib/rules.js); the board must offer that
+// one forced case without also opening the door to a forward skip.
+
+test('isBackwardTarget reads pipeline order, not stages.extra, and ignores side stages', () => {
+  const isBackwardTarget = new Function('State', 'fromStageId', 'toStageId',
+    `${liftHelper('pipelineIndex')}\n${liftHelper('isBackwardTarget')}\nreturn isBackwardTarget(fromStageId, toStageId);`);
+  const State = { stages: { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'in_review' }, { id: 'built' }], extra: [{ id: 'dropped' }] } };
+
+  assert.equal(isBackwardTarget(State, 'in_review', 'building'), true, 'building comes before in_review');
+  assert.equal(isBackwardTarget(State, 'building', 'in_review'), false, 'in_review comes after building -- forward');
+  assert.equal(isBackwardTarget(State, 'building', 'building'), false, 'the same stage is not a backward move');
+  assert.equal(isBackwardTarget(State, 'built', 'dropped'), false, 'a side stage is not "backward" -- it has its own force rule');
+  assert.equal(isBackwardTarget(State, 'dropped', 'backlog'), false, 'a side stage is not in the pipeline, so it has no backward reading either');
+});
+
+test('dropAllowed offers an ordinary forward move and a backward one, but never a forward skip', () => {
+  const dropAllowed = new Function('State', 'id', 'stageId',
+    `${liftHelper('pipelineIndex')}\n${liftHelper('isBackwardTarget')}\n${liftHelper('dropAllowed')}\nreturn dropAllowed(id, stageId);`);
+  const stages = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'in_review' }, { id: 'built' }], extra: [] };
+  const items = [{ id: 'P1-01', stage: 'building' }];
+
+  const State = (transitions) => ({ items, stages, transitions: { 'P1-01': transitions } });
+
+  assert.equal(dropAllowed(State({ in_review: { ok: true } }), 'P1-01', 'in_review'), true, 'an ordinary next-stage move stays allowed');
+  assert.equal(
+    dropAllowed(State({ backlog: { ok: true, force: true } }), 'P1-01', 'backlog'),
+    true,
+    'a backward move is offered even though the server marks it force:true',
+  );
+  assert.equal(
+    dropAllowed(State({ built: { ok: true, force: true } }), 'P1-01', 'built'),
+    false,
+    'a forward skip is still refused -- the board has no way to ask for one',
+  );
+  assert.equal(dropAllowed(State({ in_review: { ok: false } }), 'P1-01', 'in_review'), false, 'an unmet gate is still refused');
+  assert.equal(dropAllowed(State({}), 'P1-01', 'building'), false, 'the current stage is never its own drop target');
+});
+
+test('a backward move looks different everywhere it is offered, and carries force to the server', () => {
+  assert.match(SHELL, /column\.classList\.add\('drop-back'\);/, 'a backward drop target gets its own class during a drag, distinct from drop-ok');
+  assert.match(SHELL, /#board\.dragging \.column\.drop-back \{ outline: 2px dashed var\(--warn\)/, 'and its own color, distinct from the accent used for a forward move');
+  assert.match(SHELL, /class="move-back"/, 'a backward stage button in the panel carries its own class');
+  assert.match(SHELL, /#gw-panel \.stage-buttons button\.move-back:not\(\[disabled\]\) \{[\s\S]*?color: var\(--warn\);/, 'and its own warn-colored style, distinct from the accent-colored forward buttons');
+  assert.match(
+    SHELL,
+    /const force = Boolean\(opts && opts\.force\);\n\s*const result = await apiWrite\('\/api\/items\/' \+ encodeURIComponent\(id\) \+ '\/move', \{ to, evidence, \.\.\.\(force \? \{ force: true \} : \{\}\) \}\);/,
+    'force travels to the server exactly as lib/commands/move.js\'s own --force flag does',
+  );
+  assert.match(
+    SHELL,
+    /const force = isBackwardTarget\(it\.stage, btn\.dataset\.move\);\n\s*onMoveClick\(it\.id, btn\.dataset\.move, btn, \{ force \}\);/,
+    'the panel button sends force for exactly the backward case, and no other',
+  );
+  assert.match(
+    SHELL,
+    /const force = Boolean\(it && isBackwardTarget\(it\.stage, to\)\);\n\s*const result = await onMoveClick\(id, to, null, \{ force \}\);/,
+    'a drag-and-drop backward move sends the same force the panel button would',
+  );
+});
+
+// --------------------------------------------------------------------------
+// P8-15: a blocked move was explained with CLI phrasing ("run `gw claim
+// P8-05`") on a screen with a mouse and no terminal. lib/gates/describe.js's
+// English is already carried in transition.reasons; where a reason maps to an
+// action the board can perform, it must offer that action, not just nicer
+// words for the same dead end.
+
+test('claimActionHtml offers Claim exactly when the server\'s own machine failures name a missing owner, with no client-side requirement evaluator', () => {
+  // P8-15's action must be read off transition.failures -- the machine text
+  // evaluateCumulative in lib/rules.js already computed -- never re-derived
+  // from stages.json: this repo already has a test forbidding a client-side
+  // requirement evaluator in the viewer (see test/serve.test.js), so the
+  // action cannot depend on the viewer re-implementing evaluateRequires.
+  const claimActionHtml = new Function('State', 'it', 'machineFailures', `
+    ${liftHelper('escapeHtml')}
+    ${liftHelper('ownerGateUnmet')}
+    ${liftHelper('claimActionHtml')}
+    return claimActionHtml(it, machineFailures);
+  `);
+
+  const unowned = { id: 'P8-05', owner: null };
+  const owned = { id: 'P8-05', owner: 'human:alice' };
+  const ownerFailure = ['building: needs an owner: run `gw claim P8-05`'];
+  const scopeFailure = ['building: needs a scope: run `gw edit P8-05 --scope "<what done looks like>"`'];
+
+  const live = { live: true };
+  const snapshot = { live: false };
+
+  assert.match(
+    claimActionHtml(live, unowned, ownerFailure),
+    /<button class="reason-action" data-claim="P8-05"[^>]*>Claim<\/button>/,
+    'a stage-prefixed "needs an owner" failure still gets a Claim button',
+  );
+  assert.equal(claimActionHtml(live, owned, ownerFailure), '', 'an item that already has an owner gets no Claim button, whatever the failures say');
+  assert.equal(claimActionHtml(snapshot, unowned, ownerFailure), '', 'a read-only snapshot has no server to claim anything on');
+  assert.equal(claimActionHtml(live, unowned, scopeFailure), '', 'a failure about something other than ownership gets no Claim button');
+  assert.equal(claimActionHtml(live, unowned, []), '', 'no failures means nothing to act on');
+});
+
+test('the viewer still has no client-side requirement evaluator after P8-15', () => {
+  assert.doesNotMatch(SHELL, /evaluateRequires/, 'the owner-gate action must not reimplement lib/rules.js\'s evaluator');
+  assert.match(SHELL, /needs an owner:/, 'the detection reads the machine failure the server already computed');
+});
+
+test('the item panel wires the Claim button to a claim action, not a dead end', () => {
+  assert.match(
+    SHELL,
+    /panel\.querySelectorAll\('\[data-claim\]'\)\.forEach\(\(btn\) => \{\n\s*btn\.addEventListener\('click', \(\) => onClaimClick\(btn\.dataset\.claim, btn\)\);/,
+    'every rendered Claim button is wired to onClaimClick',
+  );
+  assert.match(
+    SHELL,
+    /async function onClaimClick\(id, btn\) \{[\s\S]*?apiWrite\('\/api\/items\/' \+ encodeURIComponent\(id\) \+ '\/claim', \{\}\)/,
+    'onClaimClick posts to this item\'s claim action, mirroring the existing dispatch/cancel/resume/triage actions',
+  );
+});

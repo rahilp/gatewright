@@ -687,3 +687,11 @@
 {"ts":"2026-09-15T21:48:17.537Z","type":"move","item":"P8-24","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: claimed-but-unmoved is 0 in flight; a real move counts"]}
 {"ts":"2026-09-15T21:48:17.591Z","type":"move","item":"P8-26","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: single legend line for codes actually shown"]}
 {"ts":"2026-09-15T21:48:17.647Z","type":"move","item":"P8-19","from":"building","to":"built","by":"human:rahil","evidence":["lib/settings.js","verified: POST /api/config sets glossary.gate.G0, unknown field refused with the CLI wording"]}
+{"ts":"2026-09-15T22:04:52.348Z","type":"move","item":"P8-18","from":"building","to":"backlog","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T22:05:01.611Z","type":"move","item":"P8-18","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T22:05:01.672Z","type":"move","item":"P8-18","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T22:05:13.201Z","type":"claim","item":"P8-13","by":"human:rahil"}
+{"ts":"2026-09-15T22:05:22.394Z","type":"release","item":"P8-13","by":"human:rahil"}
+{"ts":"2026-09-15T22:05:46.570Z","type":"move","item":"P8-12","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: Built collapsed at 119 with Show all; all six columns fit, Dropped no longer cut off"]}
+{"ts":"2026-09-15T22:05:46.625Z","type":"move","item":"P8-18","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","lib/serve/server.js","verified live: backward drag marked drop-back and persisted building->backlog"]}
+{"ts":"2026-09-15T22:05:46.683Z","type":"move","item":"P8-15","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","lib/serve/server.js","verified live: 'Someone must have claimed it' + a Claim button that recorded a claim event"]}

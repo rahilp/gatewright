@@ -417,3 +417,42 @@ test('/api/state reports whether this caller may change stages and settings', as
     assert.deepEqual(JSON.parse(remote.text).admin, { allowed: false }, 'the board must be able to hide controls it cannot use rather than offer a button that 403s');
   }, { allowedHosts: ['board.local'] });
 });
+
+// The board can offer a backward move -- correcting a mis-drag without opening
+// a terminal -- only if `force` reaches the CLI. It travels the same way
+// `evidence` does; before this it was dropped at the HTTP boundary and the
+// move was refused despite the UI having offered it.
+test('a backward move from the board is accepted when it asks for force, and refused when it does not', async () => {
+  await withServer(async ({ url, store }) => {
+    await write(url, '/api/items/P1-01/move', { to: 'building' });
+    assert.equal(store.readItems()[0].stage, 'building');
+
+    const withoutForce = await write(url, '/api/items/P1-01/move', { to: 'backlog' });
+    // 409, the status this API uses for a rule violation, not 400.
+    assert.equal(withoutForce.status, 409, 'a backward move is force-only by definition');
+    assert.equal(store.readItems()[0].stage, 'building', 'and nothing moved');
+
+    const forced = await write(url, '/api/items/P1-01/move', { to: 'backlog', force: true });
+    assert.equal(forced.status, 200);
+    assert.equal(store.readItems()[0].stage, 'backlog', 'the human corrected their own mistake from the board');
+  });
+});
+
+// "Someone must have claimed it" is answered by a Claim button, not by telling
+// a person with a mouse to run a CLI command.
+test('claim and release are reachable from the board', async () => {
+  await withServer(async ({ url, store }) => {
+    // The fixture item ships already owned, so release first -- claiming an
+    // owned item is correctly refused, and that refusal is worth pinning too.
+    const reclaim = await write(url, '/api/items/P1-01/claim', {});
+    assert.equal(reclaim.status, 409, 'an already-owned item cannot be silently taken');
+
+    const released = await write(url, '/api/items/P1-01/release', {});
+    assert.equal(released.status, 200);
+    assert.equal(store.readItems()[0].owner, null);
+
+    const claimed = await write(url, '/api/items/P1-01/claim', {});
+    assert.equal(claimed.status, 200);
+    assert.match(store.readItems()[0].owner, /^human:/, 'the board records a real actor, not an anonymous write');
+  });
+});

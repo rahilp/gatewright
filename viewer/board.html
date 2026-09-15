@@ -176,6 +176,10 @@
     max-width: 260px;
     flex: 0 0 auto;
   }
+  /* A terminal column collapsed to its recent handful gets its width back to
+     the non-terminal columns that matter -- see terminalStageIds() and
+     renderBoard(). Never so narrow the count or the toggle wrap. */
+  .column.collapsed { min-width: 150px; max-width: 170px; }
   .column-head {
     padding: 0.55rem 0.7rem;
     border-bottom: 1px solid var(--border);
@@ -183,12 +187,25 @@
     font-weight: 600;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
     position: sticky;
     top: 0;
     background: var(--bg-raised);
     border-radius: 0.5rem 0.5rem 0 0;
   }
+  .column-head .column-head-main { display: flex; gap: 0.4rem; align-items: baseline; overflow: hidden; text-overflow: ellipsis; }
   .column-head .count { color: var(--text-faint); font-weight: 400; }
+  .column-toggle {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text-dim);
+    border-radius: 0.3rem;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
   .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
   .card {
     background: var(--bg-sunken);
@@ -207,6 +224,12 @@
   #board.dragging .column { transition: opacity 0.1s ease; }
   #board.dragging .column.drop-ok { outline: 2px dashed var(--accent); outline-offset: -2px; }
   #board.dragging .column.drop-ok.drop-over { background: var(--accent-bg); }
+  /* A backward drop is offered too (P8-18), but it must never read like an
+     ordinary forward move: warn colors instead of accent, everywhere this
+     drag is reflected. */
+  #board.dragging .column.drop-back { outline: 2px dashed var(--warn); outline-offset: -2px; }
+  #board.dragging .column.drop-back.drop-over { background: var(--warn-bg); }
+  #board.dragging .column.drop-back .column-head::after { content: '\21b6 backward'; color: var(--warn); margin-left: 0.35rem; font-weight: 400; font-size: 0.7rem; }
   #board.dragging .column.drop-invalid { opacity: 0.4; cursor: not-allowed; }
   #board.dragging .column.drop-invalid .column-head::after { content: '✕'; color: var(--text-faint); margin-left: 0.35rem; }
   #board.dragging .column.drop-source { outline: 1px dashed var(--border); outline-offset: -2px; }
@@ -343,10 +366,31 @@
     border-color: var(--accent);
     cursor: pointer;
   }
+  /* Backward moves are offered (P8-18) but must never be mistaken for a
+     forward one: warn colors and a back-arrow label, on the button itself and
+     wherever its reason is explained. */
+  #gw-panel .stage-buttons button.move-back:not([disabled]) {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border-color: var(--warn);
+  }
   #gw-panel .stage-reason { font-size: 0.72rem; color: var(--text-dim); }
+  #gw-panel .stage-reason.stage-reason-back { color: var(--warn); }
   #gw-panel .stage-reason .reason-head { display: block; color: var(--text-faint); }
   #gw-panel .stage-reason ul { margin: 0.1rem 0 0; padding-left: 1rem; }
   #gw-panel .stage-reason li { margin: 0.1rem 0; }
+  /* Where an unmet gate maps to an action the board can perform (P8-15),
+     e.g. "needs an owner" becomes a Claim button right next to the sentence. */
+  #gw-panel .stage-reason .reason-action {
+    margin-left: 0.4rem;
+    border: 1px solid var(--accent);
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-radius: 0.3rem;
+    padding: 0.03rem 0.4rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
   #gw-panel .stage-refusal:empty { display: none; }
   .refusal {
     color: var(--danger);
@@ -811,6 +855,11 @@
     // Set while someone is typing in the stages or settings editors, so the
     // two-second poll cannot wipe a half-filled form out from under them.
     formDirty: false,
+    // Which terminal columns a human has clicked open. Absent means
+    // collapsed -- see terminalStageIds() and renderBoard() -- and a Set
+    // living on State survives every 2-second poll untouched, so reading
+    // Built does not get reset out from under whoever is reading it.
+    expandedStages: new Set(),
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     runLogs: {}, runLogLoading: {}, runLogErrors: {},
@@ -873,6 +922,32 @@
 
   function isTerminalItem(it) {
     return terminalStageIds().has(it.stage);
+  }
+
+  // How many of a collapsed terminal column's most-recently-touched items
+  // stay visible without asking. Small enough that the four columns that
+  // matter get their width back; big enough that "recent" means something.
+  const COLLAPSED_PREVIEW_COUNT = 5;
+
+  // A stage's position in the PIPELINE (never `stages.extra`, which is not an
+  // ordered flow). Mirrors stageIndex in lib/rules.js -- this file has no
+  // module loader to share it with, so the definition is repeated, not
+  // reinvented: same lookup, same "not in the pipeline" answer of -1.
+  function pipelineIndex(stageId) {
+    return (State.stages.stages || []).findIndex((stage) => stage.id === stageId);
+  }
+
+  // Whether moving from one pipeline stage to another goes backward. This is
+  // the one thing that turns a forced transition (evaluateCumulative's
+  // `force: true`) into something the board is willing to offer at all: a
+  // forward skip still has no drop target or enabled button, because the
+  // board has no way to ask the CLI for "skip these stages" -- only "go back
+  // to one I already passed". A side stage (`stages.extra`, e.g. dropped) is
+  // not "backward" in this sense; it already has its own force rule.
+  function isBackwardTarget(fromStageId, toStageId) {
+    const fromIndex = pipelineIndex(fromStageId);
+    const toIndex = pipelineIndex(toStageId);
+    return fromIndex >= 0 && toIndex >= 0 && toIndex < fromIndex;
   }
 
   // A live run, as opposed to a queued dispatch. /api/state has carried these
@@ -953,6 +1028,26 @@
   function sentenceList(sentences, className) {
     return '<ul' + (className ? ' class="' + className + '"' : '') + '>' +
       sentences.map((line) => '<li>' + escapeHtml(line) + '</li>').join('') + '</ul>';
+  }
+
+  // Whether an owner is the thing missing. This has to be read off the
+  // machine failures the server already computed (evaluateCumulative in
+  // lib/rules.js, carried here as `transition.failures`) rather than
+  // re-deriving it from stages.json: the viewer has no client-side
+  // requirement evaluator, on purpose (see test/serve.test.js), so a second
+  // evaluator does not get invented just to decide when to draw a button.
+  // The match is on lib/rules.js's fixed prefix, not on the sentence
+  // lib/gates/describe.js produces, and the matched text is never rendered --
+  // only the English `reasons` already displayed next to it are.
+  function ownerGateUnmet(it, machineFailures) {
+    return !it.owner && (machineFailures || []).some((line) => /(^|:\s)needs an owner:/.test(line));
+  }
+
+  // The inline answer to "needs an owner": a Claim button next to the English
+  // reason, offered only when claiming would actually clear this gate.
+  function claimActionHtml(it, machineFailures) {
+    if (!State.live || !ownerGateUnmet(it, machineFailures)) return '';
+    return '<button class="reason-action" data-claim="' + escapeHtml(it.id) + '" title="Claims this item for you, so the owner gate above is met.">Claim</button>';
   }
 
   // The raw rule stays one disclosure away: agents and anyone debugging
@@ -1181,15 +1276,55 @@
       '</div>' + actions + '</div>';
   }
 
+  // Parent-first, children-under-parent ordering for a column's full list.
+  // Pulled out of renderBoard so a collapsed column's preview (most recently
+  // touched first, no hierarchy -- an archive does not need its family tree)
+  // can skip it without duplicating the traversal.
+  function hierarchicalOrder(inCol) {
+    const ordered = [];
+    const visit = (parentId) => inCol.filter((item) => item.parent === parentId).forEach((child) => { ordered.push(child); visit(child.id); });
+    inCol.filter((item) => !item.parent || !inCol.some((candidate) => candidate.id === item.parent)).forEach((root) => { ordered.push(root); visit(root.id); });
+    return ordered;
+  }
+
+  function mostRecentFirst(inCol) {
+    return inCol.slice().sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+  }
+
+  // Board (P8-12): a terminal column defaults to collapsed -- see
+  // terminalStageIds(), the only place "terminal" is decided in this file --
+  // so 103 of 113 finished cards do not squeeze the four columns that still
+  // need attention off the left edge, or push Dropped off the right one
+  // entirely. The count is always in the header, in or out of that state, and
+  // one click on the toggle is the whole affordance to see everything: never
+  // a second click, a menu, or a URL parameter. State.expandedStages is on
+  // State itself, so the 2-second poll (updateBoardInPlace) cannot reset a
+  // column someone just opened out from under them.
+  function columnBodyItems(stageId, inCol, expanded) {
+    return expanded ? hierarchicalOrder(inCol) : mostRecentFirst(inCol).slice(0, COLLAPSED_PREVIEW_COUNT);
+  }
+
+  function columnHeadHtml(s, count, isTerminal, expanded) {
+    const toggle = isTerminal
+      ? '<button class="column-toggle" data-toggle-stage="' + escapeHtml(s.id) + '" title="' +
+        (expanded ? 'Collapse finished work back down.' : 'Show every item in ' + escapeHtml(s.label) + '.') + '">' +
+        (expanded ? 'Collapse' : 'Show all') + '</button>'
+      : '';
+    return '<div class="column-head"><span class="column-head-main"><span>' + escapeHtml(s.label) + '</span><span class="count">' + count + '</span></span>' + toggle + '</div>';
+  }
+
   function renderBoard(container) {
     const items = filteredItems();
     const cols = stageList(State.stages);
+    const terminal = terminalStageIds();
     container.innerHTML = '<div id="board">' + cols.map((s) => {
       const inCol = items.filter((i) => i.stage === s.id);
-      const ordered = []; const visit = (parentId) => inCol.filter((item) => item.parent === parentId).forEach((child) => { ordered.push(child); visit(child.id); });
-      inCol.filter((item) => !item.parent || !inCol.some((candidate) => candidate.id === item.parent)).forEach((root) => { ordered.push(root); visit(root.id); });
-      return '<div class="column" data-stage="' + escapeHtml(s.id) + '"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
-        '<div class="column-body">' + (ordered.map(cardMarkup).join('') || '') + '</div></div>';
+      const isTerminal = terminal.has(s.id);
+      const expanded = !isTerminal || State.expandedStages.has(s.id);
+      const shown = columnBodyItems(s.id, inCol, expanded);
+      return '<div class="column' + (isTerminal && !expanded ? ' collapsed' : '') + '" data-stage="' + escapeHtml(s.id) + '">' +
+        columnHeadHtml(s, inCol.length, isTerminal, expanded) +
+        '<div class="column-body">' + (shown.map(cardMarkup).join('') || '') + '</div></div>';
     }).join('') + '</div>';
   }
 
@@ -1198,15 +1333,20 @@
   // stage buttons, never a replacement: everything here is reachable by click
   // and keyboard through the panel, which is what anyone who cannot drag uses.
 
-  // A column is a drop target only if the very same move the panel button
-  // would issue is currently permitted. Forced moves are excluded because the
-  // board has no way to send --force; they stay a CLI decision.
+  // A column is a drop target if the very same move the panel button would
+  // issue is currently permitted. Most forced moves are still excluded --
+  // the board has no way to ask the CLI for "skip these stages", so a
+  // forward skip stays a CLI decision -- but a BACKWARD move is force-only by
+  // definition (stageOrderMessage in lib/rules.js) and undoing a mis-drag is
+  // exactly what P8-18 is for, so that one forced case is offered too.
   function dropAllowed(id, stageId) {
     const it = State.items.find((candidate) => candidate.id === id);
     if (!it || it.stage === stageId) return false;
     const transitions = State.transitions[id];
     const transition = transitions && transitions[stageId];
-    return Boolean(transition && transition.ok && !transition.force);
+    if (!transition || !transition.ok) return false;
+    if (!transition.force) return true;
+    return isBackwardTarget(it.stage, stageId);
   }
 
   function dropRefusal(id, stageId) {
@@ -1222,7 +1362,9 @@
   }
 
   // Which columns would take this card, marked before the drag reaches them
-  // rather than after the server refuses it.
+  // rather than after the server refuses it. A backward-eligible column is
+  // marked distinctly from an ordinary forward one -- see .drop-back -- so a
+  // hover never looks like an ordinary move that happens to skip stages.
   function markDropTargets() {
     const board = document.getElementById('board');
     const drag = State.drag;
@@ -1230,10 +1372,18 @@
     board.classList.add('dragging');
     board.querySelectorAll('.column').forEach((column) => {
       const stageId = column.dataset.stage;
-      column.classList.remove('drop-ok', 'drop-invalid', 'drop-source', 'drop-over');
+      column.classList.remove('drop-ok', 'drop-back', 'drop-invalid', 'drop-source', 'drop-over');
       column.removeAttribute('title');
       if (stageId === drag.from) { column.classList.add('drop-source'); return; }
-      if (dropAllowed(drag.id, stageId)) { column.classList.add('drop-ok'); return; }
+      if (dropAllowed(drag.id, stageId)) {
+        if (isBackwardTarget(drag.from, stageId)) {
+          column.classList.add('drop-back');
+          column.title = 'Backward move: sends ' + drag.id + ' back to ' + stageLabel(stageId) + '.';
+        } else {
+          column.classList.add('drop-ok');
+        }
+        return;
+      }
       column.classList.add('drop-invalid');
       const why = dropRefusal(drag.id, stageId);
       if (why) column.title = why;
@@ -1245,7 +1395,7 @@
     if (board) {
       board.classList.remove('dragging');
       board.querySelectorAll('.column').forEach((column) => {
-        column.classList.remove('drop-ok', 'drop-invalid', 'drop-source', 'drop-over');
+        column.classList.remove('drop-ok', 'drop-back', 'drop-invalid', 'drop-source', 'drop-over');
         column.removeAttribute('title');
       });
     }
@@ -1262,7 +1412,9 @@
     const home = card && card.parentNode ? { parent: card.parentNode, next: card.nextSibling } : null;
     const body = column.querySelector('.column-body');
     if (card && body) body.appendChild(card);
-    const result = await onMoveClick(id, to, null);
+    const it = State.items.find((candidate) => candidate.id === id);
+    const force = Boolean(it && isBackwardTarget(it.stage, to));
+    const result = await onMoveClick(id, to, null, { force });
     if (result && !result.ok && card && home && card.parentNode !== home.parent) {
       home.parent.insertBefore(card, home.next);
     }
@@ -1873,6 +2025,10 @@
       let unmet = [];
       let machine = [];
       let disabled = true;
+      // A backward move is force:true by definition (stageOrderMessage in
+      // lib/rules.js) -- P8-18 offers exactly that one forced case, so it is
+      // decided before the generic force branch below claims it as a skip.
+      const backward = State.live && isBackwardTarget(it.stage, s.id);
       if (!State.live) {
         note = 'read-only snapshot';
         // No server to ask what this item fails, so say what the gate checks.
@@ -1885,10 +2041,14 @@
           : 'checking transition rules…';
       } else if (!transition) {
         note = 'use `gw move --force` to skip stages';
+      } else if (transition.force && transition.ok && backward) {
+        disabled = false;
+        note = 'Backward move — this skips the gates ahead of ' + s.label + '.';
       } else if (transition.force && transition.ok) {
         note = 'use `gw move --force` to skip stages';
       } else if (!transition.ok) {
-        if (transition.force) note = 'and a jump like this also needs `gw move --force`';
+        if (transition.force && !backward) note = 'and a jump like this also needs `gw move --force`';
+        else if (backward) note = 'Backward move — not met yet.';
         heading = 'Not met yet:';
         machine = transition.failures || [];
         unmet = (transition.reasons && transition.reasons.length) ? transition.reasons : machine;
@@ -1896,10 +2056,13 @@
         disabled = false;
       }
       const tooltip = (machine.length ? machine.join('; ') : note);
+      const label = (backward && !disabled ? '← ' : '') + s.label;
       return '<div class="stage-button-wrap">' +
-        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') + (tooltip ? ' title="' + escapeHtml(tooltip) + '"' : '') + '>' + escapeHtml(s.label) + '</button>' +
-        (note ? '<div class="stage-reason">' + escapeHtml(note) + '</div>' : '') +
-        (unmet.length ? '<div class="stage-reason"><span class="reason-head">' + escapeHtml(heading) + '</span>' + sentenceList(unmet) + '</div>' : '') +
+        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') +
+          (backward ? ' class="move-back"' : '') +
+          (tooltip ? ' title="' + escapeHtml(tooltip) + '"' : '') + '>' + escapeHtml(label) + '</button>' +
+        (note ? '<div class="stage-reason' + (backward ? ' stage-reason-back' : '') + '">' + escapeHtml(note) + '</div>' : '') +
+        (unmet.length ? '<div class="stage-reason"><span class="reason-head">' + escapeHtml(heading) + '</span>' + sentenceList(unmet) + claimActionHtml(it, machine) + '</div>' : '') +
         (machine.length ? machineRule(sentenceList(machine)) : '') +
         '<div class="stage-refusal" id="move-fail-' + escapeHtml(s.id) + '"></div>' +
         '</div>';
@@ -1967,7 +2130,14 @@
     const panel = document.getElementById('gw-panel');
 
     panel.querySelectorAll('[data-move]').forEach((btn) => {
-      btn.addEventListener('click', () => onMoveClick(it.id, btn.dataset.move, btn));
+      btn.addEventListener('click', () => {
+        const force = isBackwardTarget(it.stage, btn.dataset.move);
+        onMoveClick(it.id, btn.dataset.move, btn, { force });
+      });
+    });
+
+    panel.querySelectorAll('[data-claim]').forEach((btn) => {
+      btn.addEventListener('click', () => onClaimClick(btn.dataset.claim, btn));
     });
 
     const playBtn = panel.querySelector('#panel-play');
@@ -2005,13 +2175,17 @@
   // column calls it too -- there is no second way to move an item, and so no
   // second set of rules for one of them to get wrong. `btn` is optional so a
   // drop can use it without inventing a button.
-  async function onMoveClick(id, to, btn) {
+  async function onMoveClick(id, to, btn, opts) {
     const key = 'move:' + id + ':' + to;
     if (Inflight.has(key)) return { ok: false, skipped: true, data: null };
     Inflight.add(key);
     if (btn) btn.disabled = true;
     const evidence = State.pendingEvidence[id] || [];
-    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/move', { to, evidence });
+    // `force` travels exactly as lib/commands/move.js's own --force flag does
+    // -- a plain boolean the move route is expected to forward into
+    // ctx.flags.force, same as `evidence` and `to` already are.
+    const force = Boolean(opts && opts.force);
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/move', { to, evidence, ...(force ? { force: true } : {}) });
     Inflight.delete(key);
     if (result.ok) {
       State.pendingEvidence[id] = [];
@@ -2091,6 +2265,25 @@
     Inflight.add(key);
     btn.disabled = true;
     const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/triage', { action });
+    Inflight.delete(key);
+    if (result.ok) {
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      showPanelError((result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  // The inline answer to "needs an owner" (P8-15). Mirrors the existing
+  // dispatch/cancel/resume/triage actions exactly: POST to a per-item action
+  // path, then let the one poll loop pick up the result. `gw claim <id>` is
+  // the CLI's own name for this, unchanged here.
+  async function onClaimClick(id, btn) {
+    const key = 'claim:' + id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/claim', {});
     Inflight.delete(key);
     if (result.ok) {
       await refreshNow();
@@ -2218,11 +2411,18 @@
     if (!board) { renderView(); return; }
     const oldById = new Map(previousItems.map((item) => [item.id, item]));
     const cards = new Map([...board.querySelectorAll('.card')].map((card) => [card.dataset.id, card]));
+    const terminal = terminalStageIds();
     for (const stage of stageList(State.stages)) {
       const column = board.querySelector('.column[data-stage="' + CSS.escape(stage.id) + '"]');
       if (!column) { renderView(); return; }
       const body = column.querySelector('.column-body');
-      const items = filteredItems().filter((item) => item.stage === stage.id);
+      const inCol = filteredItems().filter((item) => item.stage === stage.id);
+      const isTerminal = terminal.has(stage.id);
+      // State.expandedStages is untouched by this function, so a column a
+      // human just opened stays open across this same poll that would
+      // otherwise be the thing resetting it.
+      const expanded = !isTerminal || State.expandedStages.has(stage.id);
+      const items = columnBodyItems(stage.id, inCol, expanded);
       const fragment = document.createDocumentFragment();
       for (const item of items) {
         const prior = oldById.get(item.id); const moved = prior && prior.stage !== item.stage;
@@ -2236,7 +2436,11 @@
         }
         fragment.appendChild(card);
       }
-      body.replaceChildren(fragment); column.querySelector('.count').textContent = String(items.length);
+      body.replaceChildren(fragment);
+      column.querySelector('.count').textContent = String(inCol.length);
+      column.classList.toggle('collapsed', isTerminal && !expanded);
+      const toggleBtn = column.querySelector('[data-toggle-stage]');
+      if (toggleBtn) toggleBtn.textContent = expanded ? 'Collapse' : 'Show all';
     }
   }
 
@@ -2299,6 +2503,18 @@
     });
 
     document.getElementById('gw-view').addEventListener('click', (e) => {
+      // The one click that shows a collapsed terminal column in full, or
+      // collapses it back (P8-12). Toggled in State so the 2-second poll
+      // reflects the choice instead of resetting it.
+      const toggleBtn = e.target.closest('[data-toggle-stage]');
+      if (toggleBtn) {
+        e.stopPropagation();
+        const stageId = toggleBtn.dataset.toggleStage;
+        if (State.expandedStages.has(stageId)) State.expandedStages.delete(stageId);
+        else State.expandedStages.add(stageId);
+        renderView();
+        return;
+      }
       const playBtn = e.target.closest('[data-play]');
       if (playBtn) { e.stopPropagation(); onDispatchClick(playBtn.dataset.play, 'dispatch', playBtn); return; }
       const stopBtn = e.target.closest('[data-stop]');
