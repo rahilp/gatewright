@@ -62,12 +62,74 @@ test('terminal-ness is decided in exactly one place in the viewer', () => {
 // P8-09: a card in Building owned by a human with nothing running looked
 // identical to one an agent was burning money on.
 test('a card reports the run axis as well as the stage axis', () => {
-  assert.match(SHELL, /no agent run · /, 'an idle card must say that nothing is running, and who owns it');
+  assert.match(SHELL, /no agent run/, 'an idle card must say that nothing is running');
   assert.match(SHELL, /queued · no agent run yet/, 'a queued card must not read as a running one');
   assert.match(SHELL, /data-run-started=/, 'a running card must carry the run start so its age can be ticked');
   assert.match(SHELL, /function runLabel\(run\) \{[\s\S]*?'running · ' \+ run\.run/, 'a running card names the run');
   assert.match(SHELL, /return schedulerIsOff\(\) \? 'Queue for an agent' : 'Play';/, 'Play must read as queueing when the scheduler cannot start anything');
   assert.match(SHELL, /schedulerIsOff\(\) \? ' class="secondary"' : ''/, 'and it must not look like a button that starts work');
+  // P8-16: the idle chip still names an owner when that is informative -- when
+  // it differs from the board's obvious default -- and still says "unowned"
+  // when there is none, but stops repeating the one owner every other idle
+  // card already carries.
+  assert.match(
+    SHELL,
+    /it\.owner && !ownerIsDefault \? ' · ' \+ escapeHtml\(it\.owner\) : \(it\.owner \? '' : ' · unowned'\)/,
+    'the idle chip omits the owner only when it is the board\'s obvious default',
+  );
+});
+
+// --------------------------------------------------------------------------
+// P8-16: `ev:0` and the same owner on a hundred cards were both true and
+// neither told a first-time reader anything. An evidence count is now shown
+// only when it is short of what the item's own next stage requires, and an
+// owner only when it is not the one most items already carry.
+
+test('defaultOwner names the owner most items already have, and only when it really is the common case', () => {
+  const defaultOwner = new Function('State', `${liftFunction('defaultOwner')}\nreturn defaultOwner();`);
+
+  assert.equal(defaultOwner({ items: [] }), null, 'no items, no default');
+  assert.equal(
+    defaultOwner({ items: [{ owner: 'human:rahil' }, { owner: 'human:rahil' }, { owner: null }] }),
+    'human:rahil',
+    'an owner held by more than half the items is the obvious default',
+  );
+  assert.equal(
+    defaultOwner({ items: [{ owner: 'human:rahil' }, { owner: 'human:alice' }, { owner: null }] }),
+    null,
+    'a board split between owners, or mostly unowned, has no obvious default to omit',
+  );
+  assert.equal(
+    defaultOwner({ items: [{ owner: 'human:rahil' }, { owner: 'human:alice' }, { owner: 'human:alice' }] }),
+    'human:alice',
+    'the most common owner wins even when it is not the first one seen',
+  );
+});
+
+test('evidenceGateUnmet fires only when the item\'s own next stage is short on evidence', () => {
+  const stages = {
+    stages: [
+      { id: 'backlog' },
+      { id: 'built', requires: { evidence_min: 2 } },
+      { id: 'reviewed', requires: { evidence_match: '^https://github.com/.+/pull/\\d+' } },
+      { id: 'merged' },
+    ],
+    extra: [],
+  };
+  const State = { stages };
+  const call = (it) => new Function('State', 'it', `
+    ${liftHelper('stageList')}
+    ${liftHelper('nextStageId')}
+    ${liftHelper('evidenceGateUnmet')}
+    return evidenceGateUnmet(it);
+  `)(State, it);
+
+  assert.equal(call({ stage: 'backlog', evidence: [] }), true, 'built requires 2 entries and there are none yet');
+  assert.equal(call({ stage: 'backlog', evidence: ['a', 'b'] }), false, 'enough entries for the next stage\'s minimum');
+  assert.equal(call({ stage: 'built', evidence: ['not a pr link'] }), true, 'reviewed requires a PR link and none matches');
+  assert.equal(call({ stage: 'built', evidence: ['https://github.com/x/y/pull/1'] }), false, 'a matching entry clears the gate');
+  assert.equal(call({ stage: 'reviewed', evidence: [] }), false, 'merged has no requires at all');
+  assert.equal(call({ stage: 'nope', evidence: [] }), false, 'a stage outside the pipeline has no next gate either');
 });
 
 // The whole point of shipping the descriptions in the payload: if the wording
@@ -362,8 +424,21 @@ test('deps_at_least is a picker of real stages, never a free-text box', () => {
 test('the configuration views stay reachable on a board with no items', () => {
   assert.match(
     SHELL,
-    /const itemView = State\.view === 'overview' \|\| State\.view === 'board' \|\| State\.view === 'table';\n\s*if \(State\.items\.length === 0 && itemView\)/,
+    /const itemView = State\.view === 'overview' \|\| State\.view === 'board' \|\| State\.view === 'table';\n(?:[^\n]*\n)*?\s*if \(State\.items\.length === 0 && itemView\)/,
     'the "No items yet" screen must not hide the stages and settings views -- an empty board is exactly when they are needed',
+  );
+});
+
+// P8-17: the filter bar and "+ new item" rendered above Stages & rules,
+// Settings, and Export, where they filter nothing on screen. itemView (just
+// above) is already exactly the set of views the filter bar affects, so it
+// must be the one thing that decides #gw-filters' visibility -- no second
+// list of "which views" to keep in sync with the first.
+test('the filter bar is shown only on the views it actually filters', () => {
+  assert.match(
+    SHELL,
+    /document\.getElementById\('gw-filters'\)\.classList\.toggle\('hidden', !itemView\);/,
+    'the filter bar\'s visibility must be driven by itemView, the same predicate that decides the empty-state screen',
   );
 });
 
@@ -567,6 +642,57 @@ test('a backward move looks different everywhere it is offered, and carries forc
     /const force = Boolean\(it && isBackwardTarget\(it\.stage, to\)\);\n\s*const result = await onMoveClick\(id, to, null, \{ force \}\);/,
     'a drag-and-drop backward move sends the same force the panel button would',
   );
+});
+
+// --------------------------------------------------------------------------
+// P8-13: Overview used to be four census charts and nothing else. It is now
+// "what should I do next", built on the same "in flight" lib/brief.js just
+// had two bugs from a second definition of ("terminal" -- inflightTitles'
+// own comment) -- so the viewer must not invent a third. This test runs the
+// viewer's own isInFlightItem/computeActiveDispatch over the same fixture
+// lib/brief.js's exported inFlightTitles() sees, and checks they name the
+// same items. If a future change to either drifts from the other, this is
+// the test that catches it.
+
+test('the viewer\'s "in flight" is the same set gw brief computes, not a second definition of it', async () => {
+  const { inFlightTitles } = await import('../lib/brief.js');
+
+  const stages = {
+    stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built', role: 'done' }],
+    extra: [],
+  };
+  const items = [
+    { id: 'A', title: 'Untouched, unowned', stage: 'backlog' },
+    { id: 'B', title: 'Moved past its first stage', stage: 'building', owner: 'human:x' },
+    { id: 'C', title: 'Still in its first stage but actively dispatched', stage: 'backlog' },
+    { id: 'D', title: 'Finished', stage: 'built', owner: 'human:x' },
+    { id: 'E', title: 'Claimed but never moved and never dispatched', stage: 'backlog', owner: 'human:x' },
+    { id: 'F', title: 'Dispatched once, then cancelled', stage: 'backlog' },
+  ];
+  const events = [
+    { item: 'C', type: 'dispatch', ts: '2024-01-01T00:00:00Z', by: 'human:x' },
+    { item: 'F', type: 'dispatch', ts: '2024-01-01T00:00:00Z', by: 'human:x' },
+    { item: 'F', type: 'cancel', ts: '2024-01-01T00:05:00Z', by: 'human:x' },
+  ];
+
+  const fromLib = inFlightTitles({ items, events, stages }).slice().sort();
+
+  const viewerInFlight = new Function('State', `
+    ${liftFunction('terminalStageIds')}
+    ${liftHelper('isTerminalItem')}
+    ${liftHelper('pipelineIndex')}
+    ${liftHelper('computeActiveDispatch')}
+    ${liftHelper('isInFlightItem')}
+    ${liftHelper('depsReadyItem')}
+    ${liftFunction('briefBuckets')}
+    return briefBuckets().inFlight.map((it) => it.title).sort();
+  `)({ items, events, stages });
+
+  assert.deepEqual(
+    viewerInFlight, fromLib,
+    'the viewer and lib/brief.js disagree about which open items are "in flight" -- claiming an item must not count on its own, and a live dispatch must, on both sides',
+  );
+  assert.deepEqual(fromLib, ['Moved past its first stage', 'Still in its first stage but actively dispatched'].sort());
 });
 
 // --------------------------------------------------------------------------

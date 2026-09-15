@@ -1343,6 +1343,51 @@
       '<details class="overview-distribution"><summary>Distribution (by stage, phase, gate, type)</summary>' + distribution + '</details>';
   }
 
+  // -- card badges (P8-16) -------------------------------------------------
+  // `ev:0` on every card and `human:rahil` repeated on a hundred of them were
+  // both true and neither was informative: a fresh reader cannot decode
+  // "ev:0" at all, and an owner that never varies says nothing by being
+  // printed a hundred times. Both stay one click away -- the panel's Fields
+  // and Evidence sections -- they just stop being printed when they add
+  // nothing.
+
+  // The owner most items already have. Only worth omitting when it really is
+  // the common case; a board split roughly evenly between owners has no
+  // "obvious" one to leave off.
+  function defaultOwner() {
+    const counts = new Map();
+    for (const it of State.items) {
+      if (!it.owner) continue;
+      counts.set(it.owner, (counts.get(it.owner) || 0) + 1);
+    }
+    let top = null; let max = 0;
+    for (const [owner, n] of counts) { if (n > max) { max = n; top = owner; } }
+    return (State.items.length && max > State.items.length / 2) ? top : null;
+  }
+
+  // Whether this item's evidence is short of what its OWN next stage
+  // requires -- read straight off the stage the server already sent, the
+  // same way the panel's stage buttons and depsSelect already read
+  // `stage.requires` directly rather than through a client-side evaluator.
+  // Unlike evaluateCumulative in lib/rules.js this checks only the next
+  // stage, not every stage up to it -- exactly the question the badge asks:
+  // "is evidence why the very next move is short."
+  function evidenceGateUnmet(it) {
+    const targetId = nextStageId(State.stages, it.stage);
+    if (!targetId) return false;
+    const target = stageList(State.stages).find((s) => s.id === targetId);
+    const requires = target && target.requires;
+    if (!requires) return false;
+    const evidence = it.evidence || [];
+    if (requires.evidence_min && evidence.length < requires.evidence_min) return true;
+    if (requires.evidence_match) {
+      let re = null;
+      try { re = new RegExp(requires.evidence_match); } catch { return true; }
+      if (!evidence.some((e) => re.test(e))) return true;
+    }
+    return false;
+  }
+
   function cardMarkup(it, moved) {
     const evCount = (it.evidence || []).length;
     const dispatched = isDispatched(it.id);
@@ -1363,12 +1408,14 @@
     // button cannot answer "is it actually doing the work?" -- a card sitting
     // in Building, owned by a human, with nothing running, used to look
     // identical to one an agent was burning money on.
+    const owner = defaultOwner();
+    const ownerIsDefault = Boolean(it.owner) && it.owner === owner;
     const runStatus = action.kind === 'running'
       ? '<span class="tag badge-running" data-run-id="' + escapeHtml(action.run.run) + '" data-run-started="' + escapeHtml(action.run.started || '') + '">' + escapeHtml(runLabel(action.run)) + '</span>'
       : action.kind === 'queued'
         ? '<span class="tag badge-queued">queued · no agent run yet</span>'
         : action.kind === 'idle'
-          ? '<span class="tag badge-idle">no agent run · ' + escapeHtml(it.owner || 'unowned') + '</span>'
+          ? '<span class="tag badge-idle">no agent run' + (it.owner && !ownerIsDefault ? ' · ' + escapeHtml(it.owner) : (it.owner ? '' : ' · unowned')) + '</span>'
           : '';
     // action.kind === 'none' is a finished item: no button, because there is
     // nothing left to start, queue or stop.
@@ -1385,9 +1432,13 @@
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
       runStatus +
-      // The idle chip already names the owner; do not say it twice.
-      (it.owner && action.kind !== 'idle' ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
-      '<span class="tag mono">ev:' + evCount + '</span>' +
+      // The idle chip already names the owner when it is worth naming; do not
+      // say it twice, and never print the owner every other card already has.
+      (it.owner && action.kind !== 'idle' && !ownerIsDefault ? '<span class="tag" title="owner">' + escapeHtml(it.owner) + '</span>' : '') +
+      // A count only means something next to the gate it is judged against --
+      // see evidenceGateUnmet(). The number is still in the panel's Evidence
+      // section regardless.
+      (evidenceGateUnmet(it) ? '<span class="tag mono" title="' + escapeHtml('The next stage requires more evidence than this item has (' + evCount + ').') + '">ev:' + evCount + '</span>' : '') +
       '</div>' + actions + '</div>';
   }
 
@@ -1598,6 +1649,50 @@
     view.addEventListener('dragend', clearDropTargets);
   }
 
+  // -- table row actions (P8-14) -------------------------------------------
+  // The most scannable view could not change anything. Claim/release and a
+  // move are added inline; a snapshot (State.live false) degrades to no
+  // actions at all, same as everywhere else on the page, and a move never
+  // offers a stage the server would refuse -- it reads the same
+  // State.transitions cache and dropAllowed() the board's drag-and-drop
+  // already uses, rather than inventing a second notion of "allowed".
+
+  function rowActionsHtml(it) {
+    if (!State.live) return '';
+    return '<span class="row-actions">' + (it.owner
+      ? '<button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button>'
+      : '<button data-claim-row="' + escapeHtml(it.id) + '" title="Claims this item for you.">Claim</button>') + '</span>';
+  }
+
+  // The options for one row's move picker. Split out of moveSelectHtml so a
+  // verdict landing later (refreshTransitions) can refresh just the options
+  // of an already-rendered <select> without losing focus or scroll.
+  function moveSelectOptionsHtml(it) {
+    const transitions = State.transitions[it.id];
+    const options = stageList(State.stages).filter((s) => s.id !== it.stage).map((s) => {
+      const allowed = dropAllowed(it.id, s.id);
+      const note = allowed ? '' : (transitions ? ' (not ready)' : ' (checking…)');
+      return '<option value="' + escapeHtml(s.id) + '"' + (allowed ? '' : ' disabled') + '>' + escapeHtml(s.label) + escapeHtml(note) + '</option>';
+    }).join('');
+    return '<option value="">move to…</option>' + options;
+  }
+
+  function moveSelectHtml(it) {
+    if (!State.live || isTerminalItem(it)) return '';
+    return '<select class="row-move" data-move-row="' + escapeHtml(it.id) + '" title="Move to another stage.">' + moveSelectOptionsHtml(it) + '</select>';
+  }
+
+  // Called once a verdict lands (refreshTransitions), so a row does not have
+  // to wait for the next poll to stop showing every target as "checking…".
+  function updateTableRowMove(id) {
+    const select = document.querySelector('select.row-move[data-move-row="' + CSS.escape(id) + '"]');
+    if (!select) return;
+    const it = State.items.find((candidate) => candidate.id === id);
+    if (!it) return;
+    select.innerHTML = moveSelectOptionsHtml(it);
+    select.value = '';
+  }
+
   function renderTable(container) {
     const items = filteredItems();
     const cols = [
@@ -1612,6 +1707,7 @@
     });
     container.innerHTML = '<table class="gw-table"><thead><tr>' +
       cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+      (State.live ? '<th>Actions</th>' : '') +
       '</tr></thead><tbody>' +
       sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
         '<td class="id">' + escapeHtml(it.id) + '</td>' +
@@ -1624,6 +1720,7 @@
         '<td>' + (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') + '</td>' +
         '<td>' + escapeHtml(it.owner) + '</td>' +
         '<td>' + escapeHtml(fmtDate(it.updated)) + '</td>' +
+        (State.live ? '<td class="row-actions-cell">' + rowActionsHtml(it) + moveSelectHtml(it) + '</td>' : '') +
         '</tr>').join('') +
       '</tbody></table>';
   }
@@ -1995,6 +2092,12 @@
     // and settings, and hiding those behind "add an item first" is how this
     // tool stayed configurable only by hand-editing JSON.
     const itemView = State.view === 'overview' || State.view === 'board' || State.view === 'table';
+    // The filter bar (phase/gate/type/stage/flag/search) and "+ new item"
+    // filter and create ITEMS -- they control nothing on Stages & rules,
+    // Settings, or Export (P8-17), so they render only on the views they
+    // actually affect. itemView is exactly that set of views, and this must
+    // run whether or not the empty-state screen below is about to take over.
+    document.getElementById('gw-filters').classList.toggle('hidden', !itemView);
     if (State.items.length === 0 && itemView) {
       container.innerHTML = '';
       empty.classList.remove('hidden');
@@ -2054,6 +2157,10 @@
       // A drag that started before the verdicts landed gets its columns marked
       // the moment they do, rather than staying uniformly invalid.
       if (State.drag && State.drag.id === id) markDropTargets();
+      // Same idea for the table's move picker (P8-14): its options are
+      // disabled until a verdict exists, so the moment one lands they are
+      // refreshed in place rather than waiting for the next 2-second poll.
+      if (State.view === 'table') updateTableRowMove(id);
     }
   }
 
@@ -2347,6 +2454,29 @@
     if (refusalTimer) { window.clearTimeout(refusalTimer); refusalTimer = null; }
   }
 
+  // A failure from an action with no panel open to report it in (a table row
+  // action, e.g.) reuses the same corner notice a rejected drag already uses,
+  // rather than writing to #panel-error and silently doing nothing because
+  // that element does not exist outside the panel.
+  function showActionNotice(title, message) {
+    const notice = document.getElementById('gw-drop-refusal');
+    if (!notice) return;
+    notice.innerHTML = '<button class="close-btn" id="drop-refusal-close" aria-label="Dismiss">&times;</button>' +
+      '<h4>' + escapeHtml(title) + '</h4><p>' + escapeHtml(message) + '</p>';
+    notice.classList.remove('hidden');
+    notice.querySelector('#drop-refusal-close').addEventListener('click', hideBoardRefusal);
+    if (refusalTimer) window.clearTimeout(refusalTimer);
+    refusalTimer = window.setTimeout(hideBoardRefusal, 8000);
+  }
+
+  // Every row-level action (table or panel) reports its failure wherever the
+  // human can actually see it: the panel if this item's panel is open, the
+  // corner notice otherwise.
+  function reportActionError(id, message) {
+    if (State.activePanelId === id) { showPanelError(message); return; }
+    showActionNotice(id + ' failed', message);
+  }
+
   function showBoardRefusal(id, to, unmet) {
     const notice = document.getElementById('gw-drop-refusal');
     if (!notice) return;
@@ -2404,7 +2534,25 @@
       await refreshNow();
     } else {
       btn.disabled = false;
-      showPanelError((result.data && result.data.error) || 'request failed');
+      reportActionError(id, (result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  // Release's counterpart (P8-14): a table row that claimed an item by
+  // mistake, or is handing it back, does not need to open the panel to say
+  // so. Mirrors onClaimClick exactly but for /release.
+  async function onReleaseClick(id, btn) {
+    const key = 'release:' + id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/release', {});
+    Inflight.delete(key);
+    if (result.ok) {
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      reportActionError(id, (result.data && result.data.error) || 'request failed');
     }
   }
 
@@ -2638,6 +2786,15 @@
       // running, rather than withdrawing a dispatch that has not started.
       const stopRunBtn = e.target.closest('[data-stoprun]');
       if (stopRunBtn) { e.stopPropagation(); onDispatchClick(stopRunBtn.dataset.stoprun, 'stop', stopRunBtn); return; }
+      // Table row actions (P8-14). Stopped from bubbling to the row-open
+      // handler below for the same reason the card actions above are.
+      const claimRowBtn = e.target.closest('[data-claim-row]');
+      if (claimRowBtn) { e.stopPropagation(); onClaimClick(claimRowBtn.dataset.claimRow, claimRowBtn); return; }
+      const releaseRowBtn = e.target.closest('[data-release-row]');
+      if (releaseRowBtn) { e.stopPropagation(); onReleaseClick(releaseRowBtn.dataset.releaseRow, releaseRowBtn); return; }
+      // A click that opens the move picker itself must not also open the
+      // item's panel underneath it.
+      if (e.target.closest('select.row-move')) return;
       const card = e.target.closest('[data-id]');
       if (card) openPanel(card.dataset.id);
     });
@@ -2648,6 +2805,28 @@
       if (State.sort.key === key) State.sort.dir = State.sort.dir === 'asc' ? 'desc' : 'asc';
       else { State.sort.key = key; State.sort.dir = 'asc'; }
       renderView();
+    });
+
+    // Warm the transitions cache the moment a move picker is touched, same as
+    // the board warms it on mousedown before a drag -- so its options have
+    // real verdicts by the time it is actually opened, not just "checking…".
+    document.getElementById('gw-view').addEventListener('mousedown', (e) => {
+      if (!State.live || !e.target.closest) return;
+      const select = e.target.closest('select.row-move');
+      if (select) refreshTransitions(select.dataset.moveRow);
+    });
+
+    // The move picker itself: only a value dropAllowed() already approved can
+    // ever be selected (every other option is disabled), so this never has to
+    // re-check before sending the move.
+    document.getElementById('gw-view').addEventListener('change', (e) => {
+      const select = e.target.closest ? e.target.closest('select.row-move') : null;
+      if (!select || !select.value) return;
+      const id = select.dataset.moveRow;
+      const to = select.value;
+      const it = State.items.find((candidate) => candidate.id === id);
+      const force = Boolean(it && isBackwardTarget(it.stage, to));
+      onMoveClick(id, to, null, { force }).then(() => { select.value = ''; });
     });
 
     // Typing into the stages or settings editors marks the form dirty, which

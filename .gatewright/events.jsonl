@@ -712,3 +712,11 @@
 {"ts":"2026-09-15T23:27:13.370Z","type":"move","item":"P8-27","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-15T23:30:58.097Z","type":"add","item":"P8-28","by":"human:rahil","parent":null}
 {"ts":"2026-09-15T23:32:42.669Z","type":"move","item":"P8-27","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","test/brief.test.js","verified: legend lines 72-75 chars, wrapped on word boundaries, counted against the budget"]}
+{"ts":"2026-09-15T23:38:09.852Z","type":"claim","item":"P8-28","by":"human:rahil"}
+{"ts":"2026-09-15T23:38:09.916Z","type":"move","item":"P8-28","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:38:09.975Z","type":"move","item":"P8-28","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T23:38:10.034Z","type":"move","item":"P8-28","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/next.js","verified: 30 lines to 7; 'next: built (blocked)' leads, json shape unchanged"]}
+{"ts":"2026-09-15T23:45:48.692Z","type":"move","item":"P8-13","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: Overview is WHAT NEXT; in-flight count matches gw brief exactly"]}
+{"ts":"2026-09-15T23:45:48.753Z","type":"move","item":"P8-14","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: row move select offers only permitted moves, 'Built (not ready)' disabled without evidence"]}
+{"ts":"2026-09-15T23:45:48.814Z","type":"move","item":"P8-16","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: owner noise gone, ev badge only when the next gate is short, tooltip explains it"]}
+{"ts":"2026-09-15T23:45:48.880Z","type":"move","item":"P8-17","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: filter bar display:none on Stages and Settings"]}
