@@ -632,3 +632,20 @@
 {"ts":"2026-09-15T12:29:09.138Z","type":"add","item":"P8-20","by":"human:rahil","parent":null}
 {"ts":"2026-09-15T12:29:09.195Z","type":"note","item":"P8-11","by":"human:rahil","note":"Verified end to end: shipped defaults present, custom entries round-trip via gw config glossary.gate.G1, gw show prints a compact meaning block, and a malformed glossary degrades to no descriptions across show, check and config --list rather than throwing."}
 {"ts":"2026-09-15T12:29:09.251Z","type":"move","item":"P8-11","from":"building","to":"built","by":"human:rahil","evidence":["lib/glossary.js","templates/config.json","test/glossary.test.js"]}
+{"ts":"2026-09-15T16:11:31.746Z","type":"note","item":"P8-11","by":"human:rahil","note":"Closed on the backend half only. The scope also said the UI should show a legend or tooltips, and the board still renders bare codes. Split rather than silently counted as done: see P8-21."}
+{"ts":"2026-09-15T16:11:31.809Z","type":"add","item":"P8-21","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T16:11:31.871Z","type":"claim","item":"P8-06","by":"human:rahil"}
+{"ts":"2026-09-15T16:11:31.931Z","type":"move","item":"P8-06","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T16:11:31.989Z","type":"move","item":"P8-06","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T16:11:32.046Z","type":"claim","item":"P8-21","by":"human:rahil"}
+{"ts":"2026-09-15T16:11:32.104Z","type":"move","item":"P8-21","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T16:11:32.162Z","type":"move","item":"P8-21","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T16:13:31.442Z","type":"add","item":"P8-22","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T16:13:31.502Z","type":"add","item":"P8-23","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T16:13:31.565Z","type":"add","item":"P8-24","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T16:13:31.624Z","type":"add","item":"P8-25","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T16:13:31.687Z","type":"add","item":"P8-26","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T16:33:22.009Z","type":"move","item":"P8-05","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: added a stage, removal of a stage holding items refused verbatim, pipeline intact"]}
+{"ts":"2026-09-15T16:33:22.071Z","type":"move","item":"P8-06","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: built a gate with checkboxes and a stage picker; CLI enforced it immediately"]}
+{"ts":"2026-09-15T16:33:22.130Z","type":"move","item":"P8-07","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: saved runner.max_concurrent=7 through HTTP, persisted with a config event"]}
+{"ts":"2026-09-15T16:33:22.194Z","type":"move","item":"P8-21","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","test/viewer.test.js"]}

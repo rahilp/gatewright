@@ -459,6 +459,85 @@
     font-size: 0.82rem;
     text-align: center;
   }
+  /* Admin editors -- stages, gates, settings. These are the controls that
+     change the RULES of the board rather than the work on it, so they are
+     only ever rendered when /api/state says admin.allowed. */
+  .admin-notice {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    border-radius: 0.4rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
+    margin: 0 0 0.8rem;
+    max-width: 52rem;
+  }
+  .admin-notice code { font-family: var(--mono); }
+  .admin-error {
+    color: var(--danger);
+    background: var(--danger-bg);
+    border: 1px solid var(--danger);
+    border-radius: 0.35rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.78rem;
+    margin: 0.4rem 0 0;
+    white-space: pre-wrap;
+    font-family: var(--mono);
+  }
+  .admin-error:empty { display: none; }
+  .stage-rule .stage-head { display: flex; align-items: baseline; gap: 0.5rem; }
+  .stage-rule .stage-head h3 { flex: 1; margin-bottom: 0; }
+  .stage-tools { display: flex; gap: 0.25rem; }
+  .stage-tools button, .admin-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text);
+    border-radius: 0.3rem;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .stage-tools button[disabled] { color: var(--text-faint); cursor: not-allowed; }
+  .stage-tools button.danger { color: var(--danger); border-color: var(--danger); }
+  details.stage-editor { margin-top: 0.5rem; }
+  details.stage-editor > summary { cursor: pointer; font-size: 0.76rem; color: var(--accent); }
+  .editor-grid { display: grid; grid-template-columns: 11rem 1fr; gap: 0.4rem 0.7rem; align-items: center; margin: 0.5rem 0; font-size: 0.8rem; }
+  .editor-grid > label { color: var(--text-dim); }
+  .editor-grid input[type="text"], .editor-grid input[type="number"], .editor-grid select {
+    background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text);
+    border-radius: 0.3rem; padding: 0.25rem 0.4rem; font-size: 0.8rem; width: 100%;
+  }
+  .editor-grid input[type="checkbox"] { justify-self: start; }
+  .editor-note { grid-column: 1 / -1; color: var(--text-faint); font-size: 0.74rem; }
+  .editor-actions { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+  .editor-actions button.primary { background: var(--accent); color: #fff; border: none; border-radius: 0.35rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; }
+  .gate-readback { background: var(--bg-sunken); border-radius: 0.35rem; padding: 0.4rem 0.6rem; margin: 0.4rem 0 0; }
+  .gate-readback h4 { margin: 0 0 0.2rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+  .gate-readback ul { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; }
+  .add-stage { background: var(--bg-raised); border: 1px dashed var(--border); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-top: 0.8rem; max-width: 52rem; }
+  .add-stage h3 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+
+  /* Settings */
+  .settings-panel { max-width: 52rem; }
+  .setting-row { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.6rem 0.85rem; margin-bottom: 0.5rem; }
+  .setting-row .setting-key { display: block; font-family: var(--mono); font-size: 0.82rem; font-weight: 600; }
+  .setting-row .setting-summary { color: var(--text-dim); font-size: 0.78rem; margin: 0.15rem 0 0.35rem; }
+  .setting-row .setting-danger { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 0.3rem; padding: 0.3rem 0.5rem; font-size: 0.76rem; margin: 0.3rem 0; }
+  .setting-row .setting-range { color: var(--text-faint); font-size: 0.74rem; margin-left: 0.4rem; }
+  .setting-row input[type="text"], .setting-row input[type="number"], .setting-row select {
+    background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text);
+    border-radius: 0.3rem; padding: 0.25rem 0.45rem; font-size: 0.8rem; min-width: 16rem;
+  }
+  .setting-row .setting-value { font-family: var(--mono); font-size: 0.8rem; }
+  .settings-save { position: sticky; bottom: 0; background: var(--bg); padding: 0.6rem 0; }
+  .settings-save button { background: var(--accent); color: #fff; border: none; border-radius: 0.4rem; padding: 0.45rem 0.9rem; font-size: 0.85rem; cursor: pointer; }
+
+  /* Glossary legend, shown wherever codes are aggregated into a chart. */
+  .glossary-legend { margin: 0.6rem 0 0; padding: 0.45rem 0 0; border-top: 1px solid var(--border); font-size: 0.74rem; color: var(--text-dim); }
+  .glossary-legend dl { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.5rem; margin: 0; }
+  .glossary-legend dt { font-family: var(--mono); color: var(--text); }
+  .glossary-legend dd { margin: 0; }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -476,6 +555,7 @@
     <button data-view="board">Board</button>
     <button data-view="table">Table</button>
     <button data-view="stages">Stages &amp; rules</button>
+    <button data-view="settings">Settings</button>
     <button data-view="export">Export</button>
   </nav>
 
@@ -537,9 +617,200 @@
 
   const STAGE_LABEL_FALLBACK = (id) => id;
 
+  // -- glossary ------------------------------------------------------------
+  // `G0`, `P1` and `defect` are the user's own vocabulary, and a list of
+  // strings cannot explain itself. config.glossary is an OPTIONAL
+  // field -> code -> sentence map, so these two helpers mirror
+  // lib/glossary.js exactly, including how it degrades: a missing block, a
+  // string where a map should be, a number where a sentence should be, all
+  // mean "no description", and a code with no entry renders exactly as it did
+  // before. test/viewer.test.js runs both implementations over the same
+  // configs and compares them, because two notions of "described" in one
+  // product is how a board starts inventing help text.
+  // The vocab fields a glossary may describe, as lib/glossary.js declares them.
+  const GLOSSARY_FIELDS = ['phase', 'priority', 'gate', 'type'];
+
+  function glossaryFor(field) {
+    const config = State.config;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return {};
+    const block = config.glossary;
+    if (!block || typeof block !== 'object' || Array.isArray(block)) return {};
+    const entries = block[field];
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return {};
+    const described = {};
+    for (const code of Object.keys(entries)) {
+      if (code === '__proto__') continue;
+      const description = entries[code];
+      if (typeof description !== 'string' || !description.trim()) continue;
+      described[code] = description.trim();
+    }
+    return described;
+  }
+
+  function describeTerm(field, value) {
+    if (typeof value !== 'string' || !value) return null;
+    const described = glossaryFor(field);
+    return Object.prototype.hasOwnProperty.call(described, value) ? described[value] : null;
+  }
+
+  // The tooltip for one rendered code, or nothing at all when the board has
+  // not been told what the code means.
+  function termTitle(field, value) {
+    const description = field ? describeTerm(field, value) : null;
+    return description ? ' title="' + escapeHtml(description) + '"' : '';
+  }
+
+  // Where codes are aggregated -- the Overview charts -- a tooltip is not
+  // enough, because the reader has no reason to hover something they do not
+  // know is explainable. Those get the descriptions on screen.
+  function glossaryLegend(field, codes) {
+    if (!field) return '';
+    const described = [];
+    for (const code of codes) {
+      const description = describeTerm(field, code);
+      if (description) described.push([code, description]);
+    }
+    if (!described.length) return '';
+    return '<div class="glossary-legend"><dl>' + described
+      .map(([code, description]) => '<dt>' + escapeHtml(code) + '</dt><dd>' + escapeHtml(description) + '</dd>')
+      .join('') + '</dl></div>';
+  }
+
+  // -- who may change the rules --------------------------------------------
+  // One function decides this for every editor on the page, so the Stages view
+  // and the Settings view cannot disagree about whether this browser is
+  // allowed to change anything. 'snapshot' is a file written by `gw open` with
+  // no server behind it; 'remote' is a live board reached from somewhere other
+  // than the machine running `gw serve`, which the server refuses for stages
+  // and settings whatever --host says.
+  function adminMode() {
+    if (!State.live) return 'snapshot';
+    return State.admin && State.admin.allowed ? 'editable' : 'remote';
+  }
+
+  const ADMIN_REMOTE_NOTICE = 'stages and settings can only be changed on the machine running gw serve';
+
+  function adminNotice(what) {
+    const mode = adminMode();
+    if (mode === 'editable') return '';
+    if (mode === 'remote') {
+      return '<div class="admin-notice">' + escapeHtml(ADMIN_REMOTE_NOTICE) + ' &mdash; this page is read-only for ' + escapeHtml(what) + '.</div>';
+    }
+    return '<div class="admin-notice">This is a static snapshot, so ' + escapeHtml(what) +
+      ' cannot be changed here. Run <code>gw serve</code> on the machine holding the board to edit them.</div>';
+  }
+
+  function isEditorView() {
+    return State.view === 'stages' || State.view === 'settings';
+  }
+
+  // -- stages.json, as a document -----------------------------------------
+  // A verbatim copy of what the server last sent, minus the English gate
+  // descriptions it adds on the way out (those are derived, they are not part
+  // of stages.json and posting them back would put them in the file). This is
+  // a structural copy and nothing more: it decides nothing about a stage, and
+  // in particular it does not decide what "terminal" means -- terminalStageIds()
+  // is still the only thing that does.
+  function stagesDoc() {
+    const doc = JSON.parse(JSON.stringify(State.stages || {}));
+    delete doc.gates;
+    if (!Array.isArray(doc.stages)) doc.stages = [];
+    if (!Array.isArray(doc.extra)) doc.extra = [];
+    return doc;
+  }
+
+  // Move one pipeline stage by `delta` positions. Returns a new array, and
+  // returns the list untouched when the move would fall off either end, so a
+  // button that cannot do anything cannot silently do something else.
+  function movePipeline(list, id, delta) {
+    const next = list.slice();
+    const from = next.findIndex((stage) => stage.id === id);
+    if (from < 0) return next;
+    const to = from + delta;
+    if (to < 0 || to >= next.length) return next;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  }
+
+  // The rule keys this form edits. These are exactly the keys lib/rules.js
+  // reads -- no more, because a key the evaluator ignores is a rule the board
+  // would claim to enforce and does not, and no fewer, because a key only
+  // reachable by hand-editing JSON is the problem this view exists to solve.
+  // test/viewer.test.js pins this list against lib/rules.js itself.
+  const RULE_KEYS = ['scope', 'owner', 'evidence_min', 'evidence_match', 'deps_at_least'];
+
+  // Build a `requires` object from what the gate form holds. `existing` is the
+  // stage's current requires, so any key this form does not know about is
+  // carried through untouched rather than being deleted by a save that never
+  // mentioned it. Returns null when nothing is required at all, which is how
+  // stages.json spells "advanced by hand".
+  function buildRequires(values, existing) {
+    const requires = {};
+    for (const key of Object.keys(existing || {})) {
+      if (RULE_KEYS.indexOf(key) === -1) requires[key] = existing[key];
+    }
+    if (values.scope) requires.scope = true;
+    if (values.owner) requires.owner = true;
+    const min = Number(values.evidence_min);
+    if (Number.isInteger(min) && min > 0) requires.evidence_min = min;
+    const match = String(values.evidence_match == null ? '' : values.evidence_match).trim();
+    if (match) requires.evidence_match = match;
+    const deps = String(values.deps_at_least == null ? '' : values.deps_at_least).trim();
+    if (deps) requires.deps_at_least = deps;
+    return Object.keys(requires).length ? requires : null;
+  }
+
+  // The one thing this form can get wrong that the server will not catch for
+  // it: stages.json has no schema for `evidence_min`, so a fractional minimum
+  // would be written through and then compared against a list length forever.
+  // buildRequires drops a value it cannot use, and a silently dropped rule is
+  // worse than a refusal, so the save path asks this first.
+  function gateInputProblem(values) {
+    const raw = String(values.evidence_min == null ? '' : values.evidence_min).trim();
+    if (raw === '') return null;
+    const min = Number(raw);
+    if (!Number.isInteger(min) || min < 0) {
+      return 'minimum evidence must be a whole number, or blank for no minimum.';
+    }
+    return null;
+  }
+
+  function showAdminError(boxId, message) {
+    const box = document.getElementById(boxId);
+    if (box) box.textContent = message;
+  }
+
+  // Every stage change is a whole-pipeline PUT, and every refusal the server
+  // returns is shown exactly as it was written. The server's wording names the
+  // stage, the count and the fix ("stage backlog still holds 2 items; move them
+  // elsewhere before removing that stage."); replacing it with "failed" would
+  // throw away the only part a human can act on.
+  async function saveStages(doc, boxId) {
+    if (Inflight.has('stages')) return { ok: false, skipped: true };
+    Inflight.add('stages');
+    showAdminError(boxId, '');
+    const result = await apiWrite('/api/stages', doc);
+    Inflight.delete('stages');
+    if (result.ok) {
+      State.formDirty = false;
+      await refreshNow();
+      return result;
+    }
+    showAdminError(boxId, (result.data && result.data.error) || 'request failed');
+    return result;
+  }
+
   const State = {
     items: [], events: [], stages: { stages: [], extra: [] }, config: {}, sync: { status: 'off' }, generatedAt: null, live: false,
     runs: [], scheduler: { status: 'disabled' },
+    // Whether this request may change the RULES of the board (stages, gates,
+    // settings) as opposed to the work on it. /api/state answers it per
+    // request; a snapshot has no server to ask, so the default is "no".
+    admin: { allowed: false },
+    // Set while someone is typing in the stages or settings editors, so the
+    // two-second poll cannot wipe a half-filled form out from under them.
+    formDirty: false,
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     runLogs: {}, runLogLoading: {}, runLogErrors: {},
@@ -644,6 +915,7 @@
             stages: data.stages || { stages: [], extra: [] }, config: data.config || {},
             sync: data.sync || { status: 'off' },
             runs: data.runs || [], scheduler: data.scheduler || { status: 'disabled' },
+            admin: data.admin || { allowed: false },
             generatedAt: data.generatedAt || new Date().toISOString(), live: true,
           };
         }
@@ -654,6 +926,7 @@
       items: items || [], events: events || [],
       stages: stages || { stages: [], extra: [] }, config: config || {},
       sync: { status: 'off' },
+      admin: { allowed: false },
       generatedAt: (config && config.generatedAt) || null, live: false,
     };
   }
@@ -707,20 +980,24 @@
 
   function populateFilterOptions() {
     const vocab = (State.config && State.config.vocab) || {};
-    function fill(select, values, current) {
+    function fill(select, values, current, field) {
       const keep = select.querySelector('option[value=""]');
       select.innerHTML = '';
       select.appendChild(keep);
       for (const v of values) {
         const opt = document.createElement('option');
         opt.value = v; opt.textContent = v;
+        // The filter bar is where a new reader first meets `G0` or `defect`.
+        // An undescribed code gets no title and renders exactly as before.
+        const description = field ? describeTerm(field, v) : null;
+        if (description) opt.title = description;
         if (v === current) opt.selected = true;
         select.appendChild(opt);
       }
     }
-    fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase);
-    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate);
-    fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type);
+    fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase, 'phase');
+    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate, 'gate');
+    fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type, 'type');
     fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
     fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
   }
@@ -834,21 +1111,25 @@
       }
       return [...map.entries()].sort((a, b) => b[1] - a[1]);
     }
-    function card(title, rows, labelFor) {
+    function card(title, rows, labelFor, field) {
       const max = Math.max(1, ...rows.map((r) => r[1]));
       const body = rows.map(([k, n]) =>
-        '<div class="count-row"><span>' + escapeHtml(labelFor ? labelFor(k) : k) + '</span>' +
+        '<div class="count-row"><span' + termTitle(field, k) + '>' + escapeHtml(labelFor ? labelFor(k) : k) + '</span>' +
         '<span class="bar"><span style="width:' + Math.round((n / max) * 100) + '%"></span></span>' +
         '<span>' + n + '</span></div>'
       ).join('');
-      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') + '</div>';
+      // These charts are where codes are aggregated with nothing else on the
+      // row to explain them, so the descriptions are on screen rather than
+      // only in a tooltip nobody knows to hover.
+      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') +
+        glossaryLegend(field, rows.map((r) => r[0])) + '</div>';
     }
     const byStageOrdered = stageList(State.stages).map((s) => [s.id, State.items.filter((i) => i.stage === s.id).length]).filter((r) => r[1] > 0);
     container.innerHTML = '<div class="overview-grid">' +
       card('By stage', byStageOrdered, stageLabel) +
-      card('By phase', counts('phase')) +
-      card('By gate', counts('gate')) +
-      card('By type', counts('type')) +
+      card('By phase', counts('phase'), null, 'phase') +
+      card('By gate', counts('gate'), null, 'gate') +
+      card('By type', counts('type'), null, 'type') +
       '</div>';
   }
 
@@ -889,7 +1170,7 @@
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
-      '<span class="tag">' + escapeHtml(it.type || '?') + '</span>' +
+      '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type || '?') + '</span>' +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
@@ -1068,10 +1349,10 @@
       sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
         '<td class="id">' + escapeHtml(it.id) + '</td>' +
         '<td>' + escapeHtml(it.title) + '</td>' +
-        '<td>' + escapeHtml(it.type) + '</td>' +
-        '<td>' + escapeHtml(it.phase) + '</td>' +
-        '<td>' + escapeHtml(it.gate) + '</td>' +
-        '<td>' + escapeHtml(it.priority) + '</td>' +
+        '<td' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</td>' +
+        '<td' + termTitle('phase', it.phase) + '>' + escapeHtml(it.phase) + '</td>' +
+        '<td' + termTitle('gate', it.gate) + '>' + escapeHtml(it.gate) + '</td>' +
+        '<td' + termTitle('priority', it.priority) + '>' + escapeHtml(it.priority) + '</td>' +
         '<td>' + escapeHtml(stageLabel(it.stage)) + '</td>' +
         '<td>' + (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') + '</td>' +
         '<td>' + escapeHtml(it.owner) + '</td>' +
@@ -1080,9 +1361,69 @@
       '</tbody></table>';
   }
 
+  const STAGE_ROLES = ['initial', 'done', 'dropped', 'paused'];
+
+  function roleSelect(id, current) {
+    return '<select id="' + id + '" data-editor="role">' +
+      '<option value="">(no role)</option>' +
+      STAGE_ROLES.map((role) => '<option value="' + role + '"' + (role === current ? ' selected' : '') + '>' + role + '</option>').join('') +
+      '</select>';
+  }
+
+  function depsSelect(id, current) {
+    const pipeline = (State.stages.stages || []);
+    const known = pipeline.some((stage) => stage.id === current);
+    return '<select id="' + id + '" data-editor="deps_at_least">' +
+      '<option value="">(no dependency rule)</option>' +
+      pipeline.map((stage) => '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === current ? ' selected' : '') + '>' +
+        escapeHtml(stage.label || stage.id) + ' (' + escapeHtml(stage.id) + ')</option>').join('') +
+      // A rule already pointing at something that is not in the pipeline must
+      // stay visible rather than being silently reset to "none" by opening a
+      // form -- the server refuses that value and the human needs to see why.
+      (current && !known ? '<option value="' + escapeHtml(current) + '" selected>' + escapeHtml(current) + ' (not in the pipeline)</option>' : '') +
+      '</select>';
+  }
+
+  // The gate builder for one stage. Only the keys lib/rules.js actually reads,
+  // and deps_at_least is a picker of real stages rather than a text box that
+  // lets someone type a stage that does not exist.
+  // `n` is the stage's position in the rendered list, used only to mint the
+  // element ids that tie each label to its control. Stage ids are the user's
+  // own strings and may contain anything; a position cannot.
+  function gateEditor(stage, n) {
+    const requires = stage.requires || {};
+    const unknown = Object.keys(requires).filter((key) => RULE_KEYS.indexOf(key) === -1);
+    const id = (key) => 'ed-' + n + '-' + key;
+    return '<div class="editor-grid">' +
+      '<label for="' + id('label') + '">Label</label>' +
+      '<input type="text" id="' + id('label') + '" data-editor="label" value="' + escapeHtml(stage.label || '') + '">' +
+      '<label for="' + id('role') + '">Role</label>' + roleSelect(id('role'), stage.role || '') +
+      '<label for="' + id('scope') + '">Scope filled in</label>' +
+      '<input type="checkbox" id="' + id('scope') + '" data-editor="scope"' + (requires.scope ? ' checked' : '') + '>' +
+      '<label for="' + id('owner') + '">Claimed by someone</label>' +
+      '<input type="checkbox" id="' + id('owner') + '" data-editor="owner"' + (requires.owner ? ' checked' : '') + '>' +
+      '<label for="' + id('evidence_min') + '">Minimum evidence</label>' +
+      '<input type="number" min="0" step="1" id="' + id('evidence_min') + '" data-editor="evidence_min" value="' +
+        escapeHtml(requires.evidence_min == null ? '' : requires.evidence_min) + '" placeholder="0 = no minimum">' +
+      '<label for="' + id('evidence_match') + '">Evidence pattern</label>' +
+      '<input type="text" id="' + id('evidence_match') + '" data-editor="evidence_match" value="' + escapeHtml(requires.evidence_match == null ? '' : requires.evidence_match) +
+        '" placeholder="regular expression, e.g. ^https://github.com/.+/pull/\\d+">' +
+      '<label for="' + id('deps_at_least') + '">Dependencies at least</label>' + depsSelect(id('deps_at_least'), requires.deps_at_least || '') +
+      (unknown.length
+        ? '<div class="editor-note">This gate also carries ' + escapeHtml(unknown.join(', ')) +
+          ', which this form does not edit. Saving keeps ' + (unknown.length === 1 ? 'it' : 'them') + ' exactly as ' + (unknown.length === 1 ? 'it is' : 'they are') + '.</div>'
+        : '') +
+      '</div>' +
+      '<div class="editor-actions">' +
+      '<button class="primary" data-stage-save="' + escapeHtml(stage.id) + '">Save stage</button>' +
+      '</div>';
+  }
+
   function renderStages(container) {
     const cols = stageList(State.stages);
-    container.innerHTML = cols.map((s) => {
+    const pipeline = State.stages.stages || [];
+    const editable = adminMode() === 'editable';
+    const body = cols.map((s, n) => {
       const req = s.requires ? JSON.stringify(s.requires, null, 2) : '(no machine rule — advanced manually)';
       const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', terminalStageIds().has(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
       const gate = gateFor(s.id);
@@ -1091,13 +1432,277 @@
         // Older snapshots were written before the descriptions were carried in
         // the payload. Say so rather than inventing sentences for them.
         : '<p class="gate-missing">This board was written without rule descriptions — run <code>gw open</code> again to refresh it. The machine rule below is all it carries.</p>';
-      return '<div class="stage-rule"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' +
+      const index = pipeline.findIndex((stage) => stage.id === s.id);
+      const inPipeline = index >= 0;
+      const tools = editable
+        ? '<span class="stage-tools">' +
+          (inPipeline
+            ? '<button data-stage-up="' + escapeHtml(s.id) + '"' + (index === 0 ? ' disabled' : '') + ' title="Move this stage earlier in the pipeline.">&uarr;</button>' +
+              '<button data-stage-down="' + escapeHtml(s.id) + '"' + (index === pipeline.length - 1 ? ' disabled' : '') + ' title="Move this stage later in the pipeline.">&darr;</button>'
+            : '<span class="meta">off-pipeline</span>') +
+          '<button class="danger" data-stage-remove="' + escapeHtml(s.id) + '" title="Remove this stage from the pipeline.">remove</button>' +
+          '</span>'
+        : '';
+      const editor = editable
+        ? '<details class="stage-editor"><summary>edit this stage and its gate</summary>' +
+          '<div data-stage-editor="' + escapeHtml(s.id) + '">' + gateEditor(s, n) +
+          // The read-back is the server's own wording, re-fetched with the
+          // next poll after a save. Never a locally composed preview: a second
+          // copy of that wording would drift, and the board would describe a
+          // rule it does not enforce.
+          (gate ? '<div class="gate-readback"><h4>Reads back as</h4>' + sentenceList(gate.sentences) + '</div>' : '') +
+          '<div class="admin-error" id="stage-error-' + escapeHtml(s.id) + '"></div>' +
+          '</div></details>'
+        : '';
+      return '<div class="stage-rule"><div class="stage-head"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' + tools + '</div>' +
+        // Reordering and removing are driven from the header, which stays
+        // visible whether or not the editor below is open -- so their
+        // refusals need a box that is visible there too. A refusal written
+        // inside a collapsed <details> is a refusal nobody reads.
+        (editable ? '<div class="admin-error" id="stage-row-error-' + escapeHtml(s.id) + '"></div>' : '') +
         (s.exit ? '<p class="exit">' + escapeHtml(s.exit) + '</p>' : '') +
         english +
         (flags ? '<div class="flags">' + escapeHtml(flags) + '</div>' : '') +
         machineRule('<pre class="requires">' + escapeHtml(req) + '</pre>') +
+        editor +
         '</div>';
     }).join('');
+
+    const adder = editable
+      ? '<div class="add-stage"><h3>Add a stage</h3>' +
+        '<div class="editor-grid">' +
+        '<label for="new-stage-id">Stage id</label><input type="text" id="new-stage-id" placeholder="lowercase id, e.g. reviewing">' +
+        '<label for="new-stage-label">Label</label><input type="text" id="new-stage-label" placeholder="Reviewing">' +
+        '<label for="new-stage-where">Where</label><select id="new-stage-where">' +
+        '<option value="pipeline">in the pipeline (work flows through it)</option>' +
+        '<option value="extra">off-pipeline (a side stage such as dropped)</option>' +
+        '</select>' +
+        '</div><div class="editor-actions"><button class="primary" id="add-stage-btn">Add stage</button></div>' +
+        '<div class="admin-error" id="add-stage-error"></div></div>'
+      : '';
+
+    container.innerHTML = adminNotice('stages and gates') + body + adder;
+    State.formDirty = false;
+    if (editable) wireStagesEditors(container);
+  }
+
+  function editorValues(scope) {
+    const values = {};
+    scope.querySelectorAll('[data-editor]').forEach((el) => {
+      values[el.dataset.editor] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    return values;
+  }
+
+  function wireStagesEditors(container) {
+    container.querySelectorAll('[data-stage-up], [data-stage-down]').forEach((btn) => {
+      const up = btn.hasAttribute('data-stage-up');
+      const id = up ? btn.dataset.stageUp : btn.dataset.stageDown;
+      btn.addEventListener('click', () => {
+        const doc = stagesDoc();
+        doc.stages = movePipeline(doc.stages, id, up ? -1 : 1);
+        saveStages(doc, 'stage-row-error-' + id);
+      });
+    });
+
+    container.querySelectorAll('[data-stage-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.stageRemove;
+        const doc = stagesDoc();
+        doc.stages = doc.stages.filter((stage) => stage.id !== id);
+        doc.extra = doc.extra.filter((stage) => stage.id !== id);
+        // A stage removed from the pipeline cannot stay in `terminal`: that
+        // list may only name stages that exist, and leaving a dangling entry
+        // would turn a clear refusal about items into a confusing one.
+        if (Array.isArray(doc.terminal)) doc.terminal = doc.terminal.filter((entry) => entry !== id);
+        saveStages(doc, 'stage-row-error-' + id);
+      });
+    });
+
+    container.querySelectorAll('[data-stage-save]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.stageSave;
+        const scope = container.querySelector('[data-stage-editor="' + CSS.escape(id) + '"]');
+        if (!scope) return;
+        const values = editorValues(scope);
+        const problem = gateInputProblem(values);
+        if (problem) { showAdminError('stage-error-' + id, problem); return; }
+        const doc = stagesDoc();
+        const apply = (list) => list.map((stage) => {
+          if (stage.id !== id) return stage;
+          const next = { ...stage };
+          next.label = String(values.label || '').trim() || stage.label || stage.id;
+          if (values.role) next.role = values.role; else delete next.role;
+          const requires = buildRequires(values, stage.requires);
+          if (requires) next.requires = requires; else delete next.requires;
+          return next;
+        });
+        doc.stages = apply(doc.stages);
+        doc.extra = apply(doc.extra);
+        saveStages(doc, 'stage-error-' + id);
+      });
+    });
+
+    const addBtn = container.querySelector('#add-stage-btn');
+    if (addBtn) addBtn.addEventListener('click', () => {
+      const id = String(container.querySelector('#new-stage-id').value || '').trim();
+      const label = String(container.querySelector('#new-stage-label').value || '').trim();
+      const where = container.querySelector('#new-stage-where').value;
+      if (!id) { showAdminError('add-stage-error', 'give the new stage an id.'); return; }
+      const doc = stagesDoc();
+      const stage = { id, label: label || id };
+      if (where === 'extra') doc.extra = doc.extra.concat([stage]);
+      else doc.stages = doc.stages.concat([stage]);
+      saveStages(doc, 'add-stage-error');
+    });
+  }
+
+  // -- settings ------------------------------------------------------------
+  // A declarative mirror of SETTINGS in lib/settings.js. The page has no
+  // module loader and no build step, so it cannot import that file; what it
+  // can do is refuse to drift from it. The form below is generated from this
+  // table and knows nothing about any individual key, and
+  // test/viewer.test.js imports the real SETTINGS and asserts this table is
+  // equal to it field for field -- so adding a setting to the CLI and not to
+  // the board fails CI rather than quietly shipping a board that cannot set
+  // it. `choicesFrom` is the one thing that cannot be copied literally (it is
+  // a function there); it is written here as the config path whose keys are
+  // the choices, and the test evaluates both and compares the results.
+  const SETTINGS = [
+    {
+      key: 'runner.enabled',
+      type: 'boolean',
+      summary: 'Let the scheduler start agent runs. Off means Play only queues.',
+      danger: 'This is the switch that lets gw spawn processes on this machine.',
+    },
+    { key: 'runner.provider', type: 'string', summary: 'Which entry in runner.providers to invoke.', choicesFrom: 'runner.providers' },
+    { key: 'runner.max_concurrent', type: 'integer', min: 1, max: 64, summary: 'How many runs may be live at once.' },
+    { key: 'runner.tick_s', type: 'integer', min: 1, max: 3600, summary: 'Seconds between scheduler ticks.' },
+    { key: 'runner.run_timeout_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes before a run is stopped as overrunning.' },
+    { key: 'runner.stop_timeout_s', type: 'integer', min: 0, max: 600, summary: 'Grace period between a stop request and force.' },
+    { key: 'runner.paused', type: 'boolean', summary: 'Global pause. Keeps config intact while stopping new runs.' },
+    { key: 'policy.auto_dispatch_children', type: 'boolean', summary: 'Whether agent-created children dispatch without a human.', danger: 'Leaving this off is what stops a run filing work that starts more runs.' },
+    { key: 'policy.max_children_per_item', type: 'integer', min: 0, max: 100, summary: 'Cap on children one item may create.' },
+    { key: 'policy.max_depth', type: 'integer', min: 1, max: 10, summary: 'How deep agent-created work may nest.' },
+    { key: 'id_scheme', type: 'string', choices: ['phase-seq', 'seq'], summary: 'phase-seq gives P1-01; seq gives T-0001.' },
+    { key: 'memory.enabled', type: 'boolean', summary: 'Recall prior context into prompts and remember completed work.' },
+    { key: 'vocab.phase', type: 'list', summary: 'Allowed --phase values, in order. Comma-separated.' },
+    { key: 'vocab.priority', type: 'list', summary: 'Allowed --priority values, most urgent first.' },
+    { key: 'vocab.gate', type: 'list', summary: 'Allowed --gate values.' },
+    { key: 'vocab.type', type: 'list', summary: 'Allowed --type values.' },
+  ];
+
+  function configValue(key) {
+    return String(key).split('.').reduce((node, part) => (node == null ? undefined : node[part]), State.config);
+  }
+
+  // The value as the form holds it: a string for everything except booleans,
+  // so "changed" is a string comparison and an untouched field is never sent.
+  function settingFormValue(setting) {
+    const value = configValue(setting.key);
+    if (setting.type === 'boolean') return Boolean(value);
+    if (setting.type === 'list') return Array.isArray(value) ? value.join(', ') : (value == null ? '' : String(value));
+    return value == null ? '' : String(value);
+  }
+
+  function settingChoices(setting) {
+    if (setting.choices) return setting.choices.slice();
+    if (!setting.choicesFrom) return null;
+    const node = String(setting.choicesFrom).split('.').reduce((n, part) => (n == null ? undefined : n[part]), State.config);
+    return node && typeof node === 'object' && !Array.isArray(node) ? Object.keys(node) : [];
+  }
+
+  // Setting keys are declared in this file, not typed by anyone, so they are
+  // safe to use directly as element ids -- which is what lets the key itself
+  // be the control's label.
+  function settingControlId(setting) {
+    return 'set-' + setting.key;
+  }
+
+  function settingControl(setting, editable) {
+    const value = settingFormValue(setting);
+    if (!editable) {
+      const shown = setting.type === 'boolean' ? String(value) : (value === '' ? '(unset)' : value);
+      return '<div class="setting-value">' + escapeHtml(shown) + '</div>';
+    }
+    const attr = ' id="' + settingControlId(setting) + '" data-setting="' + escapeHtml(setting.key) + '"';
+    if (setting.type === 'boolean') {
+      return '<label><input type="checkbox"' + attr + (value ? ' checked' : '') + '> enabled</label>';
+    }
+    if (setting.type === 'integer') {
+      return '<input type="number" step="1"' + attr +
+        (setting.min === undefined ? '' : ' min="' + setting.min + '"') +
+        (setting.max === undefined ? '' : ' max="' + setting.max + '"') +
+        ' value="' + escapeHtml(value) + '">' +
+        (setting.min === undefined && setting.max === undefined ? ''
+          : '<span class="setting-range">' + escapeHtml(setting.min + ' to ' + setting.max) + '</span>');
+    }
+    const choices = settingChoices(setting);
+    if (choices) {
+      const known = choices.indexOf(value) !== -1;
+      return '<select' + attr + '>' +
+        (known ? '' : '<option value="' + escapeHtml(value) + '" selected>' + escapeHtml(value === '' ? '(unset)' : value) + '</option>') +
+        choices.map((choice) => '<option value="' + escapeHtml(choice) + '"' + (choice === value ? ' selected' : '') + '>' + escapeHtml(choice) + '</option>').join('') +
+        '</select>' +
+        (choices.length ? '' : '<span class="setting-range">nothing to choose from yet — runner.providers is empty</span>');
+    }
+    return '<input type="text"' + attr + ' value="' + escapeHtml(value) + '"' +
+      (setting.type === 'list' ? ' placeholder="comma-separated"' : '') + '>';
+  }
+
+  function renderSettings(container) {
+    const editable = adminMode() === 'editable';
+    const rows = SETTINGS.map((setting) =>
+      '<div class="setting-row">' +
+      // A boolean's control carries its own inline label, so only the other
+      // types point their key at the input.
+      (editable && setting.type !== 'boolean'
+        ? '<label class="setting-key" for="' + settingControlId(setting) + '">' + escapeHtml(setting.key) + '</label>'
+        : '<div class="setting-key">' + escapeHtml(setting.key) + '</div>') +
+      '<div class="setting-summary">' + escapeHtml(setting.summary) + '</div>' +
+      (setting.danger ? '<div class="setting-danger">' + escapeHtml(setting.danger) + '</div>' : '') +
+      settingControl(setting, editable) +
+      '</div>').join('');
+    container.innerHTML = '<div class="settings-panel">' + adminNotice('settings') + rows +
+      (editable
+        ? '<div class="settings-save"><button id="settings-save-btn">Save settings</button></div>' +
+          '<div class="admin-error" id="settings-error"></div>'
+        : '') +
+      '</div>';
+    State.formDirty = false;
+    const saveBtn = container.querySelector('#settings-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', () => onSaveSettings(container, saveBtn));
+  }
+
+  // Only changed keys are sent. /api/config validates through lib/settings.js
+  // exactly as `gw config` does, so the refusal it returns is the wording the
+  // CLI would have used and is shown unaltered.
+  async function onSaveSettings(container, btn) {
+    const settings = {};
+    for (const setting of SETTINGS) {
+      const el = container.querySelector('[data-setting="' + CSS.escape(setting.key) + '"]');
+      if (!el) continue;
+      const current = settingFormValue(setting);
+      if (setting.type === 'boolean') {
+        if (el.checked !== current) settings[setting.key] = el.checked;
+      } else if (el.value !== current) {
+        settings[setting.key] = el.value;
+      }
+    }
+    if (!Object.keys(settings).length) { showAdminError('settings-error', 'nothing changed.'); return; }
+    if (Inflight.has('settings')) return;
+    Inflight.add('settings');
+    btn.disabled = true;
+    showAdminError('settings-error', '');
+    const result = await apiWrite('/api/config', { settings });
+    Inflight.delete('settings');
+    btn.disabled = false;
+    if (result.ok) {
+      State.formDirty = false;
+      await refreshNow();
+    } else {
+      showAdminError('settings-error', (result.data && result.data.error) || 'request failed');
+    }
   }
 
   function renderExport(container) {
@@ -1117,7 +1722,13 @@
   function renderView() {
     const container = document.getElementById('gw-view');
     const empty = document.getElementById('gw-empty');
-    if (State.items.length === 0) {
+    // "No items yet" answers the views that are about items. It must not
+    // answer the views that are about the board's own configuration: a board
+    // with nothing on it is exactly when someone needs to set up their stages
+    // and settings, and hiding those behind "add an item first" is how this
+    // tool stayed configurable only by hand-editing JSON.
+    const itemView = State.view === 'overview' || State.view === 'board' || State.view === 'table';
+    if (State.items.length === 0 && itemView) {
       container.innerHTML = '';
       empty.classList.remove('hidden');
       return;
@@ -1127,6 +1738,7 @@
     else if (State.view === 'board') renderBoard(container);
     else if (State.view === 'table') renderTable(container);
     else if (State.view === 'stages') renderStages(container);
+    else if (State.view === 'settings') renderSettings(container);
     else if (State.view === 'export') renderExport(container);
   }
 
@@ -1310,13 +1922,16 @@
     const fieldRows = editableFields.map((f) => {
       const raw = it[f];
       const value = Array.isArray(raw) ? raw.join(', ') : (raw == null ? '' : raw);
+      // phase, priority, gate and type hold codes; the glossary says what this
+      // item's code means, right where the item shows it.
+      const glossed = termTitle(GLOSSARY_FIELDS.indexOf(f) === -1 ? null : f, value);
       if (!State.live) {
-        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '">' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
+        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '"' + glossed + '>' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
       }
       const lockedNote = linked && ghOwned.has(f)
         ? ' <span class="meta">(GitHub-owned on this linked item &mdash; edits are refused; edit the issue instead)</span>'
         : '';
-      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + '>' + lockedNote +
+      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
         '<div class="field-refusal" id="field-fail-' + f + '"></div></dd>';
     }).join('');
     const saveBtn = State.live ? '<button id="save-fields-btn">save fields</button>' : '';
@@ -1637,13 +2252,23 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json(); const previous = State.items;
       const priorDispatch = new Map(previous.map((item) => [item.id, isDispatched(item.id)]));
+      // What the open editor is showing, captured before the new payload
+      // lands: an editor view is only redrawn when the thing it edits has
+      // actually changed, because redrawing it every two seconds would throw
+      // away whatever the human had typed into it.
+      const beforeEditable = JSON.stringify([State.stages, State.config, State.admin]);
       State.items = data.items || []; mergeEvents(data.events || []);
       State.stages = data.stages || State.stages; State.config = data.config || State.config; State.sync = data.sync || State.sync;
       State.runs = data.runs || []; State.scheduler = data.scheduler || State.scheduler;
+      State.admin = data.admin || { allowed: false };
       State.generatedAt = data.generatedAt || new Date().toISOString();
       State.lastLiveUpdate = Date.now(); State.liveError = null; State.pollingDelay = 2000;
       populateFilterOptions(); renderHeader();
-      if (State.view === 'board') updateBoardInPlace(previous, priorDispatch); else renderView();
+      if (State.view === 'board') updateBoardInPlace(previous, priorDispatch);
+      else if (isEditorView()) {
+        const changed = beforeEditable !== JSON.stringify([State.stages, State.config, State.admin]);
+        if (changed && !State.formDirty) renderView();
+      } else renderView();
       if (State.activePanelId) openPanel(State.activePanelId);
     } catch (error) {
       State.liveError = error.message || 'server unavailable'; State.pollingDelay = Math.min(State.pollingDelay * 2, 30000); renderHeader();
@@ -1692,6 +2317,15 @@
       if (State.sort.key === key) State.sort.dir = State.sort.dir === 'asc' ? 'desc' : 'asc';
       else { State.sort.key = key; State.sort.dir = 'asc'; }
       renderView();
+    });
+
+    // Typing into the stages or settings editors marks the form dirty, which
+    // is what stops the poll loop redrawing the view and throwing the input
+    // away mid-edit. Cleared whenever one of those views is (re)rendered.
+    ['input', 'change'].forEach((type) => {
+      document.getElementById('gw-view').addEventListener(type, () => {
+        if (isEditorView()) State.formDirty = true;
+      });
     });
 
     wireDragAndDrop(document.getElementById('gw-view'));
