@@ -205,9 +205,9 @@ const glossaryConfig = {
 test('P8-26: a legend line explains only the phase/gate codes actually shown', () => {
   const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
   const out = renderBrief({ items: [next], events: [], stages, config: glossaryConfig });
-  // The legend may wrap, so check for the opening and closing patterns
-  assert.match(out, /^Legend: P1 = The first working version\./m);
-  assert.match(out, /No gate: ship when the evidence rule is met\.$/m);
+  // The legend contains the phase and gate descriptions (may wrap across lines)
+  // Use a regex that allows for line breaks within the legend
+  assert.match(out, /Legend: P1 = The first working version[\s\S]*G0 = No gate: ship when the[\s\S]*evidence rule is met\./);
 });
 
 test('P8-26: no glossary configured means no legend line at all', () => {

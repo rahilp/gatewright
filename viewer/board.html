@@ -165,6 +165,19 @@
   .count-row:last-child { border-bottom: none; }
   .count-row .bar { flex: 1; margin: 0 0.6rem; background: var(--bg-sunken); border-radius: 0.2rem; overflow: hidden; height: 0.5rem; align-self: center; }
   .count-row .bar span { display: block; height: 100%; background: var(--accent); }
+  /* Overview (P8-13): the headline answers "what should I do next", the four
+     census charts move behind a <details> toggle below it. Never deleted --
+     see renderOverview -- just no longer the first thing on screen. */
+  .overview-section { margin-bottom: 1.1rem; }
+  .overview-heading { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 0.6rem; }
+  .overview-distribution { margin-top: 0.4rem; }
+  .overview-distribution > summary { cursor: pointer; font-size: 0.8rem; color: var(--accent); padding: 0.3rem 0; }
+  .overview-distribution .overview-grid { margin-top: 0.7rem; }
+  .brief-row { cursor: pointer; gap: 0.6rem; }
+  .brief-row:hover { color: var(--accent); }
+  .brief-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brief-row span:last-child { color: var(--text-faint); white-space: nowrap; }
+  .brief-card .meta { color: var(--text-dim); font-size: 0.82rem; }
 
   /* Board */
   #board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
@@ -275,6 +288,20 @@
   table.gw-table th.sorted { color: var(--text); }
   table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
   table.gw-table td.id { white-space: nowrap; }
+  /* Table row actions (P8-14): claim/release and a move picker, so a row can
+     change something without opening the item's panel. */
+  table.gw-table td.row-actions-cell { white-space: nowrap; }
+  .row-actions { display: inline-flex; gap: 0.3rem; margin-right: 0.35rem; }
+  .row-actions button, select.row-move {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text);
+    border-radius: 0.3rem;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  select.row-move { max-width: 10rem; }
 
   /* Stages & rules */
   .stage-rule {
@@ -1197,7 +1224,91 @@
     return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm';
   }
 
+  // -- Overview as "what should I do next" (P8-13) ------------------------
+  // The Overview tab used to be four census charts (by stage/phase/gate/type)
+  // and nothing else -- a distribution, not an answer to the question a human
+  // actually opens the board with. `gw brief` already answers that question
+  // over the same data, so this mirrors its definitions instead of inventing
+  // a second set. In particular "in flight" is copied from lib/brief.js's
+  // computeActive/isInFlight line for line: real progress (the item moved
+  // past the stage it was created in) or a live dispatch (a `dispatch` event
+  // with no matching run_ended/cancel yet). Claiming an item alone does not
+  // qualify -- lib/brief.js has already had two bugs from a second notion of
+  // "terminal"; this file is not going to add a second notion of "in flight"
+  // next to it. test/viewer-brief-parity.test.js runs both implementations
+  // over the same fixtures and compares them.
+
+  // Mirrors computeActive in lib/brief.js exactly.
+  function computeActiveDispatch(events) {
+    const active = new Set();
+    for (const event of events) {
+      if (event.type === 'dispatch') active.add(event.item);
+      if (event.type === 'run_ended' || event.type === 'cancel') active.delete(event.item);
+    }
+    return active;
+  }
+
+  // Mirrors isInFlight in lib/brief.js, using this file's own pipelineIndex
+  // in place of lib/rules.js's stageIndex -- same lookup, same result, no
+  // module loader to share the original with (see pipelineIndex's own
+  // comment for the precedent).
+  function isInFlightItem(it, active) {
+    return pipelineIndex(it.stage) > 0 || active.has(it.id);
+  }
+
+  // Mirrors depsReady in lib/brief.js exactly.
+  function depsReadyItem(it) {
+    const target = (State.stages.stages || [])[pipelineIndex(it.stage) + 1];
+    const boundary = (target && target.requires && target.requires.deps_at_least) || ((it.deps || []).length ? it.stage : null);
+    return (it.deps || []).every((id) => {
+      const dep = State.items.find((candidate) => candidate.id === id);
+      return dep && (!boundary || pipelineIndex(dep.stage) >= pipelineIndex(boundary));
+    });
+  }
+
+  // The same open/blocked/triage/in-flight/next split renderBrief computes,
+  // minus the "assigned to me" personalization gw brief applies for a CLI
+  // user (the board has no login, so a live dispatch belongs to "in flight"
+  // whether or not it happens to be claimed) -- everything else is identical.
+  function briefBuckets() {
+    const active = computeActiveDispatch(State.events);
+    const open = State.items.filter((it) => !isTerminalItem(it));
+    const blocked = open.filter((it) => it.flag === 'blocked' || !depsReadyItem(it));
+    const triage = open.filter((it) => it.flag === 'needs-triage');
+    const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && it.flag !== 'needs-triage' && isInFlightItem(it, active));
+    const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 &&
+      !it.owner && pipelineIndex(it.stage) <= 0 && depsReadyItem(it));
+    return { open, blocked, triage, inFlight, next };
+  }
+
+  const BRIEF_SECTION_LIMIT = 8;
+
+  // One card in the "what next" row. Rows carry data-id, so the existing
+  // delegated click handler on #gw-view opens the item panel exactly as a
+  // board card or table row does -- no separate wiring needed.
+  function briefSectionHtml(title, items, note, emptyText) {
+    if (!items.length) {
+      return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + '</h2><p class="meta">' + escapeHtml(emptyText) + '</p></div>';
+    }
+    const shown = items.slice(0, BRIEF_SECTION_LIMIT);
+    const rows = shown.map((it) =>
+      '<div class="count-row brief-row" data-id="' + escapeHtml(it.id) + '">' +
+      '<span>' + escapeHtml(it.id) + ' · ' + escapeHtml(it.title) + '</span>' +
+      '<span>' + escapeHtml(note(it)) + '</span></div>'
+    ).join('');
+    const more = items.length > shown.length ? '<p class="meta">+' + (items.length - shown.length) + ' more</p>' : '';
+    return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + ' (' + items.length + ')</h2>' + rows + more + '</div>';
+  }
+
   function renderOverview(container) {
+    const { blocked, triage, inFlight, next } = briefBuckets();
+    const whatNext = '<div class="overview-grid">' +
+      briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
+      briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
+      briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
+      briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-') + ' ' + (it.gate || '-'), 'Nothing is unblocked and unowned.') +
+      '</div>';
+
     function counts(key) {
       const map = new Map();
       for (const it of State.items) {
@@ -1220,12 +1331,16 @@
         glossaryLegend(field, rows.map((r) => r[0])) + '</div>';
     }
     const byStageOrdered = stageList(State.stages).map((s) => [s.id, State.items.filter((i) => i.stage === s.id).length]).filter((r) => r[1] > 0);
-    container.innerHTML = '<div class="overview-grid">' +
+    const distribution = '<div class="overview-grid">' +
       card('By stage', byStageOrdered, stageLabel) +
       card('By phase', counts('phase'), null, 'phase') +
       card('By gate', counts('gate'), null, 'gate') +
       card('By type', counts('type'), null, 'type') +
       '</div>';
+
+    container.innerHTML =
+      '<div class="overview-section"><h2 class="overview-heading">What next</h2>' + whatNext + '</div>' +
+      '<details class="overview-distribution"><summary>Distribution (by stage, phase, gate, type)</summary>' + distribution + '</details>';
   }
 
   function cardMarkup(it, moved) {
