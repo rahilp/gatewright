@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { run as config } from '../lib/commands/config.js';
 import { isInteractive } from '../lib/tui/prompt.js';
+import { fakeTty as tty } from './fixtures/tty.js';
 
 function board(overrides = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gw-config-'));
@@ -23,30 +24,6 @@ function board(overrides = {}) {
 function capture() {
   let text = '';
   return { write: (chunk) => { text += chunk; }, read: () => text };
-}
-
-// A terminal is simulated rather than borrowed: node --test does not give the
-// suite a TTY, and a test that depended on one would be skipped exactly where
-// this behaviour matters most.
-function tty(scripted = []) {
-  const input = new PassThrough();
-  input.isTTY = true;
-  const output = new PassThrough();
-  output.isTTY = true;
-  let text = '';
-  // Answers are fed one at a time in response to a prompt, not written up
-  // front. readline emits a 'line' event for every buffered line the moment it
-  // attaches, and question() consumes only the first -- so a pre-filled buffer
-  // loses every answer after the first and the wizard stalls forever.
-  const queue = [...scripted];
-  output.on('data', (chunk) => {
-    text += chunk;
-    if (/: $/.test(String(chunk)) && queue.length) {
-      const next = queue.shift();
-      setImmediate(() => input.write(`${next}\n`));
-    }
-  });
-  return { input, output, read: () => text };
 }
 
 function ctxFor({ store, positionals = [], flags = {}, env = {}, stdin, stdout = capture() }) {
@@ -98,13 +75,22 @@ test('the interactive editor walks every setting and saves what was answered', a
   const { store } = board();
   // One answer per setting, in declaration order: booleans take y/n, the
   // provider select takes a number, the rest take a literal value.
-  const { input, output, read } = tty(['y', '1', '3', '5', '60', '30', 'n', 'n', '2', '2', '1', 'n']);
+  // One answer per setting, in declaration order. The four vocab lists come
+  // last; a short script here does not fail loudly, it stalls until the
+  // suite's timeout, so this must stay in step with SETTINGS.
+  const { input, output, read, remaining } = tty([
+    'y', '1', '3', '5', '60', '30', 'n', 'n', '2', '2', '1', 'n',
+    'P0,P1,P2', 'P0,P1', 'G0,G1', 'feature,defect,doc',
+  ]);
   const code = await config(ctxFor({ store, stdin: input, stdout: output, env: {} }));
   assert.equal(code, 0);
   const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
   assert.equal(saved.runner.enabled, true);
   assert.equal(saved.runner.max_concurrent, 3);
   assert.equal(saved.policy.max_children_per_item, 2);
+  assert.deepEqual(saved.vocab.phase, ['P0', 'P1', 'P2']);
+  assert.deepEqual(saved.vocab.type, ['feature', 'defect', 'doc']);
+  assert.equal(remaining(), 0, 'every setting was asked about exactly once');
   assert.match(read(), /Saved to \.gatewright\/config\.json/);
 });
 

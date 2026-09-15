@@ -43,3 +43,28 @@ test('validateStages catches an empty pipeline and accepts a valid definition', 
   assert.match(validateStages({ stages: [], extra: [] })[0], /add at least one stage/);
   assert.deepEqual(validateStages({ stages: [{ id: 'queued', role: 'initial' }, { id: 'shipped', role: 'done', requires: { evidence_match: '^ok$' } }], terminal: ['shipped'], extra: [{ id: 'binned', role: 'dropped' }] }), []);
 });
+
+// A pipeline that ends at `built` -- the shape a repo that commits to main
+// actually uses -- must be able to say so, or every finished item is counted
+// as still in flight forever and `gw brief` degrades into a list of
+// everything ever completed.
+test('a stage that declares role done is terminal without being listed in terminal', () => {
+  const trunk = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built', role: 'done' }], extra: [{ id: 'dropped' }] };
+  assert.equal(isTerminalStage('built', trunk), true);
+  assert.equal(isTerminalStage('building', trunk), false);
+});
+
+// The inferred default must NOT be treated as an ending. resolveRoles falls
+// back to "last stage in the pipeline", and promoting that to terminal would
+// silently reclassify the final stage of every board already in existence --
+// including pipelines whose last stage is a waiting room, not a finish line.
+test('the inferred done role does not make the last pipeline stage terminal', () => {
+  const pipeline = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'awaiting_release' }] };
+  assert.equal(resolveRoles(pipeline).done, 'awaiting_release', 'it is still reported as the done role');
+  assert.equal(isTerminalStage('awaiting_release', pipeline), false, 'but inferring it never ends an item');
+});
+
+test('the shipped pipeline is unchanged by the role rule', () => {
+  assert.equal(isTerminalStage('verified', shipped), true);
+  assert.equal(isTerminalStage('built', shipped), false);
+});
