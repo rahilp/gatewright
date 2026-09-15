@@ -145,7 +145,11 @@ test('check reports items holding values the vocabulary no longer allows', () =>
   // Grouped by value, not one line per item: 33 near-identical lines would
   // bury every other finding in the report.
   assert.match(result.output(), /2 items have priority "P4"/);
-  assert.match(result.output(), /1 item have type "chore"|1 item has type "chore"/);
+  assert.doesNotMatch(result.output(), /1 item have |items has /, 'the count and the verb must agree');
+  // Asserted exactly, not as an either/or. The first version of this accepted
+  // both spellings, which is how "1 item have type" reached a published
+  // release: a test that tolerates two answers checks neither.
+  assert.match(result.output(), /1 item has type "chore"/);
   assert.doesNotMatch(result.output(), /P1-01|P1-02/, 'items are counted, not enumerated');
   // Both remedies, because only the user knows whether the vocabulary is too
   // narrow or the items are wrong.
