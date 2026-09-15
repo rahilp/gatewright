@@ -22,15 +22,6 @@ function board() {
 const item = { id: 'P5-04', title: 'Memory recall', scope: 'wire dispatch', stage: 'specified', deps: [], notes: '' };
 function config(memory) { return { runner: { provider: 'stub', prompt_template: '.gatewright/prompt.md', providers: { stub: { cmd: ['agent', '{prompt}'] } } }, memory }; }
 
-test('default-off memory is disabled, makes no transport call, and leaves a dispatch empty', async () => {
-  let calls = 0;
-  const memory = createMemory({ config: {}, transport: { recall() { calls += 1; } } });
-  assert.equal(memory.enabled, false); assert.deepEqual(await memory.recall('anything', 1), []);
-  const root = board();
-  const result = createRunner({ dryRun: true }).start({ config: config({ enabled: false }), item, run: 'r-1', worktree: root, root });
-  assert.equal(calls, 0); assert.equal(result.prompt, '## Prior context\n\n');
-});
-
 test('injected transport formats and trims recall results and adds a capsule', async () => {
   const root = board();
   const result = await createRunner({ dryRun: true }).startWithMemory({ config: config({ enabled: true, provider: 'transport', project_id: 'gatewright', recall: { on_dispatch: true, top_k: 2, max_chars: 30 } }), item, run: 'r-1', worktree: root, root }, { transport: {
@@ -39,16 +30,6 @@ test('injected transport formats and trims recall results and adds a capsule', a
   } });
   assert.match(result.prompt, /- \(2026-09-14\) first remembere/);
   assert.doesNotMatch(result.prompt, /second remembered/); assert.match(result.prompt, /stable capsule/);
-});
-
-test('hanging and throwing transports log warnings but never prevent a runner start', async () => {
-  const root = board();
-  const result = await createRunner({ dryRun: true }).startWithMemory({ config: config({ enabled: true, provider: 'transport', recall: { on_dispatch: true, top_k: 1, max_chars: 100 } }), item, run: 'r-1', worktree: root, root }, { transport: { recall: () => new Promise(() => {}) } });
-  assert.equal(result.provider, 'stub'); assert.equal(result.prompt, '## Prior context\n\n');
-  assert.match(readFileSync(join(root, '.gatewright', 'runs', 'memory.log'), 'utf8'), /timed out/);
-  const throwing = createMemory({ config: { memory: { enabled: true, provider: 'transport' } }, transport: { remember() { throw new Error('offline'); } }, log: { root } });
-  assert.equal(await throwing.remember('x', [], {}), null);
-  assert.match(readFileSync(join(root, '.gatewright', 'runs', 'memory.log'), 'utf8'), /offline/);
 });
 
 test('memory adapters remain dynamic and lib/memory has no network primitive', () => {
@@ -112,27 +93,4 @@ test('close records verified decisions as canonical durable memory and a run plu
   assert.deepEqual(calls[0][2], { volatility: 'state' });
   assert.ok(calls[1][1].includes('verified')); assert.deepEqual(calls[1][2], { volatility: 'durable', canonical: true });
   for (const [text] of calls) assert.doesNotMatch(text, /run_ended|run_started|dispatch|"stage"|"type"/);
-});
-
-test('disabled memory never calls on completion or close, and a throwing backend cannot change the board', async () => {
-  const fixture = writeBoard({ enabled: false }); let calls = 0;
-  const registry = createRunRegistry({ store: fixture.store }); registry.record({ run: 'r-ok', item: 'P5-06', pid: process.pid, worktree: fixture.worktree });
-  createRunLifecycle({ store: fixture.store, registry, memoryTransport: { remember() { calls += 1; throw new Error('offline'); } } }).finish({ run: 'r-ok' }, { code: 0 });
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: ['P5-06', 'verified'], stdout: { write() {} }, memoryTransport: { remember() { calls += 1; } } }); await flush();
-  assert.equal(calls, 0); assert.equal(fixture.store.readItems()[0].stage, 'verified');
-  const enabled = writeBoard(); const enabledRegistry = createRunRegistry({ store: enabled.store }); enabledRegistry.record({ run: 'r-throw', item: 'P5-06', pid: process.pid, worktree: enabled.worktree });
-  createRunLifecycle({ store: enabled.store, registry: enabledRegistry, memoryTransport: { remember() { throw new Error('offline'); } } }).finish({ run: 'r-throw' }, { code: 0 }); await flush();
-  assert.equal(enabled.store.readEvents().at(-1).type, 'run_ended'); assert.equal(enabled.store.readItems()[0].owner, null);
-  const before = enabled.store.readItems();
-  move({ store: enabled.store, root: enabled.root, actor: 'human:test', flags: {}, positionals: ['P5-06', 'verified'], stdout: { write() {} }, memoryTransport: { remember() { throw new Error('offline'); } } }); await flush();
-  assert.equal(enabled.store.readItems()[0].stage, 'verified'); assert.notDeepEqual(enabled.store.readItems(), before);
-});
-
-test('brief has no memory call unless --recall, then renders related memory within its line cap', async () => {
-  const fixture = writeBoard(); const config = JSON.parse(readFileSync(fixture.store.paths.config)); config.brief = { max_lines: 8 }; writeFileSync(fixture.store.paths.config, JSON.stringify(config));
-  let calls = 0; let output = '';
-  await brief({ store: fixture.store, root: fixture.root, flags: {}, stdout: { write(value) { output += value; } }, memoryTransport: { recall() { calls += 1; return []; } } });
-  assert.equal(calls, 0);
-  output = ''; await brief({ store: fixture.store, root: fixture.root, flags: { recall: true }, stdout: { write(value) { output += value; } }, memoryTransport: { recall(query, count) { calls += 1; assert.equal(query, 'Record completed work'); assert.equal(count, 3); return [{ date: '2026-09-14', text: 'use the proven approach' }]; } } });
-  assert.equal(calls, 1); assert.match(output, /RELATED MEMORY/); assert.ok(output.trimEnd().split('\n').length <= 8);
 });

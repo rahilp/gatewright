@@ -36,6 +36,15 @@ function scheduler(store, { registry = { list: () => ({ records: [] }) }, calls 
   };
 }
 
+async function waitUntil(predicate, timeout, message) {
+  const started = Date.now();
+  for (;;) {
+    if (await predicate()) return;
+    if (Date.now() - started >= timeout) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 test('max_concurrent refuses the second eligible item before its provider boundary', () => {
   const first = item('P1-01'); const second = item('P1-02', { updated: '2026-01-03T00:00:00.000Z' });
   const store = board({ items: [first, second], events: [{ type: 'dispatch', item: first.id }, { type: 'dispatch', item: second.id }] });
@@ -105,8 +114,16 @@ test('a fresh scheduler instance enforces a timeout from the durable record star
     // supervisor whose only clock is the durable registry timestamp.
     const restarted = createScheduler({ store, registry });
     assert.equal(restarted.tick().status, 'paused');
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    // Poll rather than sleep. This waits on a SIGTERM the child ignores, a
+    // SIGKILL escalation, and the OS reaping the process; a fixed delay makes
+    // the test a measure of machine load rather than of behaviour. It returns
+    // the instant the condition holds, so the generous ceiling costs nothing.
+    await waitUntil(() => {
+      try { process.kill(proc.pid, 0); return false; } catch (error) { return error.code === 'ESRCH'; }
+    }, 15000, 'timed out waiting for the run process to be reaped');
     assert.throws(() => process.kill(proc.pid, 0), { code: 'ESRCH' });
+    await waitUntil(() => store.readEvents().at(-1)?.outcome === 'timeout', 15000,
+      'timed out waiting for the timeout run_ended event');
     assert.equal(store.readEvents().at(-1).outcome, 'timeout');
   } finally { try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { process.kill(proc.pid, 'SIGKILL'); } catch {} } }
 });
