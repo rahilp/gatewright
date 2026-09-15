@@ -53,10 +53,16 @@ function waitFor(predicate, timeout = 15000) {
 
 function startWatcher(root) {
   const child = spawn(process.execPath, [BIN, 'open', '--watch', '--no-browser'], { cwd: root });
-  let output = '';
+  let output = ''; let errors = '';
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => { output += chunk; });
-  return { child, output: () => output };
+  // stderr MUST be drained. An unread pipe fills and blocks or errors the
+  // child — and the watcher now writes there on every skipped rebuild. It also
+  // means a child that dies takes its explanation with it, which is exactly
+  // what happened while diagnosing a Windows-only failure here.
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => { errors += chunk; });
+  return { child, output: () => output, errors: () => errors };
 }
 
 async function stopWatcher(child) {
@@ -168,7 +174,7 @@ test('gw open --watch keeps the last good board when JSONL is corrupt', async ()
     writeFileSync(store.paths.items, '{corrupt\n');
     await new Promise((resolve) => setTimeout(resolve, 350));
     assert.equal(readFileSync(store.paths.board, 'utf8'), before);
-    assert.equal(watcher.child.exitCode, null);
+    assert.equal(watcher.child.exitCode, null, `watcher died (code ${watcher.child.exitCode}); its stderr was:\n${watcher.errors()}`);
   } finally {
     await stopWatcher(watcher.child);
   }
