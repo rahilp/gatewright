@@ -26,6 +26,12 @@ function board({ timeout = 0.02 } = {}) {
 
 function child(source, cwd) { return spawn(process.execPath, ['-e', source], { detached: true, stdio: 'ignore', cwd }); }
 function killFinally(proc) { try { process.kill(proc.pid, 'SIGKILL'); } catch {} }
+async function captureStderr(fn) {
+  const original = process.stderr.write.bind(process.stderr);
+  const lines = [];
+  process.stderr.write = (chunk, ...rest) => { lines.push(String(chunk)); return original(chunk, ...rest); };
+  try { return { result: await fn(), lines }; } finally { process.stderr.write = original; }
+}
 // { timedOut } is the contract lib/run/spawn.js's real taskkill()/windowsProcessStartTime()
 // return; recording `opts.timeoutMs` alongside each call lets tests confirm lifecycle.js
 // actually threads a real, positive timeout through, without asserting its exact value
@@ -164,8 +170,34 @@ test('win32: an identity probe that never answers fails open and still lets the 
       windowsStartTimeFn: () => ({ startTime: null, timedOut: true }),
       taskkillFn: (pid, { force }) => { calls.push({ pid, force }); return { timedOut: false }; },
     });
-    const result = await lifecycle.stopItem('P4-07');
+    const { result, lines } = await captureStderr(() => lifecycle.stopItem('P4-07'));
     assert.equal(result[0].status, 'stopped');
     assert.deepEqual(calls, [{ pid: proc.pid, force: false }, { pid: proc.pid, force: true }], 'a wedged identity probe can never confirm the process is gone, so escalation proceeds all the way to force');
+
+    const event = fixture.store.readEvents().at(-1);
+    assert.equal(event.type, 'run_ended'); assert.equal(event.identity_unverified, true,
+      'a kill made on a fail-open identity check must be permanently distinguishable in the audit trail from a confirmed one');
+
+    assert.equal(lines.length, 2, 'both the graceful and force checks failed open and must each say so at the moment it happens');
+    for (const line of lines) {
+      assert.match(line, new RegExp(String(proc.pid)));
+      assert.match(line, /timed out/);
+    }
+  } finally { killFinally(proc); }
+});
+
+test('win32: a confirmed identity (no timeout) never marks the run_ended event unverified', async () => {
+  const fixture = board({ timeout: 0.01 }); const proc = child('setInterval(() => {}, 1000)', fixture.worktree);
+  try {
+    fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree, started: new Date().toISOString() });
+    const lifecycle = createRunLifecycle({
+      store: fixture.store, registry: fixture.registry, platform: 'win32',
+      windowsStartTimeFn: alwaysConfirms(),
+      taskkillFn: () => ({ timedOut: false }),
+    });
+    const { lines } = await captureStderr(() => lifecycle.stopItem('P4-07'));
+    assert.equal(lines.length, 0, 'a fully confirmed stop must stay silent on stderr');
+    const event = fixture.store.readEvents().at(-1);
+    assert.equal('identity_unverified' in event, false, 'the field must be absent, not merely false, on an ordinary confirmed stop');
   } finally { killFinally(proc); }
 });

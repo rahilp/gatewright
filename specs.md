@@ -676,7 +676,38 @@ the OS process list; the pid-reuse guard compares the recorded start time
 against the live process's start time rather than its working directory. That is
 a weaker guard than the POSIX path — it cannot prove the process is *ours*, only
 that it is the same process that was recorded — and the weakening is stated here
-rather than discovered by someone reading the source.
+rather than discovered by someone reading the source. It is weaker in a second
+way too: under a wedged start-time probe the guard is not merely weak, it is
+skipped entirely (see Command timeouts, next), and `/T` means an unverified
+kill can take an entire process tree with it, not just one pid.
+
+**Command timeouts.** `taskkill` and the `Get-Process` start-time probe are
+both bounded — a value derived from `stop_timeout_s`, clamped to [250ms, 5s] —
+so a wedged copy of either can never hang `gw stop`, which must keep working as
+a kill switch even when the host is otherwise unhealthy (§10.1). The two
+timeouts are handled differently, because a wedged *query* and a wedged
+*kill command* mean different things:
+
+- If the start-time probe times out, the pid-reuse guard fails **open**: the
+  live process is treated as the recorded run and escalation proceeds. A
+  wedged probe is evidence the host is unhealthy, not evidence about the
+  target process, and refusing to signal on that basis would make the switch
+  go silently inert exactly when it is needed most. A *confirmed* answer —
+  the process is gone, or its start time doesn't match — still fails closed,
+  same as always: an unrelated process is never signalled on a guess. Failing
+  open is never a silent decision: it is printed to stderr, naming the pid,
+  the moment it happens, and the resulting `run_ended` event (if the run
+  does end up reported stopped) carries `identity_unverified: true` — absent
+  entirely on an ordinary confirmed stop, so `grep identity_unverified
+  events.jsonl` is a real incident-review tool, not a field nobody checks.
+  This is how "we killed pid 4123 having confirmed it" stays distinguishable
+  from "we killed pid 4123 hoping it was ours."
+- If the force `taskkill` times out, that is never reported as a stop: the
+  run is put back in the registry (untouched, for a later attempt) and the
+  item's stage/owner are left as they were, rather than claiming a kill that
+  may not have happened. `gw stop` surfaces this as
+  `stop_unconfirmed` and exits non-zero. A timed-out *graceful* `taskkill`
+  does not get this treatment — it simply doesn't stop escalation to force.
 
 **Line endings.** Files whose bytes are part of a contract — the templates and
 the instruction block — are LF in the repository and written as LF by `init` on

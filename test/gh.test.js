@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createGh } from '../lib/sync/gh.js';
 
 function stub({ stdout = '[]', status = 0 } = {}) {
@@ -42,4 +45,36 @@ test('dry run prints writes and never executes them, while reads still execute',
 test('missing gh and unauthenticated gh have distinct actionable errors', () => {
   assert.throws(() => createGh({ run() { const error = new Error('missing'); error.code = 'ENOENT'; throw error; }, repo: 'o/r' }).authStatus(), /not installed.*gh auth login/i);
   assert.throws(() => createGh({ run: () => ({ stdout: '', status: 1 }), repo: 'o/r' }).authStatus(), /not authenticated.*gh auth login/i);
+});
+
+test('a timed-out gh call is reported as a network/slowness failure, not misdiagnosed as missing or unauthenticated', () => {
+  const timeout = () => { const error = new Error('etimedout'); error.code = 'ETIMEDOUT'; throw error; };
+  assert.throws(() => createGh({ run: timeout, repo: 'o/r' }).authStatus(), /did not respond.*retry/is);
+  assert.throws(() => createGh({ run: timeout, repo: 'o/r' }).issues(), /did not respond.*retry/is);
+  // Neither of the other two diagnoses leaks through: a timeout is not "not
+  // installed" (gh clearly ran) and not "not authenticated" (auth was never
+  // reached) — sending someone to `gh auth login` for a hung network call
+  // sends them chasing the wrong thing.
+  assert.throws(() => createGh({ run: timeout, repo: 'o/r' }).authStatus(), (error) => !/not installed|not authenticated/i.test(error.message));
+});
+
+// The two tests above prove the *classification* is right, using the same
+// injected-stub style as the rest of this file. This one proves the real
+// wiring: that createGh's default `run` actually threads timeoutMs into
+// execFileSync's own `timeout` option against a real (fake) `gh` on PATH, so
+// a genuinely wedged CLI is caught rather than assumed bounded. No real gh,
+// no network — just a slow local script standing in for one.
+test('createGh\'s default run really bounds a wedged real gh process, not just the injected-stub path', async () => {
+  const traps = mkdtempSync(join(tmpdir(), 'gw-gh-timeout-'));
+  const fakeGh = join(traps, 'gh');
+  writeFileSync(fakeGh, '#!/bin/sh\nsleep 5\n');
+  chmodSync(fakeGh, 0o755);
+  const priorPath = process.env.PATH;
+  process.env.PATH = `${traps}:${priorPath}`;
+  try {
+    const gh = createGh({ repo: 'o/r', timeoutMs: 200 });
+    const started = Date.now();
+    assert.throws(() => gh.authStatus(), /did not respond/i);
+    assert.ok(Date.now() - started < 4000, 'execFileSync must have actually killed the wedged process near timeoutMs, not waited out its real 5s sleep');
+  } finally { process.env.PATH = priorPath; rmSync(traps, { recursive: true, force: true }); }
 });
