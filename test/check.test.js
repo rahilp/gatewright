@@ -118,3 +118,10 @@ test('check --json is machine-readable and the real binary exits 1 for violation
   assert.equal(run(result.ctx), 1); assert.ok(Array.isArray(JSON.parse(result.output()).problems));
   assert.throws(() => execFileSync(process.execPath, [BIN, 'check'], { cwd: b.root, encoding: 'utf8' }), (error) => error.status === 1);
 });
+
+test('check refuses a literal memory token and tells the user to use token_env', () => {
+  const b = board([item()]);
+  writeFileSync(b.store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'] }, memory: { enabled: true, provider: 'second-brain', providers: { 'second-brain': { token: 'not-in-git' } } } }));
+  const result = ctx(b); assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /literal memory token/i); assert.match(result.output(), /environment variable/i); assert.match(result.output(), /token_env/);
+});
