@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
+import { readStages } from '../lib/config.js';
+import { describeStage } from '../lib/gates/describe.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 
@@ -93,6 +95,33 @@ test('gw open --no-browser writes .gatewright/board.html with the injected data'
 
   const config = extractBlock(html, 'gw-config');
   assert.ok(config.generatedAt, 'config block should carry the snapshot timestamp');
+});
+
+// The offline snapshot has no server to ask, so if the sentences are not
+// written into the file, `gw open --no-browser` shows a human raw JSON. This
+// is the regression that would be invisible until someone opened a file:// board.
+test('gw open --no-browser inlines the plain-English gate descriptions', () => {
+  const { root, store } = freshRoot();
+  store.writeItems([item()]);
+  execFileSync(process.execPath, [BIN, 'open', '--no-browser'], { cwd: root, encoding: 'utf8' });
+
+  const html = readFileSync(store.paths.board, 'utf8');
+  const stages = extractBlock(html, 'gw-stages');
+  const onDisk = readStages(store);
+  assert.ok(stages.gates, 'the snapshot must carry a gates map, not just raw requires');
+
+  for (const stage of [...onDisk.stages, ...(onDisk.extra || [])]) {
+    assert.deepEqual(
+      stages.gates[stage.id],
+      describeStage(stage, onDisk),
+      `${stage.id} must be described by lib/gates/describe.js, not by a copy of its wording`,
+    );
+    assert.ok(stages.gates[stage.id].sentences.length > 0);
+  }
+  // The shipped pipeline gates on evidence somewhere, so at least one sentence
+  // reaches the file as English a human can read.
+  const all = Object.values(stages.gates).flatMap((gate) => gate.sentences);
+  assert.ok(all.some((line) => /evidence/i.test(line)), all.join(' | '));
 });
 
 test('gw open exits 0 and prints the board path on stdout', () => {

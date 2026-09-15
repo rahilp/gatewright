@@ -199,6 +199,35 @@
     font-size: 0.8rem;
   }
   .card:hover { border-color: var(--accent); }
+  .card[draggable="true"] { cursor: grab; }
+  .card.dragging { opacity: 0.4; cursor: grabbing; }
+  /* While a drag is in flight the columns say which of them would accept it.
+     An invalid column is dimmed and carries the refusal as its tooltip; the
+     drop itself is refused by dragover, not by the server round trip. */
+  #board.dragging .column { transition: opacity 0.1s ease; }
+  #board.dragging .column.drop-ok { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  #board.dragging .column.drop-ok.drop-over { background: var(--accent-bg); }
+  #board.dragging .column.drop-invalid { opacity: 0.4; cursor: not-allowed; }
+  #board.dragging .column.drop-invalid .column-head::after { content: '✕'; color: var(--text-faint); margin-left: 0.35rem; }
+  #board.dragging .column.drop-source { outline: 1px dashed var(--border); outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) { #board.dragging .column { transition: none; } }
+  #gw-drop-refusal {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 120;
+    max-width: 26rem;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.6rem 0.6rem 0.75rem;
+    box-shadow: var(--shadow);
+    font-size: 0.8rem;
+  }
+  #gw-drop-refusal h4 { margin: 0 0 0.3rem; font-size: 0.8rem; }
+  #gw-drop-refusal ul { margin: 0; padding-left: 1.1rem; }
+  #gw-drop-refusal .close-btn { position: absolute; top: 0.15rem; right: 0.4rem; background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; }
   .card.card-child { margin-left: 0.8rem; border-left: 3px solid var(--border); }
   .card.card-moved { animation: card-moved 1.6s ease-out; }
   @keyframes card-moved { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } to { border-color: var(--border); box-shadow: none; } }
@@ -234,8 +263,15 @@
   }
   .stage-rule h3 { margin: 0 0 0.25rem; font-size: 0.88rem; }
   .stage-rule .exit { color: var(--text-dim); font-size: 0.82rem; margin: 0 0 0.4rem; }
-  .stage-rule .requires { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); white-space: pre-wrap; }
+  .stage-rule .requires { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); white-space: pre-wrap; margin: 0.35rem 0 0; }
   .stage-rule .flags { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.3rem; }
+  /* The sentences are the point of this view; the JSON is the footnote. */
+  .stage-rule .gate-sentences { margin: 0.3rem 0 0.45rem; padding-left: 1.1rem; font-size: 0.85rem; }
+  .stage-rule .gate-sentences li { margin: 0.12rem 0; }
+  .stage-rule .gate-missing { font-size: 0.82rem; color: var(--text-dim); margin: 0.3rem 0 0.45rem; }
+  details.machine-rule { margin-top: 0.35rem; }
+  details.machine-rule > summary { cursor: pointer; font-size: 0.72rem; color: var(--text-faint); }
+  details.machine-rule ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); }
 
   /* Export */
   .export-panel { max-width: 40rem; }
@@ -307,7 +343,10 @@
     border-color: var(--accent);
     cursor: pointer;
   }
-  #gw-panel .stage-reason { font-size: 0.7rem; color: var(--text-dim); }
+  #gw-panel .stage-reason { font-size: 0.72rem; color: var(--text-dim); }
+  #gw-panel .stage-reason .reason-head { display: block; color: var(--text-faint); }
+  #gw-panel .stage-reason ul { margin: 0.1rem 0 0; padding-left: 1rem; }
+  #gw-panel .stage-reason li { margin: 0.1rem 0; }
   #gw-panel .stage-refusal:empty { display: none; }
   .refusal {
     color: var(--danger);
@@ -391,6 +430,15 @@
     cursor: pointer;
   }
   .tag.badge-queued { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+  /* "Nothing is running" is information, not an absence: it gets a chip of its
+     own so a card never leaves the question open. */
+  .tag.badge-idle { color: var(--text-faint); border-style: dashed; }
+  /* A Play that can only queue must not look like a Play that starts work. */
+  .card-actions button.secondary, #gw-panel .panel-actions button.secondary {
+    border-color: var(--border);
+    background: var(--bg-sunken);
+    color: var(--text-dim);
+  }
   /* Running must be visually distinct from queued: one is costing money right
      now, the other is waiting for a scheduler tick. */
   .tag.badge-running { color: #7ee787; border-color: #2ea043; background: rgba(46,160,67,0.15); }
@@ -453,6 +501,8 @@
     <div id="gw-panel" role="dialog" aria-label="Item detail"></div>
   </div>
 
+  <div id="gw-drop-refusal" class="hidden" role="status" aria-live="polite"></div>
+
 <script>
 (function () {
   'use strict';
@@ -498,6 +548,7 @@
     sort: { key: 'updated', dir: 'desc' },
     pendingEvidence: {},
     creatingItem: false,
+    drag: null,
   };
 
   // -- write path: every request goes through /api/*, then the existing poll
@@ -530,11 +581,15 @@
     }
   }
 
-  // Mirrors isTerminalStage in lib/stages.js. The viewer previously consulted
-  // only stages.terminal, so a pipeline whose finish line is declared with
+  // Mirrors isTerminalStage in lib/stages.js, and is the ONLY place this page
+  // decides what "terminal" means. The viewer previously consulted only
+  // stages.terminal, so a pipeline whose finish line is declared with
   // `role: "done"` -- which is what `gw init` now writes for trunk workflows --
-  // had its finished column treated as ongoing, and every completed card
-  // offered a Play button with nothing left to play.
+  // had its finished column treated as ongoing: every completed card offered a
+  // Play button with nothing left to play, and the header counted 109 items
+  // "open" on a board `gw brief` reported 6 open for. Two notions of terminal
+  // in one file is how that happened, so there is now one. Nothing else may
+  // read that list directly; test/viewer.test.js enforces it.
   function terminalStageIds() {
     const all = (State.stages.stages || []).concat(State.stages.extra || []);
     const ids = new Set(State.stages.terminal || []);
@@ -608,6 +663,31 @@
     return s ? s.label : STAGE_LABEL_FALLBACK(id);
   }
 
+  // The plain-English gate description for a stage. This page cannot import
+  // lib/gates/describe.js -- it is a single file with no module loader -- so
+  // the sentences are resolved in Node and travel inside the stages payload:
+  // `gw serve` puts them there (withGateDescriptions in lib/serve/server.js)
+  // and `gw open` puts them in the inlined gw-stages block, which is what
+  // keeps the offline snapshot readable. Never restate the wording here: a
+  // second copy would drift and the board would describe rules it does not
+  // enforce.
+  function gateFor(stageId) {
+    const gates = State.stages && State.stages.gates;
+    const gate = gates && gates[stageId];
+    return gate && Array.isArray(gate.sentences) ? gate : null;
+  }
+
+  function sentenceList(sentences, className) {
+    return '<ul' + (className ? ' class="' + className + '"' : '') + '>' +
+      sentences.map((line) => '<li>' + escapeHtml(line) + '</li>').join('') + '</ul>';
+  }
+
+  // The raw rule stays one disclosure away: agents and anyone debugging
+  // stages.json still need the literal JSON, it just stops being the headline.
+  function machineRule(body) {
+    return '<details class="machine-rule"><summary>machine rule</summary>' + body + '</details>';
+  }
+
   function filteredItems() {
     const f = State.filters;
     const q = f.search.trim().toLowerCase();
@@ -657,12 +737,24 @@
       : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>' + syncPill;
     const total = State.items.length;
     const flagged = State.items.filter((i) => i.flag).length;
-    const terminal = new Set(State.stages.terminal || []);
+    const terminal = terminalStageIds();
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
     document.getElementById('gw-totals').innerHTML =
       '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
     renderPauseUI();
     document.getElementById('f-new').classList.toggle('hidden', !State.live);
+  }
+
+  // One wording for the Play affordance, because a button that cannot start
+  // anything must not say "Play" on the card and something else in the panel.
+  function playLabel() {
+    return schedulerIsOff() ? 'Queue for an agent' : 'Play';
+  }
+
+  function playTitle() {
+    return schedulerIsOff()
+      ? 'Queues this item. The scheduler is off, so nothing will run until it is turned on.'
+      : 'Queues this item for an agent to pick up.';
   }
 
   function schedulerIsOff() {
@@ -704,6 +796,29 @@
     return Math.max(0, Math.floor((Date.now() - State.lastLiveUpdate) / 1000)) + 's';
   }
 
+  // How long a run has actually been going. A card re-renders only when its
+  // item changes, so these labels are re-ticked by the one-second interval in
+  // boot() rather than waiting for the item to move.
+  function ageLabel(iso) {
+    const started = Date.parse(iso);
+    if (!Number.isFinite(started)) return '';
+    const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+    if (seconds < 60) return seconds + 's';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+    return Math.floor(seconds / 3600) + 'h ' + (Math.floor(seconds / 60) % 60) + 'm';
+  }
+
+  function runLabel(run) {
+    const age = ageLabel(run.started);
+    return 'running · ' + run.run + (age ? ' · ' + age : '');
+  }
+
+  function tickRunAges() {
+    document.querySelectorAll('[data-run-started]').forEach((el) => {
+      el.textContent = runLabel({ run: el.dataset.runId, started: el.dataset.runStarted });
+    });
+  }
+
   function syncAge(iso) {
     if (!iso) return 'never';
     const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
@@ -741,8 +856,7 @@
     const evCount = (it.evidence || []).length;
     const dispatched = isDispatched(it.id);
     const parent = it.parent ? State.items.find((candidate) => candidate.id === it.parent) : null;
-    const parentState = it.parent && !parent ? 'orphaned parent' : parent && (State.stages.terminal || []).includes(parent.stage) ? 'parent terminal' : null;
-    const queueOnlyNote = schedulerIsOff() ? ' The scheduler is off, so this only queues the item — nothing will run.' : '';
+    const parentState = it.parent && !parent ? 'orphaned parent' : parent && terminalStageIds().has(parent.stage) ? 'parent terminal' : null;
     const action = actionFor(it);
     var actionHtml = '';
     if (action.kind === 'running') {
@@ -750,12 +864,28 @@
     } else if (action.kind === 'queued') {
       actionHtml = '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch before it starts.">Cancel</button>';
     } else if (action.kind === 'idle') {
-      actionHtml = '<button data-play="' + escapeHtml(it.id) + '" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play</button>';
+      actionHtml = '<button data-play="' + escapeHtml(it.id) + '"' + (schedulerIsOff() ? ' class="secondary"' : '') +
+        ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
+    // The stage says where the WORK is; this says whether an agent is actually
+    // on it. They are different axes, and a card that collapses them into one
+    // button cannot answer "is it actually doing the work?" -- a card sitting
+    // in Building, owned by a human, with nothing running, used to look
+    // identical to one an agent was burning money on.
+    const runStatus = action.kind === 'running'
+      ? '<span class="tag badge-running" data-run-id="' + escapeHtml(action.run.run) + '" data-run-started="' + escapeHtml(action.run.started || '') + '">' + escapeHtml(runLabel(action.run)) + '</span>'
+      : action.kind === 'queued'
+        ? '<span class="tag badge-queued">queued · no agent run yet</span>'
+        : action.kind === 'idle'
+          ? '<span class="tag badge-idle">no agent run · ' + escapeHtml(it.owner || 'unowned') + '</span>'
+          : '';
     // action.kind === 'none' is a finished item: no button, because there is
     // nothing left to start, queue or stop.
     const actions = State.live && actionHtml ? '<div class="card-actions">' + actionHtml + '</div>' : '';
-    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
+    // Draggable only when a server is there to accept the move. A snapshot has
+    // nothing to POST to, and a card that drags but can never land is a lie.
+    const drag = State.live ? ' draggable="true" title="Drag to another column, or open this card to use the stage buttons."' : '';
+    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + drag + '>' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
@@ -763,8 +893,9 @@
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
-      (action.kind === 'running' ? '<span class="tag badge-running">running</span>' : action.kind === 'queued' ? '<span class="tag badge-queued">queued</span>' : '') +
-      (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
+      runStatus +
+      // The idle chip already names the owner; do not say it twice.
+      (it.owner && action.kind !== 'idle' ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
       '<span class="tag mono">ev:' + evCount + '</span>' +
       '</div>' + actions + '</div>';
   }
@@ -779,6 +910,144 @@
       return '<div class="column" data-stage="' + escapeHtml(s.id) + '"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
         '<div class="column-body">' + (ordered.map(cardMarkup).join('') || '') + '</div></div>';
     }).join('') + '</div>';
+  }
+
+  // -- drag and drop -------------------------------------------------------
+  // Native HTML5 drag and drop, no library. It is an addition to the panel's
+  // stage buttons, never a replacement: everything here is reachable by click
+  // and keyboard through the panel, which is what anyone who cannot drag uses.
+
+  // A column is a drop target only if the very same move the panel button
+  // would issue is currently permitted. Forced moves are excluded because the
+  // board has no way to send --force; they stay a CLI decision.
+  function dropAllowed(id, stageId) {
+    const it = State.items.find((candidate) => candidate.id === id);
+    if (!it || it.stage === stageId) return false;
+    const transitions = State.transitions[id];
+    const transition = transitions && transitions[stageId];
+    return Boolean(transition && transition.ok && !transition.force);
+  }
+
+  function dropRefusal(id, stageId) {
+    const transitions = State.transitions[id];
+    if (!transitions) {
+      return State.transitionErrors[id] ? 'Unable to check this gate.' : 'Checking this gate…';
+    }
+    const transition = transitions[stageId];
+    if (!transition) return 'Not reachable from here — `gw move --force` skips stages.';
+    if (transition.ok && transition.force) return 'A jump like this needs `gw move --force`.';
+    const reasons = (transition.reasons && transition.reasons.length) ? transition.reasons : (transition.failures || []);
+    return reasons.join(' · ');
+  }
+
+  // Which columns would take this card, marked before the drag reaches them
+  // rather than after the server refuses it.
+  function markDropTargets() {
+    const board = document.getElementById('board');
+    const drag = State.drag;
+    if (!board || !drag) return;
+    board.classList.add('dragging');
+    board.querySelectorAll('.column').forEach((column) => {
+      const stageId = column.dataset.stage;
+      column.classList.remove('drop-ok', 'drop-invalid', 'drop-source', 'drop-over');
+      column.removeAttribute('title');
+      if (stageId === drag.from) { column.classList.add('drop-source'); return; }
+      if (dropAllowed(drag.id, stageId)) { column.classList.add('drop-ok'); return; }
+      column.classList.add('drop-invalid');
+      const why = dropRefusal(drag.id, stageId);
+      if (why) column.title = why;
+    });
+  }
+
+  function clearDropTargets() {
+    const board = document.getElementById('board');
+    if (board) {
+      board.classList.remove('dragging');
+      board.querySelectorAll('.column').forEach((column) => {
+        column.classList.remove('drop-ok', 'drop-invalid', 'drop-source', 'drop-over');
+        column.removeAttribute('title');
+      });
+    }
+    document.querySelectorAll('.card.dragging').forEach((card) => card.classList.remove('dragging'));
+    State.drag = null;
+  }
+
+  // The drop moves the card immediately so the gesture feels answered, then
+  // puts it back exactly where it was if the gate refuses. The move itself is
+  // onMoveClick -- the panel button's path -- and the refusal it reports is the
+  // English from lib/gates/describe.js.
+  async function onCardDrop(id, to, column) {
+    const card = document.querySelector('.card[data-id="' + CSS.escape(id) + '"]');
+    const home = card && card.parentNode ? { parent: card.parentNode, next: card.nextSibling } : null;
+    const body = column.querySelector('.column-body');
+    if (card && body) body.appendChild(card);
+    const result = await onMoveClick(id, to, null);
+    if (result && !result.ok && card && home && card.parentNode !== home.parent) {
+      home.parent.insertBefore(card, home.next);
+    }
+  }
+
+  function wireDragAndDrop(view) {
+    // Verdicts are fetched per item, so warm the cache as the pointer goes
+    // down: by the time a column is reached the answer is usually already in.
+    view.addEventListener('mousedown', (e) => {
+      if (!State.live || !e.target.closest) return;
+      const card = e.target.closest('.card[draggable="true"]');
+      if (card) refreshTransitions(card.dataset.id);
+    });
+
+    view.addEventListener('dragstart', (e) => {
+      const card = e.target.closest ? e.target.closest('.card[draggable="true"]') : null;
+      if (!card || !State.live) return;
+      const it = State.items.find((candidate) => candidate.id === card.dataset.id);
+      if (!it) return;
+      State.drag = { id: it.id, from: it.stage };
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', it.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }
+      card.classList.add('dragging');
+      hideBoardRefusal();
+      markDropTargets();
+      // Re-ask even when cached: the answer may be older than the item.
+      refreshTransitions(it.id);
+    });
+
+    view.addEventListener('dragover', (e) => {
+      const drag = State.drag;
+      if (!drag || !e.target.closest) return;
+      const column = e.target.closest('.column');
+      if (!column) return;
+      if (!dropAllowed(drag.id, column.dataset.stage)) {
+        // No preventDefault: the browser itself refuses the drop, so an
+        // invalid column cannot even accept the card optimistically.
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      column.classList.add('drop-over');
+    });
+
+    view.addEventListener('dragleave', (e) => {
+      const column = e.target.closest ? e.target.closest('.column') : null;
+      if (column && !column.contains(e.relatedTarget)) column.classList.remove('drop-over');
+    });
+
+    view.addEventListener('drop', (e) => {
+      const drag = State.drag;
+      if (!drag || !e.target.closest) return;
+      const column = e.target.closest('.column');
+      if (!column) return;
+      const to = column.dataset.stage;
+      if (!dropAllowed(drag.id, to)) return;
+      e.preventDefault();
+      const id = drag.id;
+      clearDropTargets();
+      onCardDrop(id, to, column);
+    });
+
+    view.addEventListener('dragend', clearDropTargets);
   }
 
   function renderTable(container) {
@@ -815,11 +1084,18 @@
     const cols = stageList(State.stages);
     container.innerHTML = cols.map((s) => {
       const req = s.requires ? JSON.stringify(s.requires, null, 2) : '(no machine rule — advanced manually)';
-      const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', (State.stages.terminal || []).includes(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
+      const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', terminalStageIds().has(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
+      const gate = gateFor(s.id);
+      const english = gate
+        ? sentenceList(gate.sentences, 'gate-sentences')
+        // Older snapshots were written before the descriptions were carried in
+        // the payload. Say so rather than inventing sentences for them.
+        : '<p class="gate-missing">This board was written without rule descriptions — run <code>gw open</code> again to refresh it. The machine rule below is all it carries.</p>';
       return '<div class="stage-rule"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' +
         (s.exit ? '<p class="exit">' + escapeHtml(s.exit) + '</p>' : '') +
-        '<div class="requires">' + escapeHtml(req) + '</div>' +
+        english +
         (flags ? '<div class="flags">' + escapeHtml(flags) + '</div>' : '') +
+        machineRule('<pre class="requires">' + escapeHtml(req) + '</pre>') +
         '</div>';
     }).join('');
   }
@@ -896,6 +1172,9 @@
         const current = State.items.find((item) => item.id === id);
         if (current) renderPanel(current);
       }
+      // A drag that started before the verdicts landed gets its columns marked
+      // the moment they do, rather than staying uniformly invalid.
+      if (State.drag && State.drag.id === id) markDropTargets();
     }
   }
 
@@ -935,7 +1214,6 @@
         '</div>';
 
     const dispatched = isDispatched(it.id);
-    const queueOnlyNote = schedulerIsOff() ? ' The scheduler is off, so this only queues the item — nothing will run.' : '';
     const panelAction = actionFor(it);
     var panelButton = '';
     if (panelAction.kind === 'running') {
@@ -943,7 +1221,8 @@
     } else if (panelAction.kind === 'queued') {
       panelButton = '<button id="panel-stop" title="Cancels the queued dispatch before it starts.">Cancel dispatch</button>';
     } else if (panelAction.kind === 'idle') {
-      panelButton = '<button id="panel-play" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play (queue for an agent)</button>';
+      panelButton = '<button id="panel-play"' + (schedulerIsOff() ? ' class="secondary"' : '') +
+        ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
     const playStop = State.live && panelButton
       ? '<div class="panel-actions">' + panelButton + '</div>'
@@ -967,32 +1246,49 @@
       ? '<div class="panel-actions"><button id="panel-resume" title="Restores the item and dispatches it again.">Resume</button></div>'
       : '';
 
+    // A disabled button is a refusal, and a refusal has to say what it wants.
+    // `note` is the one-line reason the button is off; `unmet` is the gate in
+    // the English lib/gates/describe.js produces, shown next to the button
+    // rather than hidden in a tooltip; `machine` keeps the literal lib/rules.js
+    // failure lines -- which carry the exact command to run -- one disclosure
+    // away, and in the tooltip as before.
     const stageButtonsHtml = stageList(State.stages).map((s) => {
       if (s.id === it.stage) return '';
       const transitions = State.transitions[it.id];
       const transition = transitions && transitions[s.id];
-      let reason = '';
+      let note = '';
+      let heading = '';
+      let unmet = [];
+      let machine = [];
       let disabled = true;
       if (!State.live) {
-        reason = 'read-only snapshot';
+        note = 'read-only snapshot';
+        // No server to ask what this item fails, so say what the gate checks.
+        // That is a different statement and it is labelled as one.
+        const gate = gateFor(s.id);
+        if (gate) { heading = 'This gate checks:'; unmet = gate.sentences; }
       } else if (!transitions) {
-        reason = State.transitionErrors[it.id]
+        note = State.transitionErrors[it.id]
           ? 'unable to check transition rules'
           : 'checking transition rules…';
       } else if (!transition) {
-        reason = 'use `gw move --force` to skip stages';
-      } else if (transition.force) {
-        reason = transition.ok
-          ? 'use `gw move --force` to skip stages'
-          : transition.failures.join('; ');
+        note = 'use `gw move --force` to skip stages';
+      } else if (transition.force && transition.ok) {
+        note = 'use `gw move --force` to skip stages';
       } else if (!transition.ok) {
-        reason = transition.failures.join('; ');
+        if (transition.force) note = 'and a jump like this also needs `gw move --force`';
+        heading = 'Not met yet:';
+        machine = transition.failures || [];
+        unmet = (transition.reasons && transition.reasons.length) ? transition.reasons : machine;
       } else {
         disabled = false;
       }
+      const tooltip = (machine.length ? machine.join('; ') : note);
       return '<div class="stage-button-wrap">' +
-        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') + (reason ? ' title="' + escapeHtml(reason) + '"' : '') + '>' + escapeHtml(s.label) + '</button>' +
-        (reason && State.live ? '<div class="stage-reason">' + escapeHtml(reason) + '</div>' : '') +
+        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') + (tooltip ? ' title="' + escapeHtml(tooltip) + '"' : '') + '>' + escapeHtml(s.label) + '</button>' +
+        (note ? '<div class="stage-reason">' + escapeHtml(note) + '</div>' : '') +
+        (unmet.length ? '<div class="stage-reason"><span class="reason-head">' + escapeHtml(heading) + '</span>' + sentenceList(unmet) + '</div>' : '') +
+        (machine.length ? machineRule(sentenceList(machine)) : '') +
         '<div class="stage-refusal" id="move-fail-' + escapeHtml(s.id) + '"></div>' +
         '</div>';
     }).join('');
@@ -1090,25 +1386,73 @@
     if (saveBtn) saveBtn.addEventListener('click', () => onSaveFields(it, saveBtn));
   }
 
+  // The one move path. The panel buttons call it, and a card dropped on a
+  // column calls it too -- there is no second way to move an item, and so no
+  // second set of rules for one of them to get wrong. `btn` is optional so a
+  // drop can use it without inventing a button.
   async function onMoveClick(id, to, btn) {
     const key = 'move:' + id + ':' + to;
-    if (Inflight.has(key)) return;
+    if (Inflight.has(key)) return { ok: false, skipped: true, data: null };
     Inflight.add(key);
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     const evidence = State.pendingEvidence[id] || [];
     const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/move', { to, evidence });
     Inflight.delete(key);
     if (result.ok) {
       State.pendingEvidence[id] = [];
       await refreshNow();
-    } else {
-      btn.disabled = false;
-      const failures = (result.data && result.data.failures && result.data.failures.length)
-        ? result.data.failures
-        : [(result.data && result.data.error) || 'request failed'];
-      const box = document.getElementById('move-fail-' + to);
-      if (box) box.innerHTML = failures.map((f) => '<div class="refusal">' + escapeHtml(f) + '</div>').join('');
+      return result;
     }
+    if (btn) btn.disabled = false;
+    await showMoveRefusal(id, to, result);
+    return result;
+  }
+
+  // What a refusal should say, in the wording a human can act on. The server's
+  // `failures` stay available -- they name the command to run -- but the
+  // headline is the English gate description, re-fetched first so it describes
+  // the refusal that just happened rather than a stale check.
+  async function refusalText(id, to, result) {
+    await refreshTransitions(id);
+    const transitions = State.transitions[id];
+    const transition = transitions && transitions[to];
+    const machine = (result.data && result.data.failures && result.data.failures.length) ? result.data.failures : [];
+    const reasons = (transition && transition.reasons && transition.reasons.length) ? transition.reasons : null;
+    const fallback = machine.length ? machine : [(result.data && result.data.error) || 'request failed'];
+    return { unmet: reasons || fallback, machine: machine };
+  }
+
+  async function showMoveRefusal(id, to, result) {
+    const { unmet, machine } = await refusalText(id, to, result);
+    const box = document.getElementById('move-fail-' + to);
+    if (box) {
+      box.innerHTML = '<div class="refusal">' + unmet.map((line) => escapeHtml(line)).join('<br>') + '</div>' +
+        (machine.length ? machineRule(sentenceList(machine)) : '');
+    }
+    // A card that snapped back in silence is the failure mode this exists to
+    // prevent, so the board says it too whenever the panel is not already
+    // showing this item's refusal.
+    if (State.activePanelId !== id) showBoardRefusal(id, to, unmet);
+  }
+
+  let refusalTimer = null;
+
+  function hideBoardRefusal() {
+    const notice = document.getElementById('gw-drop-refusal');
+    if (notice) { notice.classList.add('hidden'); notice.innerHTML = ''; }
+    if (refusalTimer) { window.clearTimeout(refusalTimer); refusalTimer = null; }
+  }
+
+  function showBoardRefusal(id, to, unmet) {
+    const notice = document.getElementById('gw-drop-refusal');
+    if (!notice) return;
+    notice.innerHTML = '<button class="close-btn" id="drop-refusal-close" aria-label="Dismiss">&times;</button>' +
+      '<h4>' + escapeHtml(id) + ' cannot move to ' + escapeHtml(stageLabel(to)) + ' yet</h4>' +
+      sentenceList(unmet);
+    notice.classList.remove('hidden');
+    notice.querySelector('#drop-refusal-close').addEventListener('click', hideBoardRefusal);
+    if (refusalTimer) window.clearTimeout(refusalTimer);
+    refusalTimer = window.setTimeout(hideBoardRefusal, 12000);
   }
 
   async function onDispatchClick(id, action, btn) {
@@ -1350,11 +1694,13 @@
       renderView();
     });
 
+    wireDragAndDrop(document.getElementById('gw-view'));
+
     document.getElementById('gw-overlay').addEventListener('click', (e) => {
       if (e.target.id === 'gw-overlay') closePanel();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closePanel();
+      if (e.key === 'Escape') { closePanel(); hideBoardRefusal(); }
     });
 
     document.getElementById('f-new').addEventListener('click', openCreatePanel);
@@ -1383,7 +1729,7 @@
     if (location.protocol.indexOf('http') === 0) {
       State.live = true; State.lastLiveUpdate = Date.now(); renderHeader();
       schedulePoll(2000);
-      window.setInterval(() => { if (State.live) renderHeader(); }, 1000);
+      window.setInterval(() => { if (State.live) { renderHeader(); tickRunAges(); } }, 1000);
     }
   }
 

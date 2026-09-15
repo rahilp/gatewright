@@ -565,3 +565,70 @@
 {"ts":"2026-09-15T11:06:18.928Z","type":"move","item":"P1-18","from":"building","to":"built","by":"human:rahil","evidence":["PR #3, #4, #5","P6-11, P6-12, P7-06 were all found by using this board"]}
 {"ts":"2026-09-15T11:06:18.981Z","type":"note","item":"P5-13","by":"human:rahil","note":"Dropped rather than closed: the acceptance criterion is two weeks of elapsed use and this is one session, so moving it to built would be claiming a stage it has not earned. The dependency it once imposed on P5-14 was already removed — a time-based task must not gate a release. Re-open it if calendar-based soak time is genuinely wanted."}
 {"ts":"2026-09-15T11:06:19.035Z","type":"move","item":"P5-13","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:15:15.317Z","type":"add","item":"P8-01","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.369Z","type":"add","item":"P8-02","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.419Z","type":"add","item":"P8-03","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.468Z","type":"add","item":"P8-04","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.527Z","type":"add","item":"P8-05","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.579Z","type":"add","item":"P8-06","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.631Z","type":"add","item":"P8-07","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:15.683Z","type":"add","item":"P8-08","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:15:46.720Z","type":"claim","item":"P8-08","by":"human:rahil"}
+{"ts":"2026-09-15T11:15:46.776Z","type":"move","item":"P8-08","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:15:46.831Z","type":"move","item":"P8-08","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:15:46.878Z","type":"note","item":"P8-08","by":"human:rahil","note":"Decision: split the write surface in two. Item-level writes (create, move, edit, note, triage, resume, dispatch, stop) stay available wherever the board is reachable — that is the collaborative surface and the reason --host exists. Administrative writes that change the rules of the board itself (stages, gates, config) are refused unless the request arrived on loopback, regardless of --host. Rationale: a colleague on the LAN moving a card is the feature; a stranger on hotel wifi deleting your stages, disabling a gate, or enabling the runner is not. The guard is cheap, needs no auth system, and keeps the property that gw serve never becomes a remote administration console."}
+{"ts":"2026-09-15T11:15:46.931Z","type":"move","item":"P8-08","from":"building","to":"built","by":"human:rahil","evidence":["decision recorded on P8-08","constrains P8-05, P8-06, P8-07"]}
+{"ts":"2026-09-15T11:15:52.901Z","type":"claim","item":"P8-01","by":"human:rahil"}
+{"ts":"2026-09-15T11:15:52.955Z","type":"move","item":"P8-01","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:15:53.008Z","type":"move","item":"P8-01","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:15:53.055Z","type":"claim","item":"P8-04","by":"human:rahil"}
+{"ts":"2026-09-15T11:15:53.108Z","type":"move","item":"P8-04","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:15:53.161Z","type":"move","item":"P8-04","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:19:35.543Z","type":"move","item":"P8-01","from":"building","to":"built","by":"human:rahil","evidence":["lib/gates/describe.js","test/gate-describe.test.js"]}
+{"ts":"2026-09-15T11:19:35.597Z","type":"move","item":"P8-04","from":"building","to":"built","by":"human:rahil","evidence":["lib/serve/server.js","test/serve-write.test.js"]}
+{"ts":"2026-09-15T11:19:35.646Z","type":"claim","item":"P8-02","by":"human:rahil"}
+{"ts":"2026-09-15T11:19:35.700Z","type":"move","item":"P8-02","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:19:35.754Z","type":"move","item":"P8-02","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:19:35.806Z","type":"claim","item":"P8-03","by":"human:rahil"}
+{"ts":"2026-09-15T11:19:35.859Z","type":"move","item":"P8-03","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:19:35.927Z","type":"move","item":"P8-03","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:20:25.188Z","type":"dispatch","item":"P8-03","by":"human:rahil"}
+{"ts":"2026-09-15T11:20:26.715Z","type":"dispatch","item":"P8-02","by":"human:rahil"}
+{"ts":"2026-09-15T11:20:47.500Z","type":"add","item":"P8-09","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:29:45.587Z","type":"add","item":"P8-10","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:37.962Z","type":"add","item":"P8-11","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:38.020Z","type":"add","item":"P8-12","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:38.077Z","type":"add","item":"P8-13","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:38.134Z","type":"add","item":"P8-14","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:38.190Z","type":"add","item":"P8-15","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:38.245Z","type":"add","item":"P8-16","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:38.294Z","type":"add","item":"P8-17","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:34:49.819Z","type":"note","item":"P8-04","by":"human:rahil","note":"Correction: the premise was partly wrong. The detail panel already had a field editor (title, scope, priority, type, phase, gate, deps, refs with a save button) posting to the bare /api/items/<id> path, which already routed to the edit command. Verified present in committed HEAD, so it predates this work. What was actually missing and is now fixed: the explicit /api/items/<id>/edit route 404'd, and deps arriving as a JSON array crashed on .split inside edit.js. I reached the wrong conclusion by grepping for 'panel-edit' and '/edit' and not finding them, rather than opening the UI."}
+{"ts":"2026-09-15T11:37:12.605Z","type":"move","item":"P8-11","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:37:48.516Z","type":"note","item":"P8-11","by":"human:rahil","note":"Moved to specified and back during a live drag-and-drop verification; the stage change was a test, not progress."}
+{"ts":"2026-09-15T11:37:48.619Z","type":"move","item":"P8-02","from":"building","to":"built","by":"human:rahil","evidence":["lib/serve/server.js","transitions endpoint returns English reasons"]}
+{"ts":"2026-09-15T11:37:48.671Z","type":"move","item":"P8-03","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: drag to Built refused by the browser, drag to Specified persisted a move event"]}
+{"ts":"2026-09-15T11:38:04.776Z","type":"move","item":"P8-11","from":"specified","to":"backlog","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:38:04.935Z","type":"add","item":"P8-18","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T11:38:15.316Z","type":"claim","item":"P8-09","by":"human:rahil"}
+{"ts":"2026-09-15T11:38:15.374Z","type":"move","item":"P8-09","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:38:15.428Z","type":"move","item":"P8-09","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:38:15.484Z","type":"claim","item":"P8-10","by":"human:rahil"}
+{"ts":"2026-09-15T11:38:15.540Z","type":"move","item":"P8-10","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:38:15.600Z","type":"move","item":"P8-10","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:38:15.655Z","type":"move","item":"P8-09","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: cards read 'no agent run · unowned' and 'queued · no agent run yet'"]}
+{"ts":"2026-09-15T11:38:15.714Z","type":"move","item":"P8-10","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: board header and gw brief both read 14 open"]}
+{"ts":"2026-09-15T12:22:46.770Z","type":"claim","item":"P8-05","by":"human:rahil"}
+{"ts":"2026-09-15T12:22:46.825Z","type":"move","item":"P8-05","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T12:22:46.882Z","type":"move","item":"P8-05","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T12:22:46.934Z","type":"claim","item":"P8-07","by":"human:rahil"}
+{"ts":"2026-09-15T12:22:46.986Z","type":"move","item":"P8-07","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T12:22:47.043Z","type":"move","item":"P8-07","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T12:22:47.099Z","type":"claim","item":"P8-11","by":"human:rahil"}
+{"ts":"2026-09-15T12:22:47.157Z","type":"move","item":"P8-11","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T12:22:47.211Z","type":"move","item":"P8-11","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T12:22:47.272Z","type":"note","item":"P8-11","by":"human:rahil","note":"Decision: vocab stays a list of plain strings (non-breaking), and an optional config.glossary maps a code to a human description — glossary.gate.G0, glossary.phase.P1, glossary.type.defect. The UI reads it for legends and tooltips; an undescribed code still renders, just without help text."}
+{"ts":"2026-09-15T12:28:22.882Z","type":"add","item":"P8-19","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T12:29:09.138Z","type":"add","item":"P8-20","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T12:29:09.195Z","type":"note","item":"P8-11","by":"human:rahil","note":"Verified end to end: shipped defaults present, custom entries round-trip via gw config glossary.gate.G1, gw show prints a compact meaning block, and a malformed glossary degrades to no descriptions across show, check and config --list rather than throwing."}
+{"ts":"2026-09-15T12:29:09.251Z","type":"move","item":"P8-11","from":"building","to":"built","by":"human:rahil","evidence":["lib/glossary.js","templates/config.json","test/glossary.test.js"]}

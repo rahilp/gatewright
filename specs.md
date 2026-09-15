@@ -274,6 +274,13 @@ this runs first and exits non-zero on any finding.
 
 ## 5. config.json
 
+`vocab` lists the codes a board allows; `glossary` explains them. It is
+optional and additive — `glossary.<field>.<code>` is a sentence in plain
+language, and a code with no entry renders exactly as it always has. This is
+help text, never a requirement: nothing validates against it, and a missing or
+malformed `glossary` block means "no descriptions", not an error. Set one
+entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
+
 ```json
 {
   "version": 1,
@@ -303,6 +310,32 @@ this runs first and exits non-zero on any finding.
       "test",
       "doc"
     ]
+  },
+  "glossary": {
+    "phase": {
+      "P0": "Decisions and groundwork that have to be settled before code can depend on them.",
+      "P1": "The first working version: the core this product is useless without.",
+      "P2": "The work that makes the core usable day to day.",
+      "P3": "Later work: worth doing, not needed to call the product usable."
+    },
+    "priority": {
+      "P0": "Drop other work for this.",
+      "P1": "Do it in this phase.",
+      "P2": "Do it when the P1 work is clear.",
+      "P3": "Do it if there is room; fine to never do."
+    },
+    "gate": {
+      "G0": "Blocking: the phase cannot be called done while this is open.",
+      "G1": "Planned: meant for this phase, but the phase can ship without it.",
+      "G2": "Optional: picked up only if there is room."
+    },
+    "type": {
+      "decision": "A choice to make and write down, so later work can rely on it.",
+      "defect": "Something already shipped and it is wrong.",
+      "feature": "New behaviour someone using the product can see.",
+      "test": "Work whose product is evidence that something behaves as claimed.",
+      "doc": "Writing that explains the product to a human."
+    }
   },
   "brief": {
     "max_lines": 25
