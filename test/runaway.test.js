@@ -14,6 +14,21 @@ import { createRunner } from '../lib/run/spawn.js';
 import { createScheduler } from '../lib/run/scheduler.js';
 import { readConfig, readStages } from '../lib/config.js';
 
+// createRunLifecycle defaults to process.platform, so on real Windows CI stopAll() below
+// would otherwise shell out to the real taskkill.exe/powershell.exe from lib/run/spawn.js
+// to reap this test's own live process. Those execFileSync calls have no timeout, and a
+// hung or slow external process there hangs the whole job silently (see P6-05). This test
+// doesn't exercise signal-ignoring semantics, so Node's process.kill — which Windows always
+// treats as an unconditional TerminateProcess, regardless of signal name — reaps it just as
+// reliably, without ever invoking an external process. Windows-specific escalation mechanics
+// are covered deterministically by run-lifecycle-windows.test.js.
+function winSafeKill() {
+  return process.platform !== 'win32' ? {} : {
+    taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])]; },
+    windowsStartTimeFn: () => Date.now(),
+  };
+}
+
 const stages = { stages: [{ id: 'backlog' }, { id: 'specified', auto: true }, { id: 'done' }], terminal: ['done'] };
 
 function fixture({ autoDispatch }) {
@@ -110,7 +125,7 @@ test('P4-18 stop --all pauses a live stub runaway and prevents later ticks from 
   try {
     const registry = createRunRegistry({ store: subject.store }); live = runawayRunner(subject.store, { longRunning: true }); const scheduler = schedulerFor(subject.store, registry, live.runner);
     assert.equal(scheduler.tick().status, 'started'); assertTick(subject.store, registry, { held: false });
-    const lifecycle = createRunLifecycle({ store: subject.store, registry, wait: () => {} }); lifecycle.stopAll();
+    const lifecycle = createRunLifecycle({ store: subject.store, registry, wait: () => {}, ...winSafeKill() }); lifecycle.stopAll();
     await new Promise((resolve) => setImmediate(resolve));
     const spawnCount = subject.store.readEvents().filter((event) => event.type === 'run_started').length;
     for (let tick = 0; tick < 10; tick += 1) assert.equal(scheduler.tick().status, 'paused');

@@ -6,8 +6,25 @@ import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { createRunRegistry } from '../lib/run/registry.js';
 import { createScheduler } from '../lib/run/scheduler.js';
+import { createRunLifecycle } from '../lib/run/lifecycle.js';
 import { spawn } from 'node:child_process';
 import { createRunner } from '../lib/run/spawn.js';
+
+// createScheduler's default lifecycle defaults to process.platform, so on real Windows CI
+// tick()'s unconditional enforceTimeouts() call would otherwise shell out to the real
+// taskkill.exe/powershell.exe from lib/run/spawn.js to reap this test's own live process.
+// Those execFileSync calls have no timeout, and a hung or slow external process there
+// hangs the whole job silently (see P6-05). This test doesn't exercise signal-ignoring
+// semantics, so Node's process.kill — which Windows always treats as an unconditional
+// TerminateProcess, regardless of signal name — reaps it just as reliably, without ever
+// invoking an external process. Windows-specific escalation mechanics (real taskkill argv,
+// the pid-reuse identity guard) are covered deterministically by run-lifecycle-windows.test.js.
+function winSafeKill() {
+  return process.platform !== 'win32' ? {} : {
+    taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])]; },
+    windowsStartTimeFn: () => Date.now(),
+  };
+}
 
 const stages = { stages: [{ id: 'backlog' }, { id: 'specified', auto: true, requires: { deps_at_least: 'specified' } }, { id: 'done', auto: false }], terminal: ['done'] };
 
@@ -34,6 +51,15 @@ function scheduler(store, { registry = { list: () => ({ records: [] }) }, calls 
       runner: { start(args) { calls.push(args); return { provider: 'fixture' }; } },
     }),
   };
+}
+
+// Bounded so a platform divergence in child-process exit reporting fails with a
+// message instead of hanging the job silently (see P6-05).
+function onceClose(child, ms = 20000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out waiting for the child process to close')), ms);
+    child.once('close', (...args) => { clearTimeout(timer); resolve(args); });
+  });
 }
 
 async function waitUntil(predicate, timeout, message) {
@@ -112,7 +138,7 @@ test('a fresh scheduler instance enforces a timeout from the durable record star
   try {
     // This is intentionally a newly-created scheduler, modelling a restarted
     // supervisor whose only clock is the durable registry timestamp.
-    const restarted = createScheduler({ store, registry });
+    const restarted = createScheduler({ store, registry, lifecycle: createRunLifecycle({ store, registry, ...winSafeKill() }) });
     assert.equal(restarted.tick().status, 'paused');
     // Poll rather than sleep. This waits on a SIGTERM the child ignores, a
     // SIGKILL escalation, and the OS reaping the process; a fixed delay makes
@@ -135,9 +161,9 @@ test('a normally completed run frees capacity so the next tick starts the next q
   let sequence = 0;
   const runner = createRunner({ spawnFn: (_argv, options) => spawn(process.execPath, ['-e', 'process.exit(0)'], options) });
   const subject = createScheduler({ store, runner, makeRunId: () => `r-${++sequence}`, worktree: { ensure: ({ item: candidate }) => ({ path: candidate.id === first.id ? firstTree : secondTree }) } });
-  const initial = subject.tick(); await new Promise((resolve) => initial.started.child.once('close', resolve));
+  const initial = subject.tick(); await onceClose(initial.started.child);
   assert.equal(createRunRegistry({ store }).list().records.length, 0); assert.equal(store.readItems().find((entry) => entry.id === first.id).owner, null);
   const next = subject.tick();
   assert.equal(next.status, 'started'); assert.equal(next.item, second.id);
-  await new Promise((resolve) => next.started.child.once('close', resolve));
+  await onceClose(next.started.child);
 });

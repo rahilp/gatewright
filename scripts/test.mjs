@@ -10,5 +10,9 @@ const dir = 'test';
 const files = readdirSync(dir).filter((name) => name.endsWith('.test.js')).sort().map((name) => join(dir, name));
 if (files.length === 0) { console.error('no test files found in test/'); process.exit(1); }
 
-const result = spawnSync(process.execPath, ['--test', ...process.argv.slice(2), ...files], { stdio: 'inherit' });
+// A global backstop: a test that spawns a real process and never gets a signal it expects
+// (a platform difference in signal/kill semantics, an unresponsive external command) must
+// fail with a message, not hang until the CI job itself is killed (see P6-05). Generous
+// enough to clear the suite's own multi-second polling waits with room to spare.
+const result = spawnSync(process.execPath, ['--test', '--test-timeout=60000', ...process.argv.slice(2), ...files], { stdio: 'inherit' });
 process.exit(result.status ?? 1);

@@ -22,10 +22,33 @@ function board({ timeout = 0.02 } = {}) {
 function child(source, cwd) { return spawn(process.execPath, ['-e', source], { detached: true, stdio: 'ignore', cwd }); }
 function waitGone(pid, tries = 40) { return new Promise((resolve) => { const tick = () => { try { process.kill(pid, 0); } catch { resolve(true); return; } if (!tries--) { resolve(false); return; } setTimeout(tick, 10); }; tick(); }); }
 function killFinally(proc) { try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { process.kill(proc.pid, 'SIGKILL'); } catch {} } }
+// Bounded so a platform divergence in child-process exit reporting fails with a
+// message instead of hanging the job silently (see P6-05).
+function onceClose(child, ms = 20000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out waiting for the child process to close')), ms);
+    child.once('close', (...args) => { clearTimeout(timer); resolve(args); });
+  });
+}
 function providerConfig() { return { runner: { provider: 'fixture', prompt_template: '.gatewright/prompt.md', providers: { fixture: { cmd: ['fixture', '{prompt}'] } } } }; }
+// createRunLifecycle defaults to process.platform, so on real Windows CI these calls
+// would otherwise shell out to the real taskkill.exe/powershell.exe from lib/run/spawn.js
+// to reap the test's own child processes. Those execFileSync calls have no timeout, and a
+// hung or slow external process there hangs the whole job (this is what P6-05 fixed: a
+// silent hang, not a failure). None of these fixtures test signal-ignoring semantics, so
+// Node's process.kill — which Windows always treats as an unconditional TerminateProcess,
+// regardless of signal name — reaps them just as reliably, without ever invoking an
+// external process. Windows-specific escalation mechanics (real taskkill argv, the
+// pid-reuse identity guard) are covered deterministically by run-lifecycle-windows.test.js.
+function winSafeKill() {
+  return process.platform !== 'win32' ? {} : {
+    taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])]; },
+    windowsStartTimeFn: () => Date.now(),
+  };
+}
 function startedStub(fixture, source, { started } = {}) {
   writeFileSync(fixture.store.paths.prompt, '{{title}}');
-  const lifecycle = createRunLifecycle({ store: fixture.store, registry: fixture.registry });
+  const lifecycle = createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() });
   const run = createRunner({ spawnFn: (_argv, options) => spawn(process.execPath, ['-e', source], options) }).start({ config: providerConfig(), item: fixture.store.readItems()[0], run: 'r-1', worktree: fixture.worktree, root: fixture.root, registry: fixture.registry, onExit: lifecycle.finish });
   if (started) fixture.registry.record({ ...run.record, started });
   return run;
@@ -35,7 +58,7 @@ test('stop SIGTERMs a recorded process, pauses the item, retains its worktree, a
   const fixture = board(); const proc = child('setInterval(() => {}, 1000)', fixture.worktree);
   try {
     fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree, log: join(fixture.store.dir, 'runs', 'P4-07-r-1.log') });
-    const result = await createRunLifecycle({ store: fixture.store, registry: fixture.registry, gitHead: () => 'deadbeef' }).stopItem('P4-07');
+    const result = await createRunLifecycle({ store: fixture.store, registry: fixture.registry, gitHead: () => 'deadbeef', ...winSafeKill() }).stopItem('P4-07');
     assert.equal(result[0].status, 'stopped'); assert.equal(await waitGone(proc.pid), true);
     const item = fixture.store.readItems()[0]; assert.equal(item.stage, 'paused'); assert.equal(item.flag, 'paused'); assert.equal(item.prev_stage, 'building'); assert.equal(item.last_commit, 'deadbeef');
     assert.equal(existsSync(fixture.worktree), true); assert.equal(fixture.registry.list().records.length, 0);
@@ -43,7 +66,9 @@ test('stop SIGTERMs a recorded process, pauses the item, retains its worktree, a
   } finally { killFinally(proc); }
 });
 
-test('a SIGTERM-ignoring process is escalated to SIGKILL', async () => {
+test('a SIGTERM-ignoring process is escalated to SIGKILL', {
+  skip: process.platform === 'win32' ? 'Windows has no signal to ignore: process.kill there always terminates unconditionally, so this scenario cannot be modeled without shelling out to real taskkill/powershell; the escalation itself is covered by run-lifecycle-windows.test.js\'s "escalates from taskkill... when the agent ignores the request" test.' : false,
+}, async () => {
   const fixture = board({ timeout: 0.01 }); const proc = child("process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", fixture.worktree);
   try {
     fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree });
@@ -57,7 +82,7 @@ test('stop all works with no server: it stops every record and persistently paus
   try {
     fixture.store.writeItems([{ id: 'P4-07', stage: 'building', flag: null }, { id: 'P4-08', stage: 'building', flag: null }]);
     fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: first.pid, worktree: fixture.worktree }); fixture.registry.record({ run: 'r-2', item: 'P4-08', pid: second.pid, worktree: fixture.worktree });
-    await createRunLifecycle({ store: fixture.store, registry: fixture.registry }).stopAll();
+    await createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).stopAll();
     assert.equal(await waitGone(first.pid), true); assert.equal(await waitGone(second.pid), true);
     assert.equal(JSON.parse((await import('node:fs')).readFileSync(fixture.store.paths.config, 'utf8')).runner.paused, true);
   } finally { killFinally(first); killFinally(second); }
@@ -73,7 +98,7 @@ test('timeout is measured from the durable started record, not this process life
   const fixture = board(); const proc = child("process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", fixture.worktree);
   try {
     fixture.registry.record({ run: 'r-old', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree, started: new Date(Date.now() - 61_000).toISOString() });
-    await createRunLifecycle({ store: fixture.store, registry: fixture.registry }).enforceTimeouts();
+    await createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).enforceTimeouts();
     assert.equal(await waitGone(proc.pid), true); assert.equal(fixture.store.readEvents().at(-1).outcome, 'timeout');
   } finally { killFinally(proc); }
 });
@@ -82,22 +107,22 @@ test('normal exit writes ok, releases ownership, clears capacity, and survives u
   const fixture = board(); writeFileSync(fixture.store.paths.prompt, '{{title}}');
   const lifecycle = createRunLifecycle({ store: fixture.store, registry: fixture.registry, gitHead: () => { throw new Error('no git'); } });
   const run = createRunner({ spawnFn: (_argv, options) => spawn(process.execPath, ['-e', 'process.exit(0)'], options) }).start({ config: providerConfig(), item: fixture.store.readItems()[0], run: 'r-ok', worktree: fixture.worktree, root: fixture.root, registry: fixture.registry, onExit: lifecycle.finish });
-  await new Promise((resolve) => run.child.once('close', resolve));
+  await onceClose(run.child);
   const event = fixture.store.readEvents().at(-1);
   assert.equal(event.outcome, 'ok'); assert.equal(event.last_commit, null); assert.equal(fixture.store.readItems()[0].owner, null); assert.equal(fixture.registry.list().records.length, 0);
 });
 
 test('non-zero exit writes error and releases ownership', async () => {
   const fixture = board(); const run = startedStub(fixture, 'process.exit(7)');
-  await new Promise((resolve) => run.child.once('close', resolve));
+  await onceClose(run.child);
   assert.equal(fixture.store.readEvents().at(-1).outcome, 'error'); assert.equal(fixture.store.readItems()[0].owner, null); assert.equal(fixture.registry.list().records.length, 0);
 });
 
 test('stop then close writes exactly one cancelled run_ended event', async () => {
   const fixture = board({ timeout: 0.01 }); const run = startedStub(fixture, 'setInterval(() => {}, 1000)');
   try {
-    createRunLifecycle({ store: fixture.store, registry: fixture.registry }).stopItem('P4-07');
-    await new Promise((resolve) => run.child.once('close', resolve));
+    createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).stopItem('P4-07');
+    await onceClose(run.child);
     const ended = fixture.store.readEvents().filter((event) => event.type === 'run_ended');
     assert.deepEqual(ended.map((event) => event.outcome), ['cancelled']);
   } finally { killFinally(run.child); }
@@ -106,8 +131,8 @@ test('stop then close writes exactly one cancelled run_ended event', async () =>
 test('timeout then close writes exactly one timeout run_ended event', async () => {
   const fixture = board({ timeout: 0.01 }); const run = startedStub(fixture, "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", { started: new Date(Date.now() - 61_000).toISOString() });
   try {
-    createRunLifecycle({ store: fixture.store, registry: fixture.registry }).enforceTimeouts();
-    await new Promise((resolve) => run.child.once('close', resolve));
+    createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).enforceTimeouts();
+    await onceClose(run.child);
     const ended = fixture.store.readEvents().filter((event) => event.type === 'run_ended');
     assert.deepEqual(ended.map((event) => event.outcome), ['timeout']);
   } finally { killFinally(run.child); }
@@ -118,7 +143,7 @@ test('resume dispatches its stopped-run log tail into the next dry-run rendered 
   try {
     writeFileSync(log, 'known first line\nknown final line\n');
     fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: proc.pid, worktree: fixture.worktree, log });
-    createRunLifecycle({ store: fixture.store, registry: fixture.registry }).stopItem('P4-07');
+    createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).stopItem('P4-07');
     const resumed = createRunLifecycle({ store: fixture.store, registry: fixture.registry }).resume('P4-07');
     assert.equal(fixture.store.readItems()[0].stage, 'building'); assert.equal(fixture.store.readItems()[0].flag, null); assert.equal(fixture.store.readEvents().at(-1).type, 'dispatch');
     assert.equal(resumed.promptValues.log_tail, 'known first line\nknown final line');
