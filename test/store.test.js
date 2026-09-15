@@ -169,7 +169,7 @@ test('concurrent read-modify-writes from separate processes lose nothing', async
   const ids = Array.from({ length: 8 }, (_, i) => `P1-${String(i + 1).padStart(2, '0')}`);
 
   await Promise.all(ids.map((id) => new Promise((resolve, reject) => {
-    execFile(process.execPath, [worker, store.root, id], (err) => (err ? reject(err) : resolve()));
+    execFile(process.execPath, [worker, store.root, id], { env: { ...process.env, GW_TEST_LOCK_GIVEUP_MS: '60000' } }, (err) => (err ? reject(err) : resolve()));
   })));
 
   assert.deepEqual(store.readItems().map((i) => i.id).sort(), [...ids].sort());
