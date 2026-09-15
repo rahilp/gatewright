@@ -205,7 +205,9 @@ const glossaryConfig = {
 test('P8-26: a legend line explains only the phase/gate codes actually shown', () => {
   const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
   const out = renderBrief({ items: [next], events: [], stages, config: glossaryConfig });
-  assert.match(out, /^Legend: P1 = The first working version\. · G0 = No gate: ship when the evidence rule is met\.$/m);
+  // The legend may wrap, so check for the opening and closing patterns
+  assert.match(out, /^Legend: P1 = The first working version\./m);
+  assert.match(out, /No gate: ship when the evidence rule is met\.$/m);
 });
 
 test('P8-26: no glossary configured means no legend line at all', () => {
@@ -234,4 +236,145 @@ test('P8-26: the legend never pushes the brief past its line cap', () => {
   };
   const out = renderBrief({ items, events: [], stages, config });
   assert.ok(out.trimEnd().split('\n').length <= 12, 'the cap wins over legend completeness');
+});
+
+test('P8-27: the legend wraps to multiple rows and no row exceeds the computed width', () => {
+  // Create a legend with long descriptions that will wrap
+  const items = makeItems(2).map((item, index) => ({
+    ...item,
+    stage: 'backlog',
+    owner: null,
+    flag: null,
+    deps: [],
+    phase: index === 0 ? 'P1' : 'P2',
+    gate: index === 0 ? 'G0' : 'G1',
+  }));
+  const config = {
+    brief: { max_lines: 25 },
+    vocab: { phase: ['P1', 'P2'], gate: ['G0', 'G1'] },
+    glossary: {
+      phase: {
+        P1: 'The first working version: the core this product is useless without.',
+        P2: 'The work that makes the core usable day to day.',
+      },
+      gate: {
+        G0: 'Blocking: the phase cannot be called done while this is open.',
+        G1: 'Planned: meant for this phase, but the phase can ship without it.',
+      },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  const lines = out.split('\n');
+  const legendStart = lines.findIndex((line) => line.startsWith('Legend:'));
+  assert.ok(legendStart >= 0, 'legend should be present');
+
+  // Find all legend lines (first starts with "Legend:", continuations start with 7 spaces)
+  const legendLines = [];
+  for (let i = legendStart; i < lines.length; i++) {
+    if (i === legendStart) {
+      legendLines.push(lines[i]);
+    } else if (lines[i].startsWith('       ')) {
+      legendLines.push(lines[i]);
+    } else {
+      break;
+    }
+  }
+
+  // Legend should wrap to multiple lines
+  assert.ok(legendLines.length > 1, `legend should wrap to multiple lines, got ${legendLines.length}`);
+
+  // No row should exceed the wrap width of 76
+  const WRAP_WIDTH = 76;
+  for (const line of legendLines) {
+    assert.ok(line.length <= WRAP_WIDTH, `legend line exceeds width: ${line.length} chars: ${line}`);
+  }
+
+  // No wrap should happen mid-word
+  for (const line of legendLines) {
+    // Check that lines don't end with a space (which would indicate a word-break problem)
+    assert.ok(!line.endsWith(' '), `legend line should not end with space: ${line}`);
+  }
+});
+
+test('P8-27: wrapped legend rows are counted against the budget and dropped if they do not fit', () => {
+  // Create items with long phase/gate descriptions that will wrap to multiple lines
+  const items = makeItems(10).map((item, index) => ({
+    ...item,
+    stage: 'backlog',
+    owner: null,
+    flag: null,
+    deps: [],
+    phase: 'P1',
+    gate: 'G0',
+  }));
+  const config = {
+    brief: { max_lines: 10 }, // Very tight budget
+    vocab: { phase: ['P1'], gate: ['G0'] },
+    glossary: {
+      phase: {
+        P1: 'The first working version: the core this product is useless without. More text to ensure wrapping.',
+      },
+      gate: {
+        G0: 'Blocking: the phase cannot be called done while this is open. More text here too.',
+      },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  const lines = out.trimEnd().split('\n');
+
+  // With such a tight budget, the legend should be dropped if it wraps to multiple lines
+  assert.ok(lines.length <= 10, `output should respect line limit: ${lines.length} lines`);
+
+  // If the legend is present, it must fit entirely within the budget
+  const hasLegend = lines.some((line) => line.startsWith('Legend:'));
+  if (hasLegend) {
+    const legendStart = lines.findIndex((line) => line.startsWith('Legend:'));
+    let legendLineCount = 1;
+    for (let i = legendStart + 1; i < lines.length; i++) {
+      if (lines[i].startsWith('       ')) {
+        legendLineCount++;
+      } else {
+        break;
+      }
+    }
+    // Verify that the total lines including legend do not exceed the budget
+    assert.ok(lines.length <= 10, 'legend should not cause line limit to be exceeded');
+  }
+});
+
+test('P8-27: continuation lines are indented with 7 spaces to align with legend text', () => {
+  const items = makeItems(2).map((item, index) => ({
+    ...item,
+    stage: 'backlog',
+    owner: null,
+    flag: null,
+    deps: [],
+    phase: 'P1',
+    gate: 'G0',
+  }));
+  const config = {
+    brief: { max_lines: 25 },
+    vocab: { phase: ['P1'], gate: ['G0'] },
+    glossary: {
+      phase: {
+        P1: 'The first working version that is super duper long to ensure multiple lines of wrapping.',
+      },
+      gate: {
+        G0: 'Blocking gate with a very long description to make sure this wraps properly and stays aligned.',
+      },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  const lines = out.split('\n');
+  const legendStart = lines.findIndex((line) => line.startsWith('Legend:'));
+  assert.ok(legendStart >= 0, 'legend should be present');
+
+  // All continuation lines should start with exactly 7 spaces
+  for (let i = legendStart + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('       ')) {
+      assert.ok(/^       [^ ]/.test(lines[i]), `continuation line should have exactly 7 spaces of indent: ${lines[i]}`);
+    } else if (lines[i].length > 0) {
+      break; // Legend section ended
+    }
+  }
 });

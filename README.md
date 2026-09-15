@@ -272,7 +272,7 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 Gatewright is at v0.9.0.
 
-Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only — CSV and JSON return exit 2 today), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
+Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only at the time; CSV and JSON arrived in v0.9), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
 Shipped in v0.2: `gw serve`: a live board with write-back, editing, Play/Stop queuing, and global pause.
 
