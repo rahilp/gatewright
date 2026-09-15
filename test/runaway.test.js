@@ -60,7 +60,15 @@ function runawayRunner(store, { longRunning = false } = {}) {
         const child = store.readItems().at(-1); store.appendEvent({ type: 'dispatch', item: child.id, by: options.env.GW_ACTOR });
       } catch (error) { refused.push({ parent, error: error.message }); }
     }
-    if (longRunning) { const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: options.cwd, detached: true, stdio: 'ignore' }); processes.push(child); return child; }
+    if (longRunning) {
+      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: options.cwd, detached: true, stdio: 'ignore' });
+      // Registered before lib/run/spawn.js attaches its own 'close' handler,
+      // so this flag is set first and reap() can tell "already fully closed"
+      // from "exited but its completion handler has not run yet".
+      child.once('close', () => { child.gwClosed = true; });
+      processes.push(child);
+      return child;
+    }
     const child = new EventEmitter(); child.pid = ++pid; children.set(parent, child); return child;
   } });
   return { runner, children, processes, refused };
@@ -86,8 +94,18 @@ function assertTick(store, registry, { held }) {
 // FILE on a strict runner while every individual test passes. Wait for the
 // exit we asked for.
 async function reap(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch { return; } }
+  // Deliberately NOT `child.exitCode !== null`. exitCode is set on 'exit',
+  // which fires BEFORE 'close' -- and the runner's completion handler, the
+  // thing whose durable writes must land before this fixture deletes its temp
+  // root, runs on 'close'. Returning early on exitCode skipped exactly the
+  // wait this function exists for, and since lifecycle.stopAll() runs before
+  // the teardown that window was the common case, not the rare one.
+  if (child.gwClosed) return;
+  // A failing kill means the process is already gone (ESRCH), not that there
+  // is nothing to wait for: 'close' may still be pending, and returning here
+  // reintroduced the very race above. Fall through to the bounded wait either
+  // way -- it resolves as soon as 'close' arrives.
+  try { process.kill(-child.pid, 'SIGKILL'); } catch { try { process.kill(child.pid, 'SIGKILL'); } catch { /* already gone */ } }
   // Wait for 'close', not 'exit'. 'exit' fires first, but the runner's own
   // completion handler is registered on 'close' and writes the run's ending
   // through store.withLock. Resolving on 'exit' let this fixture delete its
@@ -140,7 +158,12 @@ test('P4-18 auto-dispatch is an explicit bounded policy choice and stop --all pa
 
     assert.equal(existsSync(join(subject.traps, 'INVOKED')), false, 'PATH traps prove no real provider was invoked');
   } finally {
-    if (live) await Promise.all(live.processes.map(reap));
+    if (live) {
+      await Promise.all(live.processes.map(reap));
+      // One more turn so anything the completion handlers queued has run
+      // before the directory they write into disappears.
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     process.env.PATH = priorPath; rmSync(subject.root, { recursive: true, force: true }); rmSync(subject.traps, { recursive: true, force: true });
   }
 });
@@ -163,7 +186,12 @@ test('P4-18 stop --all pauses a live stub runaway and prevents later ticks from 
     // `children` holds fakes with invented pids (50001+); signalling those does
     // nothing useful and could hit an unrelated process group that happens to
     // own that pid. The spawned processes live in `processes`.
-    if (live) await Promise.all(live.processes.map(reap));
+    if (live) {
+      await Promise.all(live.processes.map(reap));
+      // One more turn so anything the completion handlers queued has run
+      // before the directory they write into disappears.
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     process.env.PATH = priorPath; rmSync(subject.root, { recursive: true, force: true }); rmSync(subject.traps, { recursive: true, force: true });
   }
 });
