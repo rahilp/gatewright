@@ -554,3 +554,7 @@
 {"ts":"2026-09-15T10:51:28.525Z","type":"note","item":"P7-05","by":"human:rahil","note":"Decision: keep the stage, give it the rule it was always claiming. specified now requires a non-empty scope, so 'Specified' means scope is written rather than being a free pass. Applied to the shipped template and specs 4 only; existing boards keep their stages.json untouched, since retroactively adding a gate would make working boards report failures for work already done."}
 {"ts":"2026-09-15T10:51:36.066Z","type":"move","item":"P7-06","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","lib/serve/server.js","test/serve-write.test.js"]}
 {"ts":"2026-09-15T10:53:04.666Z","type":"move","item":"P3-07","from":"building","to":"built","by":"human:rahil","evidence":["lib/sync/push.js","test/sync-push.test.js"]}
+{"ts":"2026-09-15T11:02:04.508Z","type":"claim","item":"P7-07","by":"human:rahil"}
+{"ts":"2026-09-15T11:02:04.559Z","type":"move","item":"P7-07","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:02:04.610Z","type":"move","item":"P7-07","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T11:02:04.665Z","type":"move","item":"P7-07","from":"building","to":"built","by":"human:rahil","evidence":["lib/run/lifecycle.js","lib/serve/server.js","test/run-lifecycle.test.js"]}

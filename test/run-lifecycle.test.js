@@ -169,3 +169,41 @@ test('resume dispatches its stopped-run log tail into the next dry-run rendered 
     assert.match(started.prompt, /tail follows:\nknown first line\nknown final line/);
   } finally { killFinally(proc); }
 });
+
+// stop is split across the grace period so the wait can be blocking or not
+// without two copies of the logic deciding whether a process may be killed.
+// `gw stop` must keep working with no event loop at all -- that is what makes
+// it a kill switch when the host is unhealthy -- while `gw serve` must not
+// freeze its single thread for stop_timeout_s.
+test('stopItemAsync leaves the event loop turning through the grace period, stopItem deliberately does not', async () => {
+  const graceSeconds = 0.4;
+
+  const asyncFixture = board({ timeout: graceSeconds });
+  const asyncChild = child('setInterval(() => {}, 1000)', asyncFixture.worktree);
+  asyncFixture.registry.record({ run: 'r-1', item: 'P4-07', pid: asyncChild.pid, provider: 'stub', worktree: asyncFixture.worktree, started: new Date().toISOString() });
+  let ticks = 0;
+  const ticker = setInterval(() => { ticks += 1; }, 20);
+  try {
+    const results = await createRunLifecycle({ store: asyncFixture.store, registry: asyncFixture.registry, ...winSafeKill() }).stopItemAsync('P4-07');
+    assert.equal(results[0].status, 'stopped');
+    assert.ok(ticks > 0, `a timer must fire during the grace period; it fired ${ticks} times`);
+  } finally {
+    clearInterval(ticker);
+    killFinally(asyncChild);
+  }
+
+  // The blocking form is not a bug to be fixed later; it is the CLI's
+  // guarantee. Pinned so nobody "tidies" it into the async one.
+  const syncFixture = board({ timeout: graceSeconds });
+  const syncChild = child('setInterval(() => {}, 1000)', syncFixture.worktree);
+  syncFixture.registry.record({ run: 'r-2', item: 'P4-07', pid: syncChild.pid, provider: 'stub', worktree: syncFixture.worktree, started: new Date().toISOString() });
+  let blockedTicks = 0;
+  const blockedTicker = setInterval(() => { blockedTicks += 1; }, 20);
+  try {
+    createRunLifecycle({ store: syncFixture.store, registry: syncFixture.registry, ...winSafeKill() }).stopItem('P4-07');
+    assert.equal(blockedTicks, 0, 'the synchronous path must not have yielded: that is what lets gw stop work without an event loop');
+  } finally {
+    clearInterval(blockedTicker);
+    killFinally(syncChild);
+  }
+});
