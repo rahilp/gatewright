@@ -649,3 +649,41 @@
 {"ts":"2026-09-15T16:33:22.071Z","type":"move","item":"P8-06","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: built a gate with checkboxes and a stage picker; CLI enforced it immediately"]}
 {"ts":"2026-09-15T16:33:22.130Z","type":"move","item":"P8-07","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified live: saved runner.max_concurrent=7 through HTTP, persisted with a config event"]}
 {"ts":"2026-09-15T16:33:22.194Z","type":"move","item":"P8-21","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","test/viewer.test.js"]}
+{"ts":"2026-09-15T21:36:45.907Z","type":"claim","item":"P8-22","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:45.966Z","type":"move","item":"P8-22","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.018Z","type":"move","item":"P8-22","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.076Z","type":"claim","item":"P8-25","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:46.131Z","type":"move","item":"P8-25","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.181Z","type":"move","item":"P8-25","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.232Z","type":"claim","item":"P8-23","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:46.287Z","type":"move","item":"P8-23","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.337Z","type":"move","item":"P8-23","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.389Z","type":"claim","item":"P8-20","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:46.441Z","type":"move","item":"P8-20","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.496Z","type":"move","item":"P8-20","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.550Z","type":"claim","item":"P8-19","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:46.605Z","type":"move","item":"P8-19","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.658Z","type":"move","item":"P8-19","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.712Z","type":"claim","item":"P8-24","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:46.768Z","type":"move","item":"P8-24","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.825Z","type":"move","item":"P8-24","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.881Z","type":"claim","item":"P8-26","by":"human:rahil"}
+{"ts":"2026-09-15T21:36:46.939Z","type":"move","item":"P8-26","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:36:46.992Z","type":"move","item":"P8-26","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:41:49.687Z","type":"move","item":"P8-23","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/add.js","verified: child of a P3 parent now inherits P3; explicit --phase still wins"]}
+{"ts":"2026-09-15T21:41:49.741Z","type":"move","item":"P8-20","from":"building","to":"built","by":"human:rahil","evidence":["specs.md","verified: sections 1-14 sequential, no duplicates, all cross-references resolve"]}
+{"ts":"2026-09-15T21:41:49.796Z","type":"claim","item":"P8-12","by":"human:rahil"}
+{"ts":"2026-09-15T21:41:49.852Z","type":"move","item":"P8-12","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:41:49.913Z","type":"move","item":"P8-12","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:41:49.965Z","type":"claim","item":"P8-15","by":"human:rahil"}
+{"ts":"2026-09-15T21:41:50.013Z","type":"move","item":"P8-15","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:41:50.063Z","type":"move","item":"P8-15","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:41:50.114Z","type":"claim","item":"P8-18","by":"human:rahil"}
+{"ts":"2026-09-15T21:41:50.163Z","type":"move","item":"P8-18","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:41:50.218Z","type":"move","item":"P8-18","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-15T21:48:17.365Z","type":"add","item":"P8-27","by":"human:rahil","parent":null}
+{"ts":"2026-09-15T21:48:17.424Z","type":"move","item":"P8-22","from":"building","to":"built","by":"human:rahil","evidence":["lib/rules.js","lib/commands/move.js","verified: 'specified: move here first: run gw move P1-01 specified'"]}
+{"ts":"2026-09-15T21:48:17.480Z","type":"move","item":"P8-25","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/next.js","lib/transitions.js","verified: gw next lists reachable stages and unmet conditions"]}
+{"ts":"2026-09-15T21:48:17.537Z","type":"move","item":"P8-24","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: claimed-but-unmoved is 0 in flight; a real move counts"]}
+{"ts":"2026-09-15T21:48:17.591Z","type":"move","item":"P8-26","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: single legend line for codes actually shown"]}
+{"ts":"2026-09-15T21:48:17.647Z","type":"move","item":"P8-19","from":"building","to":"built","by":"human:rahil","evidence":["lib/settings.js","verified: POST /api/config sets glossary.gate.G0, unknown field refused with the CLI wording"]}

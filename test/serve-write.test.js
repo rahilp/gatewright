@@ -313,6 +313,58 @@ test('an unknown config key is refused with the CLI message and writes nothing',
   });
 });
 
+// P8-19 — `gw config glossary.gate.G0 "..."` worked, but the board's Settings
+// UI could never reach the same key: /api/config validated only through
+// SETTINGS_BY_KEY, which does not (and should not) enumerate a map keyed by
+// the user's own vocab. The fix moves the glossary write into
+// lib/settings.js (applyGlossaryEntry) so both callers share one validating
+// path -- these tests prove the endpoint now accepts what the CLI accepts,
+// and refuses what the CLI refuses, in the CLI's exact words.
+test('P8-19: POST /api/config sets a glossary entry the CLI accepts, and it round-trips through config.json', async () => {
+  await withServer(async ({ store, url }) => {
+    const response = await write(url, '/api/config', { key: 'glossary.gate.G0', value: 'No gate: ship when the evidence rule is met.' });
+    assert.equal(response.status, 200, 'the board must be able to set a glossary entry, not only the CLI');
+    assert.deepEqual((await response.json()).config, { 'glossary.gate.G0': 'No gate: ship when the evidence rule is met.' });
+    const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+    assert.equal(saved.glossary.gate.G0, 'No gate: ship when the evidence rule is met.');
+    assert.deepEqual(store.readEvents().map((event) => event.type), ['config']);
+  });
+});
+
+test('P8-19: POST /api/config refuses an unknown glossary field with the exact CLI wording, and writes nothing', async () => {
+  await withServer(async ({ store, url }) => {
+    const before = readFileSync(store.paths.config);
+    let stderr = '';
+    await runRouter(['config', 'glossary.colour.G0', 'nope'], { cwd: store.root, env: {}, stdout: { write() {} }, stderr: { write: (text) => { stderr += text; } } });
+    const response = await write(url, '/api/config', { key: 'glossary.colour.G0', value: 'nope' });
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.match(body.error, /glossary\.colour\.G0 names an unknown vocab field: colour/);
+    assert.ok(stderr.includes(body.error), 'the endpoint must refuse an unknown glossary field in the same words the CLI uses');
+    assert.deepEqual(readFileSync(store.paths.config), before, 'a refused glossary write leaves config.json byte-identical');
+  });
+});
+
+test('P8-19: an empty glossary value removes the entry through the endpoint, same as the CLI', async () => {
+  await withServer(async ({ store, url }) => {
+    await write(url, '/api/config', { key: 'glossary.gate.G0', value: 'Something.' });
+    const response = await write(url, '/api/config', { key: 'glossary.gate.G0', value: '' });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).config, { 'glossary.gate.G0': null });
+    assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')).glossary.gate, {});
+  });
+});
+
+test('P8-19: glossary and ordinary settings can be set together in one request', async () => {
+  await withServer(async ({ store, url }) => {
+    const response = await write(url, '/api/config', { settings: { 'glossary.gate.G0': 'No gate.', 'runner.max_concurrent': 5 } });
+    assert.equal(response.status, 200);
+    const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+    assert.equal(saved.glossary.gate.G0, 'No gate.');
+    assert.equal(saved.runner.max_concurrent, 5);
+  });
+});
+
 test('an out-of-range config value is refused with the CLI message and writes nothing', async () => {
   await withServer(async ({ store, url }) => {
     const before = readFileSync(store.paths.config);

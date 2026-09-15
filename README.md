@@ -185,6 +185,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw claim <id> [--by <who>]` | Take ownership |
 | `gw release <id>` | Drop ownership |
 | `gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]` | Advance a stage; refused if its exit rule is unmet |
+| `gw next <id> [--json]` | Show the stage(s) an item can move to right now, and the unmet conditions in plain English for the rest |
 | `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--gate G] [--deps a,b] [--refs a,b] [--by <who>]` | Change non-stage, non-evidence, non-notes fields |
 | `gw note <id> "<text>" [--by <who>]` | Append a timestamped line to the item's notes |
 | `gw show <id> [--json]` | Print one item and its events |

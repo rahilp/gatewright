@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js';
 import { run as runBrief } from '../lib/commands/brief.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
-import { renderBrief } from '../lib/brief.js';
+import { renderBrief, inFlightTitles } from '../lib/brief.js';
 import { makeItems, makeEvents } from './fixtures/make-items.js';
 
 const stages = { stages: [
@@ -143,4 +143,95 @@ test('fixture titles vary in length for truncation and alignment coverage', () =
   assert.ok(new Set(titles).size > 3);
   assert.ok(titles.some((value) => value.length < 30));
   assert.ok(titles.some((value) => value.length > 80));
+});
+
+// P8-24 — claiming an item sets item.owner but never touches its stage, so
+// ownership alone used to be read as "in flight". A card sitting untouched in
+// backlog with someone's name on it is not in-progress work; it is a promise
+// that has not been kept yet, and burying it in IN FLIGHT hid the fact that
+// nobody had actually started.
+test('P8-24: an item that is claimed but never moved is not reported in flight', () => {
+  const claimed = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
+  const out = renderBrief({ items: [claimed], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 1 open · 0 in flight · 0 blocked/m);
+  assert.equal(out.includes('IN FLIGHT'), false, 'a claimed-but-unmoved item must not populate IN FLIGHT');
+});
+
+test('P8-24: an item is in flight once it has actually moved past its first stage, owned or not', () => {
+  const moved = { ...makeItems(1)[0], id: 'P1-01', stage: 'specified', owner: 'human:rahil', flag: null, deps: [] };
+  const out = renderBrief({ items: [moved], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 1 open · 1 in flight · 0 blocked/m);
+  assert.match(out, /IN FLIGHT[\s\S]*P1-01/);
+});
+
+test('P8-24: a claimed item with a live dispatch is in flight even before it has moved', () => {
+  // The dispatch is by the scheduler, not by `me` -- otherwise it would land
+  // in DISPATCHED TO YOU instead, which is exactly as correct but tests a
+  // different section. The point here is that the active dispatch alone (no
+  // stage movement yet) is what makes it count as in-flight work.
+  const claimed = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
+  const out = renderBrief({
+    items: [claimed],
+    events: [{ type: 'dispatch', item: 'P1-01', by: 'scheduler' }],
+    stages,
+    config: { brief: { max_lines: 25 } },
+  }, { me: 'human:rahil' });
+  assert.match(out, /^gw · 1 open · 1 in flight · 0 blocked/m);
+  assert.match(out, /IN FLIGHT[\s\S]*P1-01/, 'a live run makes an item in flight even while it is still in its first stage');
+});
+
+test('P8-24: inFlightTitles agrees with the brief -- claimed-but-unmoved is excluded, progressed is included', () => {
+  const claimed = { ...makeItems(1)[0], id: 'P1-01', title: 'Claimed only', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
+  const moved = { ...makeItems(1)[0], id: 'P1-02', title: 'Actually moved', stage: 'specified', owner: null, flag: null, deps: [] };
+  const titles = inFlightTitles({ items: [claimed, moved], events: [], stages });
+  assert.deepEqual(titles, ['Actually moved']);
+});
+
+// P8-26 — NEXT UNBLOCKED prints bare phase/gate codes ("P1 G0") with nothing
+// to say what they mean. config.glossary already carries that meaning, and
+// `gw show` already reads it via describeTerm; brief did not. A legend line
+// naming only the codes actually on screen keeps the digest from growing one
+// sentence per row while still answering the question a new agent has the
+// first time it sees "G0".
+const glossaryConfig = {
+  brief: { max_lines: 25 },
+  vocab: { gate: ['G0'], phase: ['P1'] },
+  glossary: {
+    gate: { G0: 'No gate: ship when the evidence rule is met.' },
+    phase: { P1: 'The first working version.' },
+  },
+};
+
+test('P8-26: a legend line explains only the phase/gate codes actually shown', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+  const out = renderBrief({ items: [next], events: [], stages, config: glossaryConfig });
+  assert.match(out, /^Legend: P1 = The first working version\. · G0 = No gate: ship when the evidence rule is met\.$/m);
+});
+
+test('P8-26: no glossary configured means no legend line at all', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+  const out = renderBrief({ items: [next], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.equal(out.includes('Legend:'), false);
+});
+
+test('P8-26: a code with no glossary entry is left out of the legend rather than printed blank', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P2', gate: 'G0' };
+  const config = { brief: { max_lines: 25 }, vocab: { gate: ['G0'], phase: ['P1', 'P2'] }, glossary: { gate: { G0: 'No gate.' } } };
+  const out = renderBrief({ items: [next], events: [], stages, config });
+  assert.match(out, /^Legend: G0 = No gate\.$/m);
+  assert.equal(out.includes('P2 ='), false, 'P2 has no glossary entry, so it is silently absent from the legend');
+});
+
+test('P8-26: the legend never pushes the brief past its line cap', () => {
+  const items = makeItems(20).map((item, index) => ({ ...item, stage: 'backlog', owner: null, flag: null, deps: [], phase: `P${index % 4}`, gate: `G${index % 3}` }));
+  const config = {
+    brief: { max_lines: 12 },
+    vocab: { phase: ['P0', 'P1', 'P2', 'P3'], gate: ['G0', 'G1', 'G2'] },
+    glossary: {
+      phase: { P0: 'Phase zero.', P1: 'Phase one.', P2: 'Phase two.', P3: 'Phase three.' },
+      gate: { G0: 'Gate zero.', G1: 'Gate one.', G2: 'Gate two.' },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  assert.ok(out.trimEnd().split('\n').length <= 12, 'the cap wins over legend completeness');
 });
