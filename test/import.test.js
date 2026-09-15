@@ -95,7 +95,9 @@ test('parseMarkdown round-trips the real tasks.md with 89 items and correct deta
 
 test('resolveImportStage places verified only when requirements are actually met', () => {
   const stages = defaultStages();
-  const base = { id: 'X', owner: 'human:tester', deps: [], evidence: [] };
+  // A scope, because `specified` now requires one and these gates are
+  // cumulative. The subject of this test is evidence, not scoping.
+  const base = { id: 'X', owner: 'human:tester', deps: [], evidence: [], scope: 'what done looks like' };
   const noEvidence = resolveImportStage({ ...base }, 'verified', { items: [], stages });
   assert.equal(noEvidence.stage, 'backlog');
   assert.match(noEvidence.reason, /2 evidence/);

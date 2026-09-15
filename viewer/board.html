@@ -391,6 +391,9 @@
     cursor: pointer;
   }
   .tag.badge-queued { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+  /* Running must be visually distinct from queued: one is costing money right
+     now, the other is waiting for a scheduler tick. */
+  .tag.badge-running { color: #7ee787; border-color: #2ea043; background: rgba(46,160,67,0.15); }
   #gw-pause-btn {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -525,6 +528,41 @@
     } catch (error) {
       return { ok: false, status: 0, data: { error: error.message || 'network error' } };
     }
+  }
+
+  // Mirrors isTerminalStage in lib/stages.js. The viewer previously consulted
+  // only stages.terminal, so a pipeline whose finish line is declared with
+  // `role: "done"` -- which is what `gw init` now writes for trunk workflows --
+  // had its finished column treated as ongoing, and every completed card
+  // offered a Play button with nothing left to play.
+  function terminalStageIds() {
+    const all = (State.stages.stages || []).concat(State.stages.extra || []);
+    const ids = new Set(State.stages.terminal || []);
+    for (const stage of all) {
+      if (stage.role === 'done' || stage.role === 'dropped') ids.add(stage.id);
+    }
+    if (!all.some((stage) => stage.role === 'dropped') && all.some((stage) => stage.id === 'dropped')) ids.add('dropped');
+    return ids;
+  }
+
+  function isTerminalItem(it) {
+    return terminalStageIds().has(it.stage);
+  }
+
+  // A live run, as opposed to a queued dispatch. /api/state has carried these
+  // records all along; the buttons simply never asked.
+  function runFor(id) {
+    return (State.runs || []).find((record) => record.item === id) || null;
+  }
+
+  // Every surface that offers an action resolves it here, so a card and its
+  // detail panel cannot disagree about what is happening to an item.
+  function actionFor(it) {
+    if (isTerminalItem(it)) return { kind: 'none' };
+    const run = runFor(it.id);
+    if (run) return { kind: 'running', run: run };
+    if (isDispatched(it.id)) return { kind: 'queued' };
+    return { kind: 'idle' };
   }
 
   function isDispatched(id) {
@@ -705,9 +743,18 @@
     const parent = it.parent ? State.items.find((candidate) => candidate.id === it.parent) : null;
     const parentState = it.parent && !parent ? 'orphaned parent' : parent && (State.stages.terminal || []).includes(parent.stage) ? 'parent terminal' : null;
     const queueOnlyNote = schedulerIsOff() ? ' The scheduler is off, so this only queues the item — nothing will run.' : '';
-    const actions = State.live ? '<div class="card-actions">' + (dispatched
-      ? '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch.">Stop</button>'
-      : '<button data-play="' + escapeHtml(it.id) + '" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play</button>') + '</div>' : '';
+    const action = actionFor(it);
+    var actionHtml = '';
+    if (action.kind === 'running') {
+      actionHtml = '<button data-stoprun="' + escapeHtml(it.id) + '" title="Stops the agent process for this run.">Stop run</button>';
+    } else if (action.kind === 'queued') {
+      actionHtml = '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch before it starts.">Cancel</button>';
+    } else if (action.kind === 'idle') {
+      actionHtml = '<button data-play="' + escapeHtml(it.id) + '" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play</button>';
+    }
+    // action.kind === 'none' is a finished item: no button, because there is
+    // nothing left to start, queue or stop.
+    const actions = State.live && actionHtml ? '<div class="card-actions">' + actionHtml + '</div>' : '';
     return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
@@ -716,7 +763,7 @@
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
-      (dispatched ? '<span class="tag badge-queued">queued</span>' : '') +
+      (action.kind === 'running' ? '<span class="tag badge-running">running</span>' : action.kind === 'queued' ? '<span class="tag badge-queued">queued</span>' : '') +
       (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
       '<span class="tag mono">ev:' + evCount + '</span>' +
       '</div>' + actions + '</div>';
@@ -889,10 +936,17 @@
 
     const dispatched = isDispatched(it.id);
     const queueOnlyNote = schedulerIsOff() ? ' The scheduler is off, so this only queues the item — nothing will run.' : '';
-    const playStop = State.live
-      ? '<div class="panel-actions">' + (dispatched
-        ? '<button id="panel-stop" title="Cancels the queued dispatch.">Stop (cancel dispatch)</button>'
-        : '<button id="panel-play" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play (queue for an agent)</button>') + '</div>'
+    const panelAction = actionFor(it);
+    var panelButton = '';
+    if (panelAction.kind === 'running') {
+      panelButton = '<button id="panel-stoprun" title="Stops the agent process for this run.">Stop run</button>';
+    } else if (panelAction.kind === 'queued') {
+      panelButton = '<button id="panel-stop" title="Cancels the queued dispatch before it starts.">Cancel dispatch</button>';
+    } else if (panelAction.kind === 'idle') {
+      panelButton = '<button id="panel-play" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play (queue for an agent)</button>';
+    }
+    const playStop = State.live && panelButton
+      ? '<div class="panel-actions">' + panelButton + '</div>'
       : '';
 
     const activeRun = activeRunFor(it.id);
@@ -1009,6 +1063,8 @@
     if (playBtn) playBtn.addEventListener('click', () => onDispatchClick(it.id, 'dispatch', playBtn));
     const stopBtn = panel.querySelector('#panel-stop');
     if (stopBtn) stopBtn.addEventListener('click', () => onDispatchClick(it.id, 'cancel', stopBtn));
+    const stopRunBtn = panel.querySelector('#panel-stoprun');
+    if (stopRunBtn) stopRunBtn.addEventListener('click', () => onDispatchClick(it.id, 'stop', stopRunBtn));
     const resumeBtn = panel.querySelector('#panel-resume');
     if (resumeBtn) resumeBtn.addEventListener('click', () => onDispatchClick(it.id, 'resume', resumeBtn));
     const approveBtn = panel.querySelector('#panel-triage-approve');
@@ -1278,6 +1334,10 @@
       if (playBtn) { e.stopPropagation(); onDispatchClick(playBtn.dataset.play, 'dispatch', playBtn); return; }
       const stopBtn = e.target.closest('[data-stop]');
       if (stopBtn) { e.stopPropagation(); onDispatchClick(stopBtn.dataset.stop, 'cancel', stopBtn); return; }
+      // Distinct from cancel: this one reaches a process that is already
+      // running, rather than withdrawing a dispatch that has not started.
+      const stopRunBtn = e.target.closest('[data-stoprun]');
+      if (stopRunBtn) { e.stopPropagation(); onDispatchClick(stopRunBtn.dataset.stoprun, 'stop', stopRunBtn); return; }
       const card = e.target.closest('[data-id]');
       if (card) openPanel(card.dataset.id);
     });
