@@ -178,7 +178,17 @@ export function runPreflight({ root = process.cwd(), ci = false } = {}) {
 
     const tag = command(root, 'git', ['tag', '-l', `v${pkg.version}`]);
     if (!tag.ok) failures.push(`git tag: could not inspect tags; fix git metadata. ${tag.output}`);
-    else if (tag.output.split(/\r?\n/).includes(`v${pkg.version}`)) failures.push(`git tag: v${pkg.version} already exists; bump package.json before publishing.`);
+    else if (tag.output.split(/\r?\n/).includes(`v${pkg.version}`)) {
+      // A tag for this version is only a problem when it points somewhere other
+      // than HEAD. Tagging before publishing is a legitimate order, and a
+      // publish can fail after the tag is written — blocking on the release's
+      // own tag is a false positive, and false positives get checks muted.
+      const tagged = command(root, 'git', ['rev-parse', `v${pkg.version}^{commit}`]);
+      const head = command(root, 'git', ['rev-parse', 'HEAD']);
+      if (!tagged.ok || !head.ok || tagged.output.trim() !== head.output.trim()) {
+        failures.push(`git tag: v${pkg.version} already exists and points at a different commit; bump package.json before publishing.`);
+      }
+    }
     const branch = command(root, 'git', ['branch', '--show-current']);
     const defaultRef = command(root, 'git', ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']);
     const defaultBranch = defaultRef.ok ? defaultRef.output.replace(/^origin\//, '').trim() : 'main';
