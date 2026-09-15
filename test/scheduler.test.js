@@ -21,8 +21,8 @@ import { createRunner } from '../lib/run/spawn.js';
 // the pid-reuse identity guard) are covered deterministically by run-lifecycle-windows.test.js.
 function winSafeKill() {
   return process.platform !== 'win32' ? {} : {
-    taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])]; },
-    windowsStartTimeFn: () => Date.now(),
+    taskkillFn: (pid, { force }) => { try { process.kill(pid, force ? 'SIGKILL' : 'SIGTERM'); } catch {} return { timedOut: false }; },
+    windowsStartTimeFn: () => ({ startTime: Date.now(), timedOut: false }),
   };
 }
 
