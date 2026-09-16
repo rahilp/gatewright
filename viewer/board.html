@@ -165,6 +165,19 @@
   .count-row:last-child { border-bottom: none; }
   .count-row .bar { flex: 1; margin: 0 0.6rem; background: var(--bg-sunken); border-radius: 0.2rem; overflow: hidden; height: 0.5rem; align-self: center; }
   .count-row .bar span { display: block; height: 100%; background: var(--accent); }
+  /* Overview (P8-13): the headline answers "what should I do next", the four
+     census charts move behind a <details> toggle below it. Never deleted --
+     see renderOverview -- just no longer the first thing on screen. */
+  .overview-section { margin-bottom: 1.1rem; }
+  .overview-heading { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 0.6rem; }
+  .overview-distribution { margin-top: 0.4rem; }
+  .overview-distribution > summary { cursor: pointer; font-size: 0.8rem; color: var(--accent); padding: 0.3rem 0; }
+  .overview-distribution .overview-grid { margin-top: 0.7rem; }
+  .brief-row { cursor: pointer; gap: 0.6rem; }
+  .brief-row:hover { color: var(--accent); }
+  .brief-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brief-row span:last-child { color: var(--text-faint); white-space: nowrap; }
+  .brief-card .meta { color: var(--text-dim); font-size: 0.82rem; }
 
   /* Board */
   #board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
@@ -176,6 +189,10 @@
     max-width: 260px;
     flex: 0 0 auto;
   }
+  /* A terminal column collapsed to its recent handful gets its width back to
+     the non-terminal columns that matter -- see terminalStageIds() and
+     renderBoard(). Never so narrow the count or the toggle wrap. */
+  .column.collapsed { min-width: 150px; max-width: 170px; }
   .column-head {
     padding: 0.55rem 0.7rem;
     border-bottom: 1px solid var(--border);
@@ -183,12 +200,25 @@
     font-weight: 600;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
     position: sticky;
     top: 0;
     background: var(--bg-raised);
     border-radius: 0.5rem 0.5rem 0 0;
   }
+  .column-head .column-head-main { display: flex; gap: 0.4rem; align-items: baseline; overflow: hidden; text-overflow: ellipsis; }
   .column-head .count { color: var(--text-faint); font-weight: 400; }
+  .column-toggle {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text-dim);
+    border-radius: 0.3rem;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
   .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
   .card {
     background: var(--bg-sunken);
@@ -199,6 +229,41 @@
     font-size: 0.8rem;
   }
   .card:hover { border-color: var(--accent); }
+  .card[draggable="true"] { cursor: grab; }
+  .card.dragging { opacity: 0.4; cursor: grabbing; }
+  /* While a drag is in flight the columns say which of them would accept it.
+     An invalid column is dimmed and carries the refusal as its tooltip; the
+     drop itself is refused by dragover, not by the server round trip. */
+  #board.dragging .column { transition: opacity 0.1s ease; }
+  #board.dragging .column.drop-ok { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  #board.dragging .column.drop-ok.drop-over { background: var(--accent-bg); }
+  /* A backward drop is offered too (P8-18), but it must never read like an
+     ordinary forward move: warn colors instead of accent, everywhere this
+     drag is reflected. */
+  #board.dragging .column.drop-back { outline: 2px dashed var(--warn); outline-offset: -2px; }
+  #board.dragging .column.drop-back.drop-over { background: var(--warn-bg); }
+  #board.dragging .column.drop-back .column-head::after { content: '\21b6 backward'; color: var(--warn); margin-left: 0.35rem; font-weight: 400; font-size: 0.7rem; }
+  #board.dragging .column.drop-invalid { opacity: 0.4; cursor: not-allowed; }
+  #board.dragging .column.drop-invalid .column-head::after { content: '✕'; color: var(--text-faint); margin-left: 0.35rem; }
+  #board.dragging .column.drop-source { outline: 1px dashed var(--border); outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) { #board.dragging .column { transition: none; } }
+  #gw-drop-refusal {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 120;
+    max-width: 26rem;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.6rem 0.6rem 0.75rem;
+    box-shadow: var(--shadow);
+    font-size: 0.8rem;
+  }
+  #gw-drop-refusal h4 { margin: 0 0 0.3rem; font-size: 0.8rem; }
+  #gw-drop-refusal ul { margin: 0; padding-left: 1.1rem; }
+  #gw-drop-refusal .close-btn { position: absolute; top: 0.15rem; right: 0.4rem; background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; }
   .card.card-child { margin-left: 0.8rem; border-left: 3px solid var(--border); }
   .card.card-moved { animation: card-moved 1.6s ease-out; }
   @keyframes card-moved { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } to { border-color: var(--border); box-shadow: none; } }
@@ -223,6 +288,20 @@
   table.gw-table th.sorted { color: var(--text); }
   table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
   table.gw-table td.id { white-space: nowrap; }
+  /* Table row actions (P8-14): claim/release and a move picker, so a row can
+     change something without opening the item's panel. */
+  table.gw-table td.row-actions-cell { white-space: nowrap; }
+  .row-actions { display: inline-flex; gap: 0.3rem; margin-right: 0.35rem; }
+  .row-actions button, select.row-move {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text);
+    border-radius: 0.3rem;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  select.row-move { max-width: 10rem; }
 
   /* Stages & rules */
   .stage-rule {
@@ -234,8 +313,15 @@
   }
   .stage-rule h3 { margin: 0 0 0.25rem; font-size: 0.88rem; }
   .stage-rule .exit { color: var(--text-dim); font-size: 0.82rem; margin: 0 0 0.4rem; }
-  .stage-rule .requires { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); white-space: pre-wrap; }
+  .stage-rule .requires { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); white-space: pre-wrap; margin: 0.35rem 0 0; }
   .stage-rule .flags { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.3rem; }
+  /* The sentences are the point of this view; the JSON is the footnote. */
+  .stage-rule .gate-sentences { margin: 0.3rem 0 0.45rem; padding-left: 1.1rem; font-size: 0.85rem; }
+  .stage-rule .gate-sentences li { margin: 0.12rem 0; }
+  .stage-rule .gate-missing { font-size: 0.82rem; color: var(--text-dim); margin: 0.3rem 0 0.45rem; }
+  details.machine-rule { margin-top: 0.35rem; }
+  details.machine-rule > summary { cursor: pointer; font-size: 0.72rem; color: var(--text-faint); }
+  details.machine-rule ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); }
 
   /* Export */
   .export-panel { max-width: 40rem; }
@@ -307,7 +393,31 @@
     border-color: var(--accent);
     cursor: pointer;
   }
-  #gw-panel .stage-reason { font-size: 0.7rem; color: var(--text-dim); }
+  /* Backward moves are offered (P8-18) but must never be mistaken for a
+     forward one: warn colors and a back-arrow label, on the button itself and
+     wherever its reason is explained. */
+  #gw-panel .stage-buttons button.move-back:not([disabled]) {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border-color: var(--warn);
+  }
+  #gw-panel .stage-reason { font-size: 0.72rem; color: var(--text-dim); }
+  #gw-panel .stage-reason.stage-reason-back { color: var(--warn); }
+  #gw-panel .stage-reason .reason-head { display: block; color: var(--text-faint); }
+  #gw-panel .stage-reason ul { margin: 0.1rem 0 0; padding-left: 1rem; }
+  #gw-panel .stage-reason li { margin: 0.1rem 0; }
+  /* Where an unmet gate maps to an action the board can perform (P8-15),
+     e.g. "needs an owner" becomes a Claim button right next to the sentence. */
+  #gw-panel .stage-reason .reason-action {
+    margin-left: 0.4rem;
+    border: 1px solid var(--accent);
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-radius: 0.3rem;
+    padding: 0.03rem 0.4rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
   #gw-panel .stage-refusal:empty { display: none; }
   .refusal {
     color: var(--danger);
@@ -391,6 +501,15 @@
     cursor: pointer;
   }
   .tag.badge-queued { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+  /* "Nothing is running" is information, not an absence: it gets a chip of its
+     own so a card never leaves the question open. */
+  .tag.badge-idle { color: var(--text-faint); border-style: dashed; }
+  /* A Play that can only queue must not look like a Play that starts work. */
+  .card-actions button.secondary, #gw-panel .panel-actions button.secondary {
+    border-color: var(--border);
+    background: var(--bg-sunken);
+    color: var(--text-dim);
+  }
   /* Running must be visually distinct from queued: one is costing money right
      now, the other is waiting for a scheduler tick. */
   .tag.badge-running { color: #7ee787; border-color: #2ea043; background: rgba(46,160,67,0.15); }
@@ -411,6 +530,85 @@
     font-size: 0.82rem;
     text-align: center;
   }
+  /* Admin editors -- stages, gates, settings. These are the controls that
+     change the RULES of the board rather than the work on it, so they are
+     only ever rendered when /api/state says admin.allowed. */
+  .admin-notice {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    border-radius: 0.4rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
+    margin: 0 0 0.8rem;
+    max-width: 52rem;
+  }
+  .admin-notice code { font-family: var(--mono); }
+  .admin-error {
+    color: var(--danger);
+    background: var(--danger-bg);
+    border: 1px solid var(--danger);
+    border-radius: 0.35rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.78rem;
+    margin: 0.4rem 0 0;
+    white-space: pre-wrap;
+    font-family: var(--mono);
+  }
+  .admin-error:empty { display: none; }
+  .stage-rule .stage-head { display: flex; align-items: baseline; gap: 0.5rem; }
+  .stage-rule .stage-head h3 { flex: 1; margin-bottom: 0; }
+  .stage-tools { display: flex; gap: 0.25rem; }
+  .stage-tools button, .admin-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    color: var(--text);
+    border-radius: 0.3rem;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .stage-tools button[disabled] { color: var(--text-faint); cursor: not-allowed; }
+  .stage-tools button.danger { color: var(--danger); border-color: var(--danger); }
+  details.stage-editor { margin-top: 0.5rem; }
+  details.stage-editor > summary { cursor: pointer; font-size: 0.76rem; color: var(--accent); }
+  .editor-grid { display: grid; grid-template-columns: 11rem 1fr; gap: 0.4rem 0.7rem; align-items: center; margin: 0.5rem 0; font-size: 0.8rem; }
+  .editor-grid > label { color: var(--text-dim); }
+  .editor-grid input[type="text"], .editor-grid input[type="number"], .editor-grid select {
+    background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text);
+    border-radius: 0.3rem; padding: 0.25rem 0.4rem; font-size: 0.8rem; width: 100%;
+  }
+  .editor-grid input[type="checkbox"] { justify-self: start; }
+  .editor-note { grid-column: 1 / -1; color: var(--text-faint); font-size: 0.74rem; }
+  .editor-actions { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+  .editor-actions button.primary { background: var(--accent); color: #fff; border: none; border-radius: 0.35rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; }
+  .gate-readback { background: var(--bg-sunken); border-radius: 0.35rem; padding: 0.4rem 0.6rem; margin: 0.4rem 0 0; }
+  .gate-readback h4 { margin: 0 0 0.2rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+  .gate-readback ul { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; }
+  .add-stage { background: var(--bg-raised); border: 1px dashed var(--border); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-top: 0.8rem; max-width: 52rem; }
+  .add-stage h3 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+
+  /* Settings */
+  .settings-panel { max-width: 52rem; }
+  .setting-row { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.6rem 0.85rem; margin-bottom: 0.5rem; }
+  .setting-row .setting-key { display: block; font-family: var(--mono); font-size: 0.82rem; font-weight: 600; }
+  .setting-row .setting-summary { color: var(--text-dim); font-size: 0.78rem; margin: 0.15rem 0 0.35rem; }
+  .setting-row .setting-danger { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 0.3rem; padding: 0.3rem 0.5rem; font-size: 0.76rem; margin: 0.3rem 0; }
+  .setting-row .setting-range { color: var(--text-faint); font-size: 0.74rem; margin-left: 0.4rem; }
+  .setting-row input[type="text"], .setting-row input[type="number"], .setting-row select {
+    background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text);
+    border-radius: 0.3rem; padding: 0.25rem 0.45rem; font-size: 0.8rem; min-width: 16rem;
+  }
+  .setting-row .setting-value { font-family: var(--mono); font-size: 0.8rem; }
+  .settings-save { position: sticky; bottom: 0; background: var(--bg); padding: 0.6rem 0; }
+  .settings-save button { background: var(--accent); color: #fff; border: none; border-radius: 0.4rem; padding: 0.45rem 0.9rem; font-size: 0.85rem; cursor: pointer; }
+
+  /* Glossary legend, shown wherever codes are aggregated into a chart. */
+  .glossary-legend { margin: 0.6rem 0 0; padding: 0.45rem 0 0; border-top: 1px solid var(--border); font-size: 0.74rem; color: var(--text-dim); }
+  .glossary-legend dl { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.5rem; margin: 0; }
+  .glossary-legend dt { font-family: var(--mono); color: var(--text); }
+  .glossary-legend dd { margin: 0; }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -428,6 +626,7 @@
     <button data-view="board">Board</button>
     <button data-view="table">Table</button>
     <button data-view="stages">Stages &amp; rules</button>
+    <button data-view="settings">Settings</button>
     <button data-view="export">Export</button>
   </nav>
 
@@ -452,6 +651,8 @@
   <div id="gw-overlay">
     <div id="gw-panel" role="dialog" aria-label="Item detail"></div>
   </div>
+
+  <div id="gw-drop-refusal" class="hidden" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
@@ -487,9 +688,205 @@
 
   const STAGE_LABEL_FALLBACK = (id) => id;
 
+  // -- glossary ------------------------------------------------------------
+  // `G0`, `P1` and `defect` are the user's own vocabulary, and a list of
+  // strings cannot explain itself. config.glossary is an OPTIONAL
+  // field -> code -> sentence map, so these two helpers mirror
+  // lib/glossary.js exactly, including how it degrades: a missing block, a
+  // string where a map should be, a number where a sentence should be, all
+  // mean "no description", and a code with no entry renders exactly as it did
+  // before. test/viewer.test.js runs both implementations over the same
+  // configs and compares them, because two notions of "described" in one
+  // product is how a board starts inventing help text.
+  // The vocab fields a glossary may describe, as lib/glossary.js declares them.
+  const GLOSSARY_FIELDS = ['phase', 'priority', 'gate', 'type'];
+
+  function glossaryFor(field) {
+    const config = State.config;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return {};
+    const block = config.glossary;
+    if (!block || typeof block !== 'object' || Array.isArray(block)) return {};
+    const entries = block[field];
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return {};
+    const described = {};
+    for (const code of Object.keys(entries)) {
+      if (code === '__proto__') continue;
+      const description = entries[code];
+      if (typeof description !== 'string' || !description.trim()) continue;
+      described[code] = description.trim();
+    }
+    return described;
+  }
+
+  function describeTerm(field, value) {
+    if (typeof value !== 'string' || !value) return null;
+    const described = glossaryFor(field);
+    return Object.prototype.hasOwnProperty.call(described, value) ? described[value] : null;
+  }
+
+  // The tooltip for one rendered code, or nothing at all when the board has
+  // not been told what the code means.
+  function termTitle(field, value) {
+    const description = field ? describeTerm(field, value) : null;
+    return description ? ' title="' + escapeHtml(description) + '"' : '';
+  }
+
+  // Where codes are aggregated -- the Overview charts -- a tooltip is not
+  // enough, because the reader has no reason to hover something they do not
+  // know is explainable. Those get the descriptions on screen.
+  function glossaryLegend(field, codes) {
+    if (!field) return '';
+    const described = [];
+    for (const code of codes) {
+      const description = describeTerm(field, code);
+      if (description) described.push([code, description]);
+    }
+    if (!described.length) return '';
+    return '<div class="glossary-legend"><dl>' + described
+      .map(([code, description]) => '<dt>' + escapeHtml(code) + '</dt><dd>' + escapeHtml(description) + '</dd>')
+      .join('') + '</dl></div>';
+  }
+
+  // -- who may change the rules --------------------------------------------
+  // One function decides this for every editor on the page, so the Stages view
+  // and the Settings view cannot disagree about whether this browser is
+  // allowed to change anything. 'snapshot' is a file written by `gw open` with
+  // no server behind it; 'remote' is a live board reached from somewhere other
+  // than the machine running `gw serve`, which the server refuses for stages
+  // and settings whatever --host says.
+  function adminMode() {
+    if (!State.live) return 'snapshot';
+    return State.admin && State.admin.allowed ? 'editable' : 'remote';
+  }
+
+  const ADMIN_REMOTE_NOTICE = 'stages and settings can only be changed on the machine running gw serve';
+
+  function adminNotice(what) {
+    const mode = adminMode();
+    if (mode === 'editable') return '';
+    if (mode === 'remote') {
+      return '<div class="admin-notice">' + escapeHtml(ADMIN_REMOTE_NOTICE) + ' &mdash; this page is read-only for ' + escapeHtml(what) + '.</div>';
+    }
+    return '<div class="admin-notice">This is a static snapshot, so ' + escapeHtml(what) +
+      ' cannot be changed here. Run <code>gw serve</code> on the machine holding the board to edit them.</div>';
+  }
+
+  function isEditorView() {
+    return State.view === 'stages' || State.view === 'settings';
+  }
+
+  // -- stages.json, as a document -----------------------------------------
+  // A verbatim copy of what the server last sent, minus the English gate
+  // descriptions it adds on the way out (those are derived, they are not part
+  // of stages.json and posting them back would put them in the file). This is
+  // a structural copy and nothing more: it decides nothing about a stage, and
+  // in particular it does not decide what "terminal" means -- terminalStageIds()
+  // is still the only thing that does.
+  function stagesDoc() {
+    const doc = JSON.parse(JSON.stringify(State.stages || {}));
+    delete doc.gates;
+    if (!Array.isArray(doc.stages)) doc.stages = [];
+    if (!Array.isArray(doc.extra)) doc.extra = [];
+    return doc;
+  }
+
+  // Move one pipeline stage by `delta` positions. Returns a new array, and
+  // returns the list untouched when the move would fall off either end, so a
+  // button that cannot do anything cannot silently do something else.
+  function movePipeline(list, id, delta) {
+    const next = list.slice();
+    const from = next.findIndex((stage) => stage.id === id);
+    if (from < 0) return next;
+    const to = from + delta;
+    if (to < 0 || to >= next.length) return next;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  }
+
+  // The rule keys this form edits. These are exactly the keys lib/rules.js
+  // reads -- no more, because a key the evaluator ignores is a rule the board
+  // would claim to enforce and does not, and no fewer, because a key only
+  // reachable by hand-editing JSON is the problem this view exists to solve.
+  // test/viewer.test.js pins this list against lib/rules.js itself.
+  const RULE_KEYS = ['scope', 'owner', 'evidence_min', 'evidence_match', 'deps_at_least'];
+
+  // Build a `requires` object from what the gate form holds. `existing` is the
+  // stage's current requires, so any key this form does not know about is
+  // carried through untouched rather than being deleted by a save that never
+  // mentioned it. Returns null when nothing is required at all, which is how
+  // stages.json spells "advanced by hand".
+  function buildRequires(values, existing) {
+    const requires = {};
+    for (const key of Object.keys(existing || {})) {
+      if (RULE_KEYS.indexOf(key) === -1) requires[key] = existing[key];
+    }
+    if (values.scope) requires.scope = true;
+    if (values.owner) requires.owner = true;
+    const min = Number(values.evidence_min);
+    if (Number.isInteger(min) && min > 0) requires.evidence_min = min;
+    const match = String(values.evidence_match == null ? '' : values.evidence_match).trim();
+    if (match) requires.evidence_match = match;
+    const deps = String(values.deps_at_least == null ? '' : values.deps_at_least).trim();
+    if (deps) requires.deps_at_least = deps;
+    return Object.keys(requires).length ? requires : null;
+  }
+
+  // The one thing this form can get wrong that the server will not catch for
+  // it: stages.json has no schema for `evidence_min`, so a fractional minimum
+  // would be written through and then compared against a list length forever.
+  // buildRequires drops a value it cannot use, and a silently dropped rule is
+  // worse than a refusal, so the save path asks this first.
+  function gateInputProblem(values) {
+    const raw = String(values.evidence_min == null ? '' : values.evidence_min).trim();
+    if (raw === '') return null;
+    const min = Number(raw);
+    if (!Number.isInteger(min) || min < 0) {
+      return 'minimum evidence must be a whole number, or blank for no minimum.';
+    }
+    return null;
+  }
+
+  function showAdminError(boxId, message) {
+    const box = document.getElementById(boxId);
+    if (box) box.textContent = message;
+  }
+
+  // Every stage change is a whole-pipeline PUT, and every refusal the server
+  // returns is shown exactly as it was written. The server's wording names the
+  // stage, the count and the fix ("stage backlog still holds 2 items; move them
+  // elsewhere before removing that stage."); replacing it with "failed" would
+  // throw away the only part a human can act on.
+  async function saveStages(doc, boxId) {
+    if (Inflight.has('stages')) return { ok: false, skipped: true };
+    Inflight.add('stages');
+    showAdminError(boxId, '');
+    const result = await apiWrite('/api/stages', doc);
+    Inflight.delete('stages');
+    if (result.ok) {
+      State.formDirty = false;
+      await refreshNow();
+      return result;
+    }
+    showAdminError(boxId, (result.data && result.data.error) || 'request failed');
+    return result;
+  }
+
   const State = {
     items: [], events: [], stages: { stages: [], extra: [] }, config: {}, sync: { status: 'off' }, generatedAt: null, live: false,
     runs: [], scheduler: { status: 'disabled' },
+    // Whether this request may change the RULES of the board (stages, gates,
+    // settings) as opposed to the work on it. /api/state answers it per
+    // request; a snapshot has no server to ask, so the default is "no".
+    admin: { allowed: false },
+    // Set while someone is typing in the stages or settings editors, so the
+    // two-second poll cannot wipe a half-filled form out from under them.
+    formDirty: false,
+    // Which terminal columns a human has clicked open. Absent means
+    // collapsed -- see terminalStageIds() and renderBoard() -- and a Set
+    // living on State survives every 2-second poll untouched, so reading
+    // Built does not get reset out from under whoever is reading it.
+    expandedStages: new Set(),
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     runLogs: {}, runLogLoading: {}, runLogErrors: {},
@@ -498,6 +895,7 @@
     sort: { key: 'updated', dir: 'desc' },
     pendingEvidence: {},
     creatingItem: false,
+    drag: null,
   };
 
   // -- write path: every request goes through /api/*, then the existing poll
@@ -530,11 +928,15 @@
     }
   }
 
-  // Mirrors isTerminalStage in lib/stages.js. The viewer previously consulted
-  // only stages.terminal, so a pipeline whose finish line is declared with
+  // Mirrors isTerminalStage in lib/stages.js, and is the ONLY place this page
+  // decides what "terminal" means. The viewer previously consulted only
+  // stages.terminal, so a pipeline whose finish line is declared with
   // `role: "done"` -- which is what `gw init` now writes for trunk workflows --
-  // had its finished column treated as ongoing, and every completed card
-  // offered a Play button with nothing left to play.
+  // had its finished column treated as ongoing: every completed card offered a
+  // Play button with nothing left to play, and the header counted 109 items
+  // "open" on a board `gw brief` reported 6 open for. Two notions of terminal
+  // in one file is how that happened, so there is now one. Nothing else may
+  // read that list directly; test/viewer.test.js enforces it.
   function terminalStageIds() {
     const all = (State.stages.stages || []).concat(State.stages.extra || []);
     const ids = new Set(State.stages.terminal || []);
@@ -547,6 +949,32 @@
 
   function isTerminalItem(it) {
     return terminalStageIds().has(it.stage);
+  }
+
+  // How many of a collapsed terminal column's most-recently-touched items
+  // stay visible without asking. Small enough that the four columns that
+  // matter get their width back; big enough that "recent" means something.
+  const COLLAPSED_PREVIEW_COUNT = 5;
+
+  // A stage's position in the PIPELINE (never `stages.extra`, which is not an
+  // ordered flow). Mirrors stageIndex in lib/rules.js -- this file has no
+  // module loader to share it with, so the definition is repeated, not
+  // reinvented: same lookup, same "not in the pipeline" answer of -1.
+  function pipelineIndex(stageId) {
+    return (State.stages.stages || []).findIndex((stage) => stage.id === stageId);
+  }
+
+  // Whether moving from one pipeline stage to another goes backward. This is
+  // the one thing that turns a forced transition (evaluateCumulative's
+  // `force: true`) into something the board is willing to offer at all: a
+  // forward skip still has no drop target or enabled button, because the
+  // board has no way to ask the CLI for "skip these stages" -- only "go back
+  // to one I already passed". A side stage (`stages.extra`, e.g. dropped) is
+  // not "backward" in this sense; it already has its own force rule.
+  function isBackwardTarget(fromStageId, toStageId) {
+    const fromIndex = pipelineIndex(fromStageId);
+    const toIndex = pipelineIndex(toStageId);
+    return fromIndex >= 0 && toIndex >= 0 && toIndex < fromIndex;
   }
 
   // A live run, as opposed to a queued dispatch. /api/state has carried these
@@ -589,6 +1017,7 @@
             stages: data.stages || { stages: [], extra: [] }, config: data.config || {},
             sync: data.sync || { status: 'off' },
             runs: data.runs || [], scheduler: data.scheduler || { status: 'disabled' },
+            admin: data.admin || { allowed: false },
             generatedAt: data.generatedAt || new Date().toISOString(), live: true,
           };
         }
@@ -599,6 +1028,7 @@
       items: items || [], events: events || [],
       stages: stages || { stages: [], extra: [] }, config: config || {},
       sync: { status: 'off' },
+      admin: { allowed: false },
       generatedAt: (config && config.generatedAt) || null, live: false,
     };
   }
@@ -606,6 +1036,51 @@
   function stageLabel(id) {
     const s = stageList(State.stages).find((s) => s.id === id);
     return s ? s.label : STAGE_LABEL_FALLBACK(id);
+  }
+
+  // The plain-English gate description for a stage. This page cannot import
+  // lib/gates/describe.js -- it is a single file with no module loader -- so
+  // the sentences are resolved in Node and travel inside the stages payload:
+  // `gw serve` puts them there (withGateDescriptions in lib/serve/server.js)
+  // and `gw open` puts them in the inlined gw-stages block, which is what
+  // keeps the offline snapshot readable. Never restate the wording here: a
+  // second copy would drift and the board would describe rules it does not
+  // enforce.
+  function gateFor(stageId) {
+    const gates = State.stages && State.stages.gates;
+    const gate = gates && gates[stageId];
+    return gate && Array.isArray(gate.sentences) ? gate : null;
+  }
+
+  function sentenceList(sentences, className) {
+    return '<ul' + (className ? ' class="' + className + '"' : '') + '>' +
+      sentences.map((line) => '<li>' + escapeHtml(line) + '</li>').join('') + '</ul>';
+  }
+
+  // Whether an owner is the thing missing. This has to be read off the
+  // machine failures the server already computed (evaluateCumulative in
+  // lib/rules.js, carried here as `transition.failures`) rather than
+  // re-deriving it from stages.json: the viewer has no client-side
+  // requirement evaluator, on purpose (see test/serve.test.js), so a second
+  // evaluator does not get invented just to decide when to draw a button.
+  // The match is on lib/rules.js's fixed prefix, not on the sentence
+  // lib/gates/describe.js produces, and the matched text is never rendered --
+  // only the English `reasons` already displayed next to it are.
+  function ownerGateUnmet(it, machineFailures) {
+    return !it.owner && (machineFailures || []).some((line) => /(^|:\s)needs an owner:/.test(line));
+  }
+
+  // The inline answer to "needs an owner": a Claim button next to the English
+  // reason, offered only when claiming would actually clear this gate.
+  function claimActionHtml(it, machineFailures) {
+    if (!State.live || !ownerGateUnmet(it, machineFailures)) return '';
+    return '<button class="reason-action" data-claim="' + escapeHtml(it.id) + '" title="Claims this item for you, so the owner gate above is met.">Claim</button>';
+  }
+
+  // The raw rule stays one disclosure away: agents and anyone debugging
+  // stages.json still need the literal JSON, it just stops being the headline.
+  function machineRule(body) {
+    return '<details class="machine-rule"><summary>machine rule</summary>' + body + '</details>';
   }
 
   function filteredItems() {
@@ -627,20 +1102,24 @@
 
   function populateFilterOptions() {
     const vocab = (State.config && State.config.vocab) || {};
-    function fill(select, values, current) {
+    function fill(select, values, current, field) {
       const keep = select.querySelector('option[value=""]');
       select.innerHTML = '';
       select.appendChild(keep);
       for (const v of values) {
         const opt = document.createElement('option');
         opt.value = v; opt.textContent = v;
+        // The filter bar is where a new reader first meets `G0` or `defect`.
+        // An undescribed code gets no title and renders exactly as before.
+        const description = field ? describeTerm(field, v) : null;
+        if (description) opt.title = description;
         if (v === current) opt.selected = true;
         select.appendChild(opt);
       }
     }
-    fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase);
-    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate);
-    fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type);
+    fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase, 'phase');
+    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate, 'gate');
+    fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type, 'type');
     fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
     fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
   }
@@ -657,12 +1136,24 @@
       : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>' + syncPill;
     const total = State.items.length;
     const flagged = State.items.filter((i) => i.flag).length;
-    const terminal = new Set(State.stages.terminal || []);
+    const terminal = terminalStageIds();
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
     document.getElementById('gw-totals').innerHTML =
       '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
     renderPauseUI();
     document.getElementById('f-new').classList.toggle('hidden', !State.live);
+  }
+
+  // One wording for the Play affordance, because a button that cannot start
+  // anything must not say "Play" on the card and something else in the panel.
+  function playLabel() {
+    return schedulerIsOff() ? 'Queue for an agent' : 'Play';
+  }
+
+  function playTitle() {
+    return schedulerIsOff()
+      ? 'Queues this item. The scheduler is off, so nothing will run until it is turned on.'
+      : 'Queues this item for an agent to pick up.';
   }
 
   function schedulerIsOff() {
@@ -704,13 +1195,120 @@
     return Math.max(0, Math.floor((Date.now() - State.lastLiveUpdate) / 1000)) + 's';
   }
 
+  // How long a run has actually been going. A card re-renders only when its
+  // item changes, so these labels are re-ticked by the one-second interval in
+  // boot() rather than waiting for the item to move.
+  function ageLabel(iso) {
+    const started = Date.parse(iso);
+    if (!Number.isFinite(started)) return '';
+    const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+    if (seconds < 60) return seconds + 's';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+    return Math.floor(seconds / 3600) + 'h ' + (Math.floor(seconds / 60) % 60) + 'm';
+  }
+
+  function runLabel(run) {
+    const age = ageLabel(run.started);
+    return 'running · ' + run.run + (age ? ' · ' + age : '');
+  }
+
+  function tickRunAges() {
+    document.querySelectorAll('[data-run-started]').forEach((el) => {
+      el.textContent = runLabel({ run: el.dataset.runId, started: el.dataset.runStarted });
+    });
+  }
+
   function syncAge(iso) {
     if (!iso) return 'never';
     const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
     return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm';
   }
 
+  // -- Overview as "what should I do next" (P8-13) ------------------------
+  // The Overview tab used to be four census charts (by stage/phase/gate/type)
+  // and nothing else -- a distribution, not an answer to the question a human
+  // actually opens the board with. `gw brief` already answers that question
+  // over the same data, so this mirrors its definitions instead of inventing
+  // a second set. In particular "in flight" is copied from lib/brief.js's
+  // computeActive/isInFlight line for line: real progress (the item moved
+  // past the stage it was created in) or a live dispatch (a `dispatch` event
+  // with no matching run_ended/cancel yet). Claiming an item alone does not
+  // qualify -- lib/brief.js has already had two bugs from a second notion of
+  // "terminal"; this file is not going to add a second notion of "in flight"
+  // next to it. test/viewer-brief-parity.test.js runs both implementations
+  // over the same fixtures and compares them.
+
+  // Mirrors computeActive in lib/brief.js exactly.
+  function computeActiveDispatch(events) {
+    const active = new Set();
+    for (const event of events) {
+      if (event.type === 'dispatch') active.add(event.item);
+      if (event.type === 'run_ended' || event.type === 'cancel') active.delete(event.item);
+    }
+    return active;
+  }
+
+  // Mirrors isInFlight in lib/brief.js, using this file's own pipelineIndex
+  // in place of lib/rules.js's stageIndex -- same lookup, same result, no
+  // module loader to share the original with (see pipelineIndex's own
+  // comment for the precedent).
+  function isInFlightItem(it, active) {
+    return pipelineIndex(it.stage) > 0 || active.has(it.id);
+  }
+
+  // Mirrors depsReady in lib/brief.js exactly.
+  function depsReadyItem(it) {
+    const target = (State.stages.stages || [])[pipelineIndex(it.stage) + 1];
+    const boundary = (target && target.requires && target.requires.deps_at_least) || ((it.deps || []).length ? it.stage : null);
+    return (it.deps || []).every((id) => {
+      const dep = State.items.find((candidate) => candidate.id === id);
+      return dep && (!boundary || pipelineIndex(dep.stage) >= pipelineIndex(boundary));
+    });
+  }
+
+  // The same open/blocked/triage/in-flight/next split renderBrief computes,
+  // minus the "assigned to me" personalization gw brief applies for a CLI
+  // user (the board has no login, so a live dispatch belongs to "in flight"
+  // whether or not it happens to be claimed) -- everything else is identical.
+  function briefBuckets() {
+    const active = computeActiveDispatch(State.events);
+    const open = State.items.filter((it) => !isTerminalItem(it));
+    const blocked = open.filter((it) => it.flag === 'blocked' || !depsReadyItem(it));
+    const triage = open.filter((it) => it.flag === 'needs-triage');
+    const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && it.flag !== 'needs-triage' && isInFlightItem(it, active));
+    const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 &&
+      !it.owner && pipelineIndex(it.stage) <= 0 && depsReadyItem(it));
+    return { open, blocked, triage, inFlight, next };
+  }
+
+  const BRIEF_SECTION_LIMIT = 8;
+
+  // One card in the "what next" row. Rows carry data-id, so the existing
+  // delegated click handler on #gw-view opens the item panel exactly as a
+  // board card or table row does -- no separate wiring needed.
+  function briefSectionHtml(title, items, note, emptyText) {
+    if (!items.length) {
+      return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + '</h2><p class="meta">' + escapeHtml(emptyText) + '</p></div>';
+    }
+    const shown = items.slice(0, BRIEF_SECTION_LIMIT);
+    const rows = shown.map((it) =>
+      '<div class="count-row brief-row" data-id="' + escapeHtml(it.id) + '">' +
+      '<span>' + escapeHtml(it.id) + ' · ' + escapeHtml(it.title) + '</span>' +
+      '<span>' + escapeHtml(note(it)) + '</span></div>'
+    ).join('');
+    const more = items.length > shown.length ? '<p class="meta">+' + (items.length - shown.length) + ' more</p>' : '';
+    return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + ' (' + items.length + ')</h2>' + rows + more + '</div>';
+  }
+
   function renderOverview(container) {
+    const { blocked, triage, inFlight, next } = briefBuckets();
+    const whatNext = '<div class="overview-grid">' +
+      briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
+      briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
+      briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
+      briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-') + ' ' + (it.gate || '-'), 'Nothing is unblocked and unowned.') +
+      '</div>';
+
     function counts(key) {
       const map = new Map();
       for (const it of State.items) {
@@ -719,30 +1317,82 @@
       }
       return [...map.entries()].sort((a, b) => b[1] - a[1]);
     }
-    function card(title, rows, labelFor) {
+    function card(title, rows, labelFor, field) {
       const max = Math.max(1, ...rows.map((r) => r[1]));
       const body = rows.map(([k, n]) =>
-        '<div class="count-row"><span>' + escapeHtml(labelFor ? labelFor(k) : k) + '</span>' +
+        '<div class="count-row"><span' + termTitle(field, k) + '>' + escapeHtml(labelFor ? labelFor(k) : k) + '</span>' +
         '<span class="bar"><span style="width:' + Math.round((n / max) * 100) + '%"></span></span>' +
         '<span>' + n + '</span></div>'
       ).join('');
-      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') + '</div>';
+      // These charts are where codes are aggregated with nothing else on the
+      // row to explain them, so the descriptions are on screen rather than
+      // only in a tooltip nobody knows to hover.
+      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') +
+        glossaryLegend(field, rows.map((r) => r[0])) + '</div>';
     }
     const byStageOrdered = stageList(State.stages).map((s) => [s.id, State.items.filter((i) => i.stage === s.id).length]).filter((r) => r[1] > 0);
-    container.innerHTML = '<div class="overview-grid">' +
+    const distribution = '<div class="overview-grid">' +
       card('By stage', byStageOrdered, stageLabel) +
-      card('By phase', counts('phase')) +
-      card('By gate', counts('gate')) +
-      card('By type', counts('type')) +
+      card('By phase', counts('phase'), null, 'phase') +
+      card('By gate', counts('gate'), null, 'gate') +
+      card('By type', counts('type'), null, 'type') +
       '</div>';
+
+    container.innerHTML =
+      '<div class="overview-section"><h2 class="overview-heading">What next</h2>' + whatNext + '</div>' +
+      '<details class="overview-distribution"><summary>Distribution (by stage, phase, gate, type)</summary>' + distribution + '</details>';
+  }
+
+  // -- card badges (P8-16) -------------------------------------------------
+  // `ev:0` on every card and `human:rahil` repeated on a hundred of them were
+  // both true and neither was informative: a fresh reader cannot decode
+  // "ev:0" at all, and an owner that never varies says nothing by being
+  // printed a hundred times. Both stay one click away -- the panel's Fields
+  // and Evidence sections -- they just stop being printed when they add
+  // nothing.
+
+  // The owner most items already have. Only worth omitting when it really is
+  // the common case; a board split roughly evenly between owners has no
+  // "obvious" one to leave off.
+  function defaultOwner() {
+    const counts = new Map();
+    for (const it of State.items) {
+      if (!it.owner) continue;
+      counts.set(it.owner, (counts.get(it.owner) || 0) + 1);
+    }
+    let top = null; let max = 0;
+    for (const [owner, n] of counts) { if (n > max) { max = n; top = owner; } }
+    return (State.items.length && max > State.items.length / 2) ? top : null;
+  }
+
+  // Whether this item's evidence is short of what its OWN next stage
+  // requires -- read straight off the stage the server already sent, the
+  // same way the panel's stage buttons and depsSelect already read
+  // `stage.requires` directly rather than through a client-side evaluator.
+  // Unlike evaluateCumulative in lib/rules.js this checks only the next
+  // stage, not every stage up to it -- exactly the question the badge asks:
+  // "is evidence why the very next move is short."
+  function evidenceGateUnmet(it) {
+    const targetId = nextStageId(State.stages, it.stage);
+    if (!targetId) return false;
+    const target = stageList(State.stages).find((s) => s.id === targetId);
+    const requires = target && target.requires;
+    if (!requires) return false;
+    const evidence = it.evidence || [];
+    if (requires.evidence_min && evidence.length < requires.evidence_min) return true;
+    if (requires.evidence_match) {
+      let re = null;
+      try { re = new RegExp(requires.evidence_match); } catch { return true; }
+      if (!evidence.some((e) => re.test(e))) return true;
+    }
+    return false;
   }
 
   function cardMarkup(it, moved) {
     const evCount = (it.evidence || []).length;
     const dispatched = isDispatched(it.id);
     const parent = it.parent ? State.items.find((candidate) => candidate.id === it.parent) : null;
-    const parentState = it.parent && !parent ? 'orphaned parent' : parent && (State.stages.terminal || []).includes(parent.stage) ? 'parent terminal' : null;
-    const queueOnlyNote = schedulerIsOff() ? ' The scheduler is off, so this only queues the item — nothing will run.' : '';
+    const parentState = it.parent && !parent ? 'orphaned parent' : parent && terminalStageIds().has(parent.stage) ? 'parent terminal' : null;
     const action = actionFor(it);
     var actionHtml = '';
     if (action.kind === 'running') {
@@ -750,35 +1400,297 @@
     } else if (action.kind === 'queued') {
       actionHtml = '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch before it starts.">Cancel</button>';
     } else if (action.kind === 'idle') {
-      actionHtml = '<button data-play="' + escapeHtml(it.id) + '" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play</button>';
+      actionHtml = '<button data-play="' + escapeHtml(it.id) + '"' + (schedulerIsOff() ? ' class="secondary"' : '') +
+        ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
+    // The stage says where the WORK is; this says whether an agent is actually
+    // on it. They are different axes, and a card that collapses them into one
+    // button cannot answer "is it actually doing the work?" -- a card sitting
+    // in Building, owned by a human, with nothing running, used to look
+    // identical to one an agent was burning money on.
+    const owner = defaultOwner();
+    const ownerIsDefault = Boolean(it.owner) && it.owner === owner;
+    const runStatus = action.kind === 'running'
+      ? '<span class="tag badge-running" data-run-id="' + escapeHtml(action.run.run) + '" data-run-started="' + escapeHtml(action.run.started || '') + '">' + escapeHtml(runLabel(action.run)) + '</span>'
+      : action.kind === 'queued'
+        ? '<span class="tag badge-queued">queued · no agent run yet</span>'
+        : action.kind === 'idle'
+          ? '<span class="tag badge-idle">no agent run' + (it.owner && !ownerIsDefault ? ' · ' + escapeHtml(it.owner) : (it.owner ? '' : ' · unowned')) + '</span>'
+          : '';
     // action.kind === 'none' is a finished item: no button, because there is
     // nothing left to start, queue or stop.
     const actions = State.live && actionHtml ? '<div class="card-actions">' + actionHtml + '</div>' : '';
-    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '">' +
+    // Draggable only when a server is there to accept the move. A snapshot has
+    // nothing to POST to, and a card that drags but can never land is a lie.
+    const drag = State.live ? ' draggable="true" title="Drag to another column, or open this card to use the stage buttons."' : '';
+    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + drag + '>' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
-      '<span class="tag">' + escapeHtml(it.type || '?') + '</span>' +
+      '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type || '?') + '</span>' +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
-      (action.kind === 'running' ? '<span class="tag badge-running">running</span>' : action.kind === 'queued' ? '<span class="tag badge-queued">queued</span>' : '') +
-      (it.owner ? '<span class="tag">' + escapeHtml(it.owner) + '</span>' : '') +
-      '<span class="tag mono">ev:' + evCount + '</span>' +
+      runStatus +
+      // The idle chip already names the owner when it is worth naming; do not
+      // say it twice, and never print the owner every other card already has.
+      (it.owner && action.kind !== 'idle' && !ownerIsDefault ? '<span class="tag" title="owner">' + escapeHtml(it.owner) + '</span>' : '') +
+      // A count only means something next to the gate it is judged against --
+      // see evidenceGateUnmet(). The number is still in the panel's Evidence
+      // section regardless.
+      (evidenceGateUnmet(it) ? '<span class="tag mono" title="' + escapeHtml('The next stage requires more evidence than this item has (' + evCount + ').') + '">ev:' + evCount + '</span>' : '') +
       '</div>' + actions + '</div>';
+  }
+
+  // Parent-first, children-under-parent ordering for a column's full list.
+  // Pulled out of renderBoard so a collapsed column's preview (most recently
+  // touched first, no hierarchy -- an archive does not need its family tree)
+  // can skip it without duplicating the traversal.
+  function hierarchicalOrder(inCol) {
+    const ordered = [];
+    const visit = (parentId) => inCol.filter((item) => item.parent === parentId).forEach((child) => { ordered.push(child); visit(child.id); });
+    inCol.filter((item) => !item.parent || !inCol.some((candidate) => candidate.id === item.parent)).forEach((root) => { ordered.push(root); visit(root.id); });
+    return ordered;
+  }
+
+  function mostRecentFirst(inCol) {
+    return inCol.slice().sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+  }
+
+  // Board (P8-12): a terminal column defaults to collapsed -- see
+  // terminalStageIds(), the only place "terminal" is decided in this file --
+  // so 103 of 113 finished cards do not squeeze the four columns that still
+  // need attention off the left edge, or push Dropped off the right one
+  // entirely. The count is always in the header, in or out of that state, and
+  // one click on the toggle is the whole affordance to see everything: never
+  // a second click, a menu, or a URL parameter. State.expandedStages is on
+  // State itself, so the 2-second poll (updateBoardInPlace) cannot reset a
+  // column someone just opened out from under them.
+  function columnBodyItems(stageId, inCol, expanded) {
+    return expanded ? hierarchicalOrder(inCol) : mostRecentFirst(inCol).slice(0, COLLAPSED_PREVIEW_COUNT);
+  }
+
+  function columnHeadHtml(s, count, isTerminal, expanded) {
+    const toggle = isTerminal
+      ? '<button class="column-toggle" data-toggle-stage="' + escapeHtml(s.id) + '" title="' +
+        (expanded ? 'Collapse finished work back down.' : 'Show every item in ' + escapeHtml(s.label) + '.') + '">' +
+        (expanded ? 'Collapse' : 'Show all') + '</button>'
+      : '';
+    return '<div class="column-head"><span class="column-head-main"><span>' + escapeHtml(s.label) + '</span><span class="count">' + count + '</span></span>' + toggle + '</div>';
   }
 
   function renderBoard(container) {
     const items = filteredItems();
     const cols = stageList(State.stages);
+    const terminal = terminalStageIds();
     container.innerHTML = '<div id="board">' + cols.map((s) => {
       const inCol = items.filter((i) => i.stage === s.id);
-      const ordered = []; const visit = (parentId) => inCol.filter((item) => item.parent === parentId).forEach((child) => { ordered.push(child); visit(child.id); });
-      inCol.filter((item) => !item.parent || !inCol.some((candidate) => candidate.id === item.parent)).forEach((root) => { ordered.push(root); visit(root.id); });
-      return '<div class="column" data-stage="' + escapeHtml(s.id) + '"><div class="column-head"><span>' + escapeHtml(s.label) + '</span><span class="count">' + inCol.length + '</span></div>' +
-        '<div class="column-body">' + (ordered.map(cardMarkup).join('') || '') + '</div></div>';
+      const isTerminal = terminal.has(s.id);
+      const expanded = !isTerminal || State.expandedStages.has(s.id);
+      const shown = columnBodyItems(s.id, inCol, expanded);
+      return '<div class="column' + (isTerminal && !expanded ? ' collapsed' : '') + '" data-stage="' + escapeHtml(s.id) + '">' +
+        columnHeadHtml(s, inCol.length, isTerminal, expanded) +
+        '<div class="column-body">' + (shown.map(cardMarkup).join('') || '') + '</div></div>';
     }).join('') + '</div>';
+  }
+
+  // -- drag and drop -------------------------------------------------------
+  // Native HTML5 drag and drop, no library. It is an addition to the panel's
+  // stage buttons, never a replacement: everything here is reachable by click
+  // and keyboard through the panel, which is what anyone who cannot drag uses.
+
+  // A column is a drop target if the very same move the panel button would
+  // issue is currently permitted. Most forced moves are still excluded --
+  // the board has no way to ask the CLI for "skip these stages", so a
+  // forward skip stays a CLI decision -- but a BACKWARD move is force-only by
+  // definition (stageOrderMessage in lib/rules.js) and undoing a mis-drag is
+  // exactly what P8-18 is for, so that one forced case is offered too.
+  function dropAllowed(id, stageId) {
+    const it = State.items.find((candidate) => candidate.id === id);
+    if (!it || it.stage === stageId) return false;
+    const transitions = State.transitions[id];
+    const transition = transitions && transitions[stageId];
+    if (!transition || !transition.ok) return false;
+    if (!transition.force) return true;
+    return isBackwardTarget(it.stage, stageId);
+  }
+
+  function dropRefusal(id, stageId) {
+    const transitions = State.transitions[id];
+    if (!transitions) {
+      return State.transitionErrors[id] ? 'Unable to check this gate.' : 'Checking this gate…';
+    }
+    const transition = transitions[stageId];
+    if (!transition) return 'Not reachable from here — `gw move --force` skips stages.';
+    if (transition.ok && transition.force) return 'A jump like this needs `gw move --force`.';
+    const reasons = (transition.reasons && transition.reasons.length) ? transition.reasons : (transition.failures || []);
+    return reasons.join(' · ');
+  }
+
+  // Which columns would take this card, marked before the drag reaches them
+  // rather than after the server refuses it. A backward-eligible column is
+  // marked distinctly from an ordinary forward one -- see .drop-back -- so a
+  // hover never looks like an ordinary move that happens to skip stages.
+  function markDropTargets() {
+    const board = document.getElementById('board');
+    const drag = State.drag;
+    if (!board || !drag) return;
+    board.classList.add('dragging');
+    board.querySelectorAll('.column').forEach((column) => {
+      const stageId = column.dataset.stage;
+      column.classList.remove('drop-ok', 'drop-back', 'drop-invalid', 'drop-source', 'drop-over');
+      column.removeAttribute('title');
+      if (stageId === drag.from) { column.classList.add('drop-source'); return; }
+      if (dropAllowed(drag.id, stageId)) {
+        if (isBackwardTarget(drag.from, stageId)) {
+          column.classList.add('drop-back');
+          column.title = 'Backward move: sends ' + drag.id + ' back to ' + stageLabel(stageId) + '.';
+        } else {
+          column.classList.add('drop-ok');
+        }
+        return;
+      }
+      column.classList.add('drop-invalid');
+      const why = dropRefusal(drag.id, stageId);
+      if (why) column.title = why;
+    });
+  }
+
+  function clearDropTargets() {
+    const board = document.getElementById('board');
+    if (board) {
+      board.classList.remove('dragging');
+      board.querySelectorAll('.column').forEach((column) => {
+        column.classList.remove('drop-ok', 'drop-back', 'drop-invalid', 'drop-source', 'drop-over');
+        column.removeAttribute('title');
+      });
+    }
+    document.querySelectorAll('.card.dragging').forEach((card) => card.classList.remove('dragging'));
+    State.drag = null;
+  }
+
+  // The drop moves the card immediately so the gesture feels answered, then
+  // puts it back exactly where it was if the gate refuses. The move itself is
+  // onMoveClick -- the panel button's path -- and the refusal it reports is the
+  // English from lib/gates/describe.js.
+  async function onCardDrop(id, to, column) {
+    const card = document.querySelector('.card[data-id="' + CSS.escape(id) + '"]');
+    const home = card && card.parentNode ? { parent: card.parentNode, next: card.nextSibling } : null;
+    const body = column.querySelector('.column-body');
+    if (card && body) body.appendChild(card);
+    const it = State.items.find((candidate) => candidate.id === id);
+    const force = Boolean(it && isBackwardTarget(it.stage, to));
+    const result = await onMoveClick(id, to, null, { force });
+    if (result && !result.ok && card && home && card.parentNode !== home.parent) {
+      home.parent.insertBefore(card, home.next);
+    }
+  }
+
+  function wireDragAndDrop(view) {
+    // Verdicts are fetched per item, so warm the cache as the pointer goes
+    // down: by the time a column is reached the answer is usually already in.
+    view.addEventListener('mousedown', (e) => {
+      if (!State.live || !e.target.closest) return;
+      const card = e.target.closest('.card[draggable="true"]');
+      if (card) refreshTransitions(card.dataset.id);
+    });
+
+    view.addEventListener('dragstart', (e) => {
+      const card = e.target.closest ? e.target.closest('.card[draggable="true"]') : null;
+      if (!card || !State.live) return;
+      const it = State.items.find((candidate) => candidate.id === card.dataset.id);
+      if (!it) return;
+      State.drag = { id: it.id, from: it.stage };
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', it.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }
+      card.classList.add('dragging');
+      hideBoardRefusal();
+      markDropTargets();
+      // Re-ask even when cached: the answer may be older than the item.
+      refreshTransitions(it.id);
+    });
+
+    view.addEventListener('dragover', (e) => {
+      const drag = State.drag;
+      if (!drag || !e.target.closest) return;
+      const column = e.target.closest('.column');
+      if (!column) return;
+      if (!dropAllowed(drag.id, column.dataset.stage)) {
+        // No preventDefault: the browser itself refuses the drop, so an
+        // invalid column cannot even accept the card optimistically.
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      column.classList.add('drop-over');
+    });
+
+    view.addEventListener('dragleave', (e) => {
+      const column = e.target.closest ? e.target.closest('.column') : null;
+      if (column && !column.contains(e.relatedTarget)) column.classList.remove('drop-over');
+    });
+
+    view.addEventListener('drop', (e) => {
+      const drag = State.drag;
+      if (!drag || !e.target.closest) return;
+      const column = e.target.closest('.column');
+      if (!column) return;
+      const to = column.dataset.stage;
+      if (!dropAllowed(drag.id, to)) return;
+      e.preventDefault();
+      const id = drag.id;
+      clearDropTargets();
+      onCardDrop(id, to, column);
+    });
+
+    view.addEventListener('dragend', clearDropTargets);
+  }
+
+  // -- table row actions (P8-14) -------------------------------------------
+  // The most scannable view could not change anything. Claim/release and a
+  // move are added inline; a snapshot (State.live false) degrades to no
+  // actions at all, same as everywhere else on the page, and a move never
+  // offers a stage the server would refuse -- it reads the same
+  // State.transitions cache and dropAllowed() the board's drag-and-drop
+  // already uses, rather than inventing a second notion of "allowed".
+
+  function rowActionsHtml(it) {
+    if (!State.live) return '';
+    return '<span class="row-actions">' + (it.owner
+      ? '<button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button>'
+      : '<button data-claim-row="' + escapeHtml(it.id) + '" title="Claims this item for you.">Claim</button>') + '</span>';
+  }
+
+  // The options for one row's move picker. Split out of moveSelectHtml so a
+  // verdict landing later (refreshTransitions) can refresh just the options
+  // of an already-rendered <select> without losing focus or scroll.
+  function moveSelectOptionsHtml(it) {
+    const transitions = State.transitions[it.id];
+    const options = stageList(State.stages).filter((s) => s.id !== it.stage).map((s) => {
+      const allowed = dropAllowed(it.id, s.id);
+      const note = allowed ? '' : (transitions ? ' (not ready)' : ' (checking…)');
+      return '<option value="' + escapeHtml(s.id) + '"' + (allowed ? '' : ' disabled') + '>' + escapeHtml(s.label) + escapeHtml(note) + '</option>';
+    }).join('');
+    return '<option value="">move to…</option>' + options;
+  }
+
+  function moveSelectHtml(it) {
+    if (!State.live || isTerminalItem(it)) return '';
+    return '<select class="row-move" data-move-row="' + escapeHtml(it.id) + '" title="Move to another stage.">' + moveSelectOptionsHtml(it) + '</select>';
+  }
+
+  // Called once a verdict lands (refreshTransitions), so a row does not have
+  // to wait for the next poll to stop showing every target as "checking…".
+  function updateTableRowMove(id) {
+    const select = document.querySelector('select.row-move[data-move-row="' + CSS.escape(id) + '"]');
+    if (!select) return;
+    const it = State.items.find((candidate) => candidate.id === id);
+    if (!it) return;
+    select.innerHTML = moveSelectOptionsHtml(it);
+    select.value = '';
   }
 
   function renderTable(container) {
@@ -795,33 +1707,366 @@
     });
     container.innerHTML = '<table class="gw-table"><thead><tr>' +
       cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+      (State.live ? '<th>Actions</th>' : '') +
       '</tr></thead><tbody>' +
       sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
         '<td class="id">' + escapeHtml(it.id) + '</td>' +
         '<td>' + escapeHtml(it.title) + '</td>' +
-        '<td>' + escapeHtml(it.type) + '</td>' +
-        '<td>' + escapeHtml(it.phase) + '</td>' +
-        '<td>' + escapeHtml(it.gate) + '</td>' +
-        '<td>' + escapeHtml(it.priority) + '</td>' +
+        '<td' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</td>' +
+        '<td' + termTitle('phase', it.phase) + '>' + escapeHtml(it.phase) + '</td>' +
+        '<td' + termTitle('gate', it.gate) + '>' + escapeHtml(it.gate) + '</td>' +
+        '<td' + termTitle('priority', it.priority) + '>' + escapeHtml(it.priority) + '</td>' +
         '<td>' + escapeHtml(stageLabel(it.stage)) + '</td>' +
         '<td>' + (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') + '</td>' +
         '<td>' + escapeHtml(it.owner) + '</td>' +
         '<td>' + escapeHtml(fmtDate(it.updated)) + '</td>' +
+        (State.live ? '<td class="row-actions-cell">' + rowActionsHtml(it) + moveSelectHtml(it) + '</td>' : '') +
         '</tr>').join('') +
       '</tbody></table>';
   }
 
+  const STAGE_ROLES = ['initial', 'done', 'dropped', 'paused'];
+
+  function roleSelect(id, current) {
+    return '<select id="' + id + '" data-editor="role">' +
+      '<option value="">(no role)</option>' +
+      STAGE_ROLES.map((role) => '<option value="' + role + '"' + (role === current ? ' selected' : '') + '>' + role + '</option>').join('') +
+      '</select>';
+  }
+
+  function depsSelect(id, current) {
+    const pipeline = (State.stages.stages || []);
+    const known = pipeline.some((stage) => stage.id === current);
+    return '<select id="' + id + '" data-editor="deps_at_least">' +
+      '<option value="">(no dependency rule)</option>' +
+      pipeline.map((stage) => '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === current ? ' selected' : '') + '>' +
+        escapeHtml(stage.label || stage.id) + ' (' + escapeHtml(stage.id) + ')</option>').join('') +
+      // A rule already pointing at something that is not in the pipeline must
+      // stay visible rather than being silently reset to "none" by opening a
+      // form -- the server refuses that value and the human needs to see why.
+      (current && !known ? '<option value="' + escapeHtml(current) + '" selected>' + escapeHtml(current) + ' (not in the pipeline)</option>' : '') +
+      '</select>';
+  }
+
+  // The gate builder for one stage. Only the keys lib/rules.js actually reads,
+  // and deps_at_least is a picker of real stages rather than a text box that
+  // lets someone type a stage that does not exist.
+  // `n` is the stage's position in the rendered list, used only to mint the
+  // element ids that tie each label to its control. Stage ids are the user's
+  // own strings and may contain anything; a position cannot.
+  function gateEditor(stage, n) {
+    const requires = stage.requires || {};
+    const unknown = Object.keys(requires).filter((key) => RULE_KEYS.indexOf(key) === -1);
+    const id = (key) => 'ed-' + n + '-' + key;
+    return '<div class="editor-grid">' +
+      '<label for="' + id('label') + '">Label</label>' +
+      '<input type="text" id="' + id('label') + '" data-editor="label" value="' + escapeHtml(stage.label || '') + '">' +
+      '<label for="' + id('role') + '">Role</label>' + roleSelect(id('role'), stage.role || '') +
+      '<label for="' + id('scope') + '">Scope filled in</label>' +
+      '<input type="checkbox" id="' + id('scope') + '" data-editor="scope"' + (requires.scope ? ' checked' : '') + '>' +
+      '<label for="' + id('owner') + '">Claimed by someone</label>' +
+      '<input type="checkbox" id="' + id('owner') + '" data-editor="owner"' + (requires.owner ? ' checked' : '') + '>' +
+      '<label for="' + id('evidence_min') + '">Minimum evidence</label>' +
+      '<input type="number" min="0" step="1" id="' + id('evidence_min') + '" data-editor="evidence_min" value="' +
+        escapeHtml(requires.evidence_min == null ? '' : requires.evidence_min) + '" placeholder="0 = no minimum">' +
+      '<label for="' + id('evidence_match') + '">Evidence pattern</label>' +
+      '<input type="text" id="' + id('evidence_match') + '" data-editor="evidence_match" value="' + escapeHtml(requires.evidence_match == null ? '' : requires.evidence_match) +
+        '" placeholder="regular expression, e.g. ^https://github.com/.+/pull/\\d+">' +
+      '<label for="' + id('deps_at_least') + '">Dependencies at least</label>' + depsSelect(id('deps_at_least'), requires.deps_at_least || '') +
+      (unknown.length
+        ? '<div class="editor-note">This gate also carries ' + escapeHtml(unknown.join(', ')) +
+          ', which this form does not edit. Saving keeps ' + (unknown.length === 1 ? 'it' : 'them') + ' exactly as ' + (unknown.length === 1 ? 'it is' : 'they are') + '.</div>'
+        : '') +
+      '</div>' +
+      '<div class="editor-actions">' +
+      '<button class="primary" data-stage-save="' + escapeHtml(stage.id) + '">Save stage</button>' +
+      '</div>';
+  }
+
   function renderStages(container) {
     const cols = stageList(State.stages);
-    container.innerHTML = cols.map((s) => {
+    const pipeline = State.stages.stages || [];
+    const editable = adminMode() === 'editable';
+    const body = cols.map((s, n) => {
       const req = s.requires ? JSON.stringify(s.requires, null, 2) : '(no machine rule — advanced manually)';
-      const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', (State.stages.terminal || []).includes(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
-      return '<div class="stage-rule"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' +
+      const flags = [s.auto ? 'auto-eligible for the scheduler' : 'human-gated', terminalStageIds().has(s.id) ? 'terminal' : null].filter(Boolean).join(' · ');
+      const gate = gateFor(s.id);
+      const english = gate
+        ? sentenceList(gate.sentences, 'gate-sentences')
+        // Older snapshots were written before the descriptions were carried in
+        // the payload. Say so rather than inventing sentences for them.
+        : '<p class="gate-missing">This board was written without rule descriptions — run <code>gw open</code> again to refresh it. The machine rule below is all it carries.</p>';
+      const index = pipeline.findIndex((stage) => stage.id === s.id);
+      const inPipeline = index >= 0;
+      const tools = editable
+        ? '<span class="stage-tools">' +
+          (inPipeline
+            ? '<button data-stage-up="' + escapeHtml(s.id) + '"' + (index === 0 ? ' disabled' : '') + ' title="Move this stage earlier in the pipeline.">&uarr;</button>' +
+              '<button data-stage-down="' + escapeHtml(s.id) + '"' + (index === pipeline.length - 1 ? ' disabled' : '') + ' title="Move this stage later in the pipeline.">&darr;</button>'
+            : '<span class="meta">off-pipeline</span>') +
+          '<button class="danger" data-stage-remove="' + escapeHtml(s.id) + '" title="Remove this stage from the pipeline.">remove</button>' +
+          '</span>'
+        : '';
+      const editor = editable
+        ? '<details class="stage-editor"><summary>edit this stage and its gate</summary>' +
+          '<div data-stage-editor="' + escapeHtml(s.id) + '">' + gateEditor(s, n) +
+          // The read-back is the server's own wording, re-fetched with the
+          // next poll after a save. Never a locally composed preview: a second
+          // copy of that wording would drift, and the board would describe a
+          // rule it does not enforce.
+          (gate ? '<div class="gate-readback"><h4>Reads back as</h4>' + sentenceList(gate.sentences) + '</div>' : '') +
+          '<div class="admin-error" id="stage-error-' + escapeHtml(s.id) + '"></div>' +
+          '</div></details>'
+        : '';
+      return '<div class="stage-rule"><div class="stage-head"><h3>' + escapeHtml(s.label) + ' <span class="meta mono">(' + escapeHtml(s.id) + ')</span></h3>' + tools + '</div>' +
+        // Reordering and removing are driven from the header, which stays
+        // visible whether or not the editor below is open -- so their
+        // refusals need a box that is visible there too. A refusal written
+        // inside a collapsed <details> is a refusal nobody reads.
+        (editable ? '<div class="admin-error" id="stage-row-error-' + escapeHtml(s.id) + '"></div>' : '') +
         (s.exit ? '<p class="exit">' + escapeHtml(s.exit) + '</p>' : '') +
-        '<div class="requires">' + escapeHtml(req) + '</div>' +
+        english +
         (flags ? '<div class="flags">' + escapeHtml(flags) + '</div>' : '') +
+        machineRule('<pre class="requires">' + escapeHtml(req) + '</pre>') +
+        editor +
         '</div>';
     }).join('');
+
+    const adder = editable
+      ? '<div class="add-stage"><h3>Add a stage</h3>' +
+        '<div class="editor-grid">' +
+        '<label for="new-stage-id">Stage id</label><input type="text" id="new-stage-id" placeholder="lowercase id, e.g. reviewing">' +
+        '<label for="new-stage-label">Label</label><input type="text" id="new-stage-label" placeholder="Reviewing">' +
+        '<label for="new-stage-where">Where</label><select id="new-stage-where">' +
+        '<option value="pipeline">in the pipeline (work flows through it)</option>' +
+        '<option value="extra">off-pipeline (a side stage such as dropped)</option>' +
+        '</select>' +
+        '</div><div class="editor-actions"><button class="primary" id="add-stage-btn">Add stage</button></div>' +
+        '<div class="admin-error" id="add-stage-error"></div></div>'
+      : '';
+
+    container.innerHTML = adminNotice('stages and gates') + body + adder;
+    State.formDirty = false;
+    if (editable) wireStagesEditors(container);
+  }
+
+  function editorValues(scope) {
+    const values = {};
+    scope.querySelectorAll('[data-editor]').forEach((el) => {
+      values[el.dataset.editor] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    return values;
+  }
+
+  function wireStagesEditors(container) {
+    container.querySelectorAll('[data-stage-up], [data-stage-down]').forEach((btn) => {
+      const up = btn.hasAttribute('data-stage-up');
+      const id = up ? btn.dataset.stageUp : btn.dataset.stageDown;
+      btn.addEventListener('click', () => {
+        const doc = stagesDoc();
+        doc.stages = movePipeline(doc.stages, id, up ? -1 : 1);
+        saveStages(doc, 'stage-row-error-' + id);
+      });
+    });
+
+    container.querySelectorAll('[data-stage-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.stageRemove;
+        const doc = stagesDoc();
+        doc.stages = doc.stages.filter((stage) => stage.id !== id);
+        doc.extra = doc.extra.filter((stage) => stage.id !== id);
+        // A stage removed from the pipeline cannot stay in `terminal`: that
+        // list may only name stages that exist, and leaving a dangling entry
+        // would turn a clear refusal about items into a confusing one.
+        if (Array.isArray(doc.terminal)) doc.terminal = doc.terminal.filter((entry) => entry !== id);
+        saveStages(doc, 'stage-row-error-' + id);
+      });
+    });
+
+    container.querySelectorAll('[data-stage-save]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.stageSave;
+        const scope = container.querySelector('[data-stage-editor="' + CSS.escape(id) + '"]');
+        if (!scope) return;
+        const values = editorValues(scope);
+        const problem = gateInputProblem(values);
+        if (problem) { showAdminError('stage-error-' + id, problem); return; }
+        const doc = stagesDoc();
+        const apply = (list) => list.map((stage) => {
+          if (stage.id !== id) return stage;
+          const next = { ...stage };
+          next.label = String(values.label || '').trim() || stage.label || stage.id;
+          if (values.role) next.role = values.role; else delete next.role;
+          const requires = buildRequires(values, stage.requires);
+          if (requires) next.requires = requires; else delete next.requires;
+          return next;
+        });
+        doc.stages = apply(doc.stages);
+        doc.extra = apply(doc.extra);
+        saveStages(doc, 'stage-error-' + id);
+      });
+    });
+
+    const addBtn = container.querySelector('#add-stage-btn');
+    if (addBtn) addBtn.addEventListener('click', () => {
+      const id = String(container.querySelector('#new-stage-id').value || '').trim();
+      const label = String(container.querySelector('#new-stage-label').value || '').trim();
+      const where = container.querySelector('#new-stage-where').value;
+      if (!id) { showAdminError('add-stage-error', 'give the new stage an id.'); return; }
+      const doc = stagesDoc();
+      const stage = { id, label: label || id };
+      if (where === 'extra') doc.extra = doc.extra.concat([stage]);
+      else doc.stages = doc.stages.concat([stage]);
+      saveStages(doc, 'add-stage-error');
+    });
+  }
+
+  // -- settings ------------------------------------------------------------
+  // A declarative mirror of SETTINGS in lib/settings.js. The page has no
+  // module loader and no build step, so it cannot import that file; what it
+  // can do is refuse to drift from it. The form below is generated from this
+  // table and knows nothing about any individual key, and
+  // test/viewer.test.js imports the real SETTINGS and asserts this table is
+  // equal to it field for field -- so adding a setting to the CLI and not to
+  // the board fails CI rather than quietly shipping a board that cannot set
+  // it. `choicesFrom` is the one thing that cannot be copied literally (it is
+  // a function there); it is written here as the config path whose keys are
+  // the choices, and the test evaluates both and compares the results.
+  const SETTINGS = [
+    {
+      key: 'runner.enabled',
+      type: 'boolean',
+      summary: 'Let the scheduler start agent runs. Off means Play only queues.',
+      danger: 'This is the switch that lets gw spawn processes on this machine.',
+    },
+    { key: 'runner.provider', type: 'string', summary: 'Which entry in runner.providers to invoke.', choicesFrom: 'runner.providers' },
+    { key: 'runner.max_concurrent', type: 'integer', min: 1, max: 64, summary: 'How many runs may be live at once.' },
+    { key: 'runner.tick_s', type: 'integer', min: 1, max: 3600, summary: 'Seconds between scheduler ticks.' },
+    { key: 'runner.run_timeout_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes before a run is stopped as overrunning.' },
+    { key: 'runner.stop_timeout_s', type: 'integer', min: 0, max: 600, summary: 'Grace period between a stop request and force.' },
+    { key: 'runner.paused', type: 'boolean', summary: 'Global pause. Keeps config intact while stopping new runs.' },
+    { key: 'policy.auto_dispatch_children', type: 'boolean', summary: 'Whether agent-created children dispatch without a human.', danger: 'Leaving this off is what stops a run filing work that starts more runs.' },
+    { key: 'policy.max_children_per_item', type: 'integer', min: 0, max: 100, summary: 'Cap on children one item may create.' },
+    { key: 'policy.max_depth', type: 'integer', min: 1, max: 10, summary: 'How deep agent-created work may nest.' },
+    { key: 'id_scheme', type: 'string', choices: ['phase-seq', 'seq'], summary: 'phase-seq gives P1-01; seq gives T-0001.' },
+    { key: 'memory.enabled', type: 'boolean', summary: 'Recall prior context into prompts and remember completed work.' },
+    { key: 'vocab.phase', type: 'list', summary: 'Allowed --phase values, in order. Comma-separated.' },
+    { key: 'vocab.priority', type: 'list', summary: 'Allowed --priority values, most urgent first.' },
+    { key: 'vocab.gate', type: 'list', summary: 'Allowed --gate values.' },
+    { key: 'vocab.type', type: 'list', summary: 'Allowed --type values.' },
+  ];
+
+  function configValue(key) {
+    return String(key).split('.').reduce((node, part) => (node == null ? undefined : node[part]), State.config);
+  }
+
+  // The value as the form holds it: a string for everything except booleans,
+  // so "changed" is a string comparison and an untouched field is never sent.
+  function settingFormValue(setting) {
+    const value = configValue(setting.key);
+    if (setting.type === 'boolean') return Boolean(value);
+    if (setting.type === 'list') return Array.isArray(value) ? value.join(', ') : (value == null ? '' : String(value));
+    return value == null ? '' : String(value);
+  }
+
+  function settingChoices(setting) {
+    if (setting.choices) return setting.choices.slice();
+    if (!setting.choicesFrom) return null;
+    const node = String(setting.choicesFrom).split('.').reduce((n, part) => (n == null ? undefined : n[part]), State.config);
+    return node && typeof node === 'object' && !Array.isArray(node) ? Object.keys(node) : [];
+  }
+
+  // Setting keys are declared in this file, not typed by anyone, so they are
+  // safe to use directly as element ids -- which is what lets the key itself
+  // be the control's label.
+  function settingControlId(setting) {
+    return 'set-' + setting.key;
+  }
+
+  function settingControl(setting, editable) {
+    const value = settingFormValue(setting);
+    if (!editable) {
+      const shown = setting.type === 'boolean' ? String(value) : (value === '' ? '(unset)' : value);
+      return '<div class="setting-value">' + escapeHtml(shown) + '</div>';
+    }
+    const attr = ' id="' + settingControlId(setting) + '" data-setting="' + escapeHtml(setting.key) + '"';
+    if (setting.type === 'boolean') {
+      return '<label><input type="checkbox"' + attr + (value ? ' checked' : '') + '> enabled</label>';
+    }
+    if (setting.type === 'integer') {
+      return '<input type="number" step="1"' + attr +
+        (setting.min === undefined ? '' : ' min="' + setting.min + '"') +
+        (setting.max === undefined ? '' : ' max="' + setting.max + '"') +
+        ' value="' + escapeHtml(value) + '">' +
+        (setting.min === undefined && setting.max === undefined ? ''
+          : '<span class="setting-range">' + escapeHtml(setting.min + ' to ' + setting.max) + '</span>');
+    }
+    const choices = settingChoices(setting);
+    if (choices) {
+      const known = choices.indexOf(value) !== -1;
+      return '<select' + attr + '>' +
+        (known ? '' : '<option value="' + escapeHtml(value) + '" selected>' + escapeHtml(value === '' ? '(unset)' : value) + '</option>') +
+        choices.map((choice) => '<option value="' + escapeHtml(choice) + '"' + (choice === value ? ' selected' : '') + '>' + escapeHtml(choice) + '</option>').join('') +
+        '</select>' +
+        (choices.length ? '' : '<span class="setting-range">nothing to choose from yet — runner.providers is empty</span>');
+    }
+    return '<input type="text"' + attr + ' value="' + escapeHtml(value) + '"' +
+      (setting.type === 'list' ? ' placeholder="comma-separated"' : '') + '>';
+  }
+
+  function renderSettings(container) {
+    const editable = adminMode() === 'editable';
+    const rows = SETTINGS.map((setting) =>
+      '<div class="setting-row">' +
+      // A boolean's control carries its own inline label, so only the other
+      // types point their key at the input.
+      (editable && setting.type !== 'boolean'
+        ? '<label class="setting-key" for="' + settingControlId(setting) + '">' + escapeHtml(setting.key) + '</label>'
+        : '<div class="setting-key">' + escapeHtml(setting.key) + '</div>') +
+      '<div class="setting-summary">' + escapeHtml(setting.summary) + '</div>' +
+      (setting.danger ? '<div class="setting-danger">' + escapeHtml(setting.danger) + '</div>' : '') +
+      settingControl(setting, editable) +
+      '</div>').join('');
+    container.innerHTML = '<div class="settings-panel">' + adminNotice('settings') + rows +
+      (editable
+        ? '<div class="settings-save"><button id="settings-save-btn">Save settings</button></div>' +
+          '<div class="admin-error" id="settings-error"></div>'
+        : '') +
+      '</div>';
+    State.formDirty = false;
+    const saveBtn = container.querySelector('#settings-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', () => onSaveSettings(container, saveBtn));
+  }
+
+  // Only changed keys are sent. /api/config validates through lib/settings.js
+  // exactly as `gw config` does, so the refusal it returns is the wording the
+  // CLI would have used and is shown unaltered.
+  async function onSaveSettings(container, btn) {
+    const settings = {};
+    for (const setting of SETTINGS) {
+      const el = container.querySelector('[data-setting="' + CSS.escape(setting.key) + '"]');
+      if (!el) continue;
+      const current = settingFormValue(setting);
+      if (setting.type === 'boolean') {
+        if (el.checked !== current) settings[setting.key] = el.checked;
+      } else if (el.value !== current) {
+        settings[setting.key] = el.value;
+      }
+    }
+    if (!Object.keys(settings).length) { showAdminError('settings-error', 'nothing changed.'); return; }
+    if (Inflight.has('settings')) return;
+    Inflight.add('settings');
+    btn.disabled = true;
+    showAdminError('settings-error', '');
+    const result = await apiWrite('/api/config', { settings });
+    Inflight.delete('settings');
+    btn.disabled = false;
+    if (result.ok) {
+      State.formDirty = false;
+      await refreshNow();
+    } else {
+      showAdminError('settings-error', (result.data && result.data.error) || 'request failed');
+    }
   }
 
   function renderExport(container) {
@@ -841,7 +2086,19 @@
   function renderView() {
     const container = document.getElementById('gw-view');
     const empty = document.getElementById('gw-empty');
-    if (State.items.length === 0) {
+    // "No items yet" answers the views that are about items. It must not
+    // answer the views that are about the board's own configuration: a board
+    // with nothing on it is exactly when someone needs to set up their stages
+    // and settings, and hiding those behind "add an item first" is how this
+    // tool stayed configurable only by hand-editing JSON.
+    const itemView = State.view === 'overview' || State.view === 'board' || State.view === 'table';
+    // The filter bar (phase/gate/type/stage/flag/search) and "+ new item"
+    // filter and create ITEMS -- they control nothing on Stages & rules,
+    // Settings, or Export (P8-17), so they render only on the views they
+    // actually affect. itemView is exactly that set of views, and this must
+    // run whether or not the empty-state screen below is about to take over.
+    document.getElementById('gw-filters').classList.toggle('hidden', !itemView);
+    if (State.items.length === 0 && itemView) {
       container.innerHTML = '';
       empty.classList.remove('hidden');
       return;
@@ -851,6 +2108,7 @@
     else if (State.view === 'board') renderBoard(container);
     else if (State.view === 'table') renderTable(container);
     else if (State.view === 'stages') renderStages(container);
+    else if (State.view === 'settings') renderSettings(container);
     else if (State.view === 'export') renderExport(container);
   }
 
@@ -896,6 +2154,13 @@
         const current = State.items.find((item) => item.id === id);
         if (current) renderPanel(current);
       }
+      // A drag that started before the verdicts landed gets its columns marked
+      // the moment they do, rather than staying uniformly invalid.
+      if (State.drag && State.drag.id === id) markDropTargets();
+      // Same idea for the table's move picker (P8-14): its options are
+      // disabled until a verdict exists, so the moment one lands they are
+      // refreshed in place rather than waiting for the next 2-second poll.
+      if (State.view === 'table') updateTableRowMove(id);
     }
   }
 
@@ -935,7 +2200,6 @@
         '</div>';
 
     const dispatched = isDispatched(it.id);
-    const queueOnlyNote = schedulerIsOff() ? ' The scheduler is off, so this only queues the item — nothing will run.' : '';
     const panelAction = actionFor(it);
     var panelButton = '';
     if (panelAction.kind === 'running') {
@@ -943,7 +2207,8 @@
     } else if (panelAction.kind === 'queued') {
       panelButton = '<button id="panel-stop" title="Cancels the queued dispatch before it starts.">Cancel dispatch</button>';
     } else if (panelAction.kind === 'idle') {
-      panelButton = '<button id="panel-play" title="Queues this item for an agent to pick up.' + queueOnlyNote + '">Play (queue for an agent)</button>';
+      panelButton = '<button id="panel-play"' + (schedulerIsOff() ? ' class="secondary"' : '') +
+        ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
     const playStop = State.live && panelButton
       ? '<div class="panel-actions">' + panelButton + '</div>'
@@ -967,32 +2232,60 @@
       ? '<div class="panel-actions"><button id="panel-resume" title="Restores the item and dispatches it again.">Resume</button></div>'
       : '';
 
+    // A disabled button is a refusal, and a refusal has to say what it wants.
+    // `note` is the one-line reason the button is off; `unmet` is the gate in
+    // the English lib/gates/describe.js produces, shown next to the button
+    // rather than hidden in a tooltip; `machine` keeps the literal lib/rules.js
+    // failure lines -- which carry the exact command to run -- one disclosure
+    // away, and in the tooltip as before.
     const stageButtonsHtml = stageList(State.stages).map((s) => {
       if (s.id === it.stage) return '';
       const transitions = State.transitions[it.id];
       const transition = transitions && transitions[s.id];
-      let reason = '';
+      let note = '';
+      let heading = '';
+      let unmet = [];
+      let machine = [];
       let disabled = true;
+      // A backward move is force:true by definition (stageOrderMessage in
+      // lib/rules.js) -- P8-18 offers exactly that one forced case, so it is
+      // decided before the generic force branch below claims it as a skip.
+      const backward = State.live && isBackwardTarget(it.stage, s.id);
       if (!State.live) {
-        reason = 'read-only snapshot';
+        note = 'read-only snapshot';
+        // No server to ask what this item fails, so say what the gate checks.
+        // That is a different statement and it is labelled as one.
+        const gate = gateFor(s.id);
+        if (gate) { heading = 'This gate checks:'; unmet = gate.sentences; }
       } else if (!transitions) {
-        reason = State.transitionErrors[it.id]
+        note = State.transitionErrors[it.id]
           ? 'unable to check transition rules'
           : 'checking transition rules…';
       } else if (!transition) {
-        reason = 'use `gw move --force` to skip stages';
-      } else if (transition.force) {
-        reason = transition.ok
-          ? 'use `gw move --force` to skip stages'
-          : transition.failures.join('; ');
+        note = 'use `gw move --force` to skip stages';
+      } else if (transition.force && transition.ok && backward) {
+        disabled = false;
+        note = 'Backward move — this skips the gates ahead of ' + s.label + '.';
+      } else if (transition.force && transition.ok) {
+        note = 'use `gw move --force` to skip stages';
       } else if (!transition.ok) {
-        reason = transition.failures.join('; ');
+        if (transition.force && !backward) note = 'and a jump like this also needs `gw move --force`';
+        else if (backward) note = 'Backward move — not met yet.';
+        heading = 'Not met yet:';
+        machine = transition.failures || [];
+        unmet = (transition.reasons && transition.reasons.length) ? transition.reasons : machine;
       } else {
         disabled = false;
       }
+      const tooltip = (machine.length ? machine.join('; ') : note);
+      const label = (backward && !disabled ? '← ' : '') + s.label;
       return '<div class="stage-button-wrap">' +
-        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') + (reason ? ' title="' + escapeHtml(reason) + '"' : '') + '>' + escapeHtml(s.label) + '</button>' +
-        (reason && State.live ? '<div class="stage-reason">' + escapeHtml(reason) + '</div>' : '') +
+        '<button data-move="' + escapeHtml(s.id) + '"' + (disabled ? ' disabled' : '') +
+          (backward ? ' class="move-back"' : '') +
+          (tooltip ? ' title="' + escapeHtml(tooltip) + '"' : '') + '>' + escapeHtml(label) + '</button>' +
+        (note ? '<div class="stage-reason' + (backward ? ' stage-reason-back' : '') + '">' + escapeHtml(note) + '</div>' : '') +
+        (unmet.length ? '<div class="stage-reason"><span class="reason-head">' + escapeHtml(heading) + '</span>' + sentenceList(unmet) + claimActionHtml(it, machine) + '</div>' : '') +
+        (machine.length ? machineRule(sentenceList(machine)) : '') +
         '<div class="stage-refusal" id="move-fail-' + escapeHtml(s.id) + '"></div>' +
         '</div>';
     }).join('');
@@ -1014,13 +2307,16 @@
     const fieldRows = editableFields.map((f) => {
       const raw = it[f];
       const value = Array.isArray(raw) ? raw.join(', ') : (raw == null ? '' : raw);
+      // phase, priority, gate and type hold codes; the glossary says what this
+      // item's code means, right where the item shows it.
+      const glossed = termTitle(GLOSSARY_FIELDS.indexOf(f) === -1 ? null : f, value);
       if (!State.live) {
-        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '">' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
+        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '"' + glossed + '>' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
       }
       const lockedNote = linked && ghOwned.has(f)
         ? ' <span class="meta">(GitHub-owned on this linked item &mdash; edits are refused; edit the issue instead)</span>'
         : '';
-      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + '>' + lockedNote +
+      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
         '<div class="field-refusal" id="field-fail-' + f + '"></div></dd>';
     }).join('');
     const saveBtn = State.live ? '<button id="save-fields-btn">save fields</button>' : '';
@@ -1056,7 +2352,14 @@
     const panel = document.getElementById('gw-panel');
 
     panel.querySelectorAll('[data-move]').forEach((btn) => {
-      btn.addEventListener('click', () => onMoveClick(it.id, btn.dataset.move, btn));
+      btn.addEventListener('click', () => {
+        const force = isBackwardTarget(it.stage, btn.dataset.move);
+        onMoveClick(it.id, btn.dataset.move, btn, { force });
+      });
+    });
+
+    panel.querySelectorAll('[data-claim]').forEach((btn) => {
+      btn.addEventListener('click', () => onClaimClick(btn.dataset.claim, btn));
     });
 
     const playBtn = panel.querySelector('#panel-play');
@@ -1090,25 +2393,100 @@
     if (saveBtn) saveBtn.addEventListener('click', () => onSaveFields(it, saveBtn));
   }
 
-  async function onMoveClick(id, to, btn) {
+  // The one move path. The panel buttons call it, and a card dropped on a
+  // column calls it too -- there is no second way to move an item, and so no
+  // second set of rules for one of them to get wrong. `btn` is optional so a
+  // drop can use it without inventing a button.
+  async function onMoveClick(id, to, btn, opts) {
     const key = 'move:' + id + ':' + to;
-    if (Inflight.has(key)) return;
+    if (Inflight.has(key)) return { ok: false, skipped: true, data: null };
     Inflight.add(key);
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     const evidence = State.pendingEvidence[id] || [];
-    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/move', { to, evidence });
+    // `force` travels exactly as lib/commands/move.js's own --force flag does
+    // -- a plain boolean the move route is expected to forward into
+    // ctx.flags.force, same as `evidence` and `to` already are.
+    const force = Boolean(opts && opts.force);
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/move', { to, evidence, ...(force ? { force: true } : {}) });
     Inflight.delete(key);
     if (result.ok) {
       State.pendingEvidence[id] = [];
       await refreshNow();
-    } else {
-      btn.disabled = false;
-      const failures = (result.data && result.data.failures && result.data.failures.length)
-        ? result.data.failures
-        : [(result.data && result.data.error) || 'request failed'];
-      const box = document.getElementById('move-fail-' + to);
-      if (box) box.innerHTML = failures.map((f) => '<div class="refusal">' + escapeHtml(f) + '</div>').join('');
+      return result;
     }
+    if (btn) btn.disabled = false;
+    await showMoveRefusal(id, to, result);
+    return result;
+  }
+
+  // What a refusal should say, in the wording a human can act on. The server's
+  // `failures` stay available -- they name the command to run -- but the
+  // headline is the English gate description, re-fetched first so it describes
+  // the refusal that just happened rather than a stale check.
+  async function refusalText(id, to, result) {
+    await refreshTransitions(id);
+    const transitions = State.transitions[id];
+    const transition = transitions && transitions[to];
+    const machine = (result.data && result.data.failures && result.data.failures.length) ? result.data.failures : [];
+    const reasons = (transition && transition.reasons && transition.reasons.length) ? transition.reasons : null;
+    const fallback = machine.length ? machine : [(result.data && result.data.error) || 'request failed'];
+    return { unmet: reasons || fallback, machine: machine };
+  }
+
+  async function showMoveRefusal(id, to, result) {
+    const { unmet, machine } = await refusalText(id, to, result);
+    const box = document.getElementById('move-fail-' + to);
+    if (box) {
+      box.innerHTML = '<div class="refusal">' + unmet.map((line) => escapeHtml(line)).join('<br>') + '</div>' +
+        (machine.length ? machineRule(sentenceList(machine)) : '');
+    }
+    // A card that snapped back in silence is the failure mode this exists to
+    // prevent, so the board says it too whenever the panel is not already
+    // showing this item's refusal.
+    if (State.activePanelId !== id) showBoardRefusal(id, to, unmet);
+  }
+
+  let refusalTimer = null;
+
+  function hideBoardRefusal() {
+    const notice = document.getElementById('gw-drop-refusal');
+    if (notice) { notice.classList.add('hidden'); notice.innerHTML = ''; }
+    if (refusalTimer) { window.clearTimeout(refusalTimer); refusalTimer = null; }
+  }
+
+  // A failure from an action with no panel open to report it in (a table row
+  // action, e.g.) reuses the same corner notice a rejected drag already uses,
+  // rather than writing to #panel-error and silently doing nothing because
+  // that element does not exist outside the panel.
+  function showActionNotice(title, message) {
+    const notice = document.getElementById('gw-drop-refusal');
+    if (!notice) return;
+    notice.innerHTML = '<button class="close-btn" id="drop-refusal-close" aria-label="Dismiss">&times;</button>' +
+      '<h4>' + escapeHtml(title) + '</h4><p>' + escapeHtml(message) + '</p>';
+    notice.classList.remove('hidden');
+    notice.querySelector('#drop-refusal-close').addEventListener('click', hideBoardRefusal);
+    if (refusalTimer) window.clearTimeout(refusalTimer);
+    refusalTimer = window.setTimeout(hideBoardRefusal, 8000);
+  }
+
+  // Every row-level action (table or panel) reports its failure wherever the
+  // human can actually see it: the panel if this item's panel is open, the
+  // corner notice otherwise.
+  function reportActionError(id, message) {
+    if (State.activePanelId === id) { showPanelError(message); return; }
+    showActionNotice(id + ' failed', message);
+  }
+
+  function showBoardRefusal(id, to, unmet) {
+    const notice = document.getElementById('gw-drop-refusal');
+    if (!notice) return;
+    notice.innerHTML = '<button class="close-btn" id="drop-refusal-close" aria-label="Dismiss">&times;</button>' +
+      '<h4>' + escapeHtml(id) + ' cannot move to ' + escapeHtml(stageLabel(to)) + ' yet</h4>' +
+      sentenceList(unmet);
+    notice.classList.remove('hidden');
+    notice.querySelector('#drop-refusal-close').addEventListener('click', hideBoardRefusal);
+    if (refusalTimer) window.clearTimeout(refusalTimer);
+    refusalTimer = window.setTimeout(hideBoardRefusal, 12000);
   }
 
   async function onDispatchClick(id, action, btn) {
@@ -1138,6 +2516,43 @@
     } else {
       btn.disabled = false;
       showPanelError((result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  // The inline answer to "needs an owner" (P8-15). Mirrors the existing
+  // dispatch/cancel/resume/triage actions exactly: POST to a per-item action
+  // path, then let the one poll loop pick up the result. `gw claim <id>` is
+  // the CLI's own name for this, unchanged here.
+  async function onClaimClick(id, btn) {
+    const key = 'claim:' + id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/claim', {});
+    Inflight.delete(key);
+    if (result.ok) {
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      reportActionError(id, (result.data && result.data.error) || 'request failed');
+    }
+  }
+
+  // Release's counterpart (P8-14): a table row that claimed an item by
+  // mistake, or is handing it back, does not need to open the panel to say
+  // so. Mirrors onClaimClick exactly but for /release.
+  async function onReleaseClick(id, btn) {
+    const key = 'release:' + id;
+    if (Inflight.has(key)) return;
+    Inflight.add(key);
+    btn.disabled = true;
+    const result = await apiWrite('/api/items/' + encodeURIComponent(id) + '/release', {});
+    Inflight.delete(key);
+    if (result.ok) {
+      await refreshNow();
+    } else {
+      btn.disabled = false;
+      reportActionError(id, (result.data && result.data.error) || 'request failed');
     }
   }
 
@@ -1259,11 +2674,18 @@
     if (!board) { renderView(); return; }
     const oldById = new Map(previousItems.map((item) => [item.id, item]));
     const cards = new Map([...board.querySelectorAll('.card')].map((card) => [card.dataset.id, card]));
+    const terminal = terminalStageIds();
     for (const stage of stageList(State.stages)) {
       const column = board.querySelector('.column[data-stage="' + CSS.escape(stage.id) + '"]');
       if (!column) { renderView(); return; }
       const body = column.querySelector('.column-body');
-      const items = filteredItems().filter((item) => item.stage === stage.id);
+      const inCol = filteredItems().filter((item) => item.stage === stage.id);
+      const isTerminal = terminal.has(stage.id);
+      // State.expandedStages is untouched by this function, so a column a
+      // human just opened stays open across this same poll that would
+      // otherwise be the thing resetting it.
+      const expanded = !isTerminal || State.expandedStages.has(stage.id);
+      const items = columnBodyItems(stage.id, inCol, expanded);
       const fragment = document.createDocumentFragment();
       for (const item of items) {
         const prior = oldById.get(item.id); const moved = prior && prior.stage !== item.stage;
@@ -1277,7 +2699,11 @@
         }
         fragment.appendChild(card);
       }
-      body.replaceChildren(fragment); column.querySelector('.count').textContent = String(items.length);
+      body.replaceChildren(fragment);
+      column.querySelector('.count').textContent = String(inCol.length);
+      column.classList.toggle('collapsed', isTerminal && !expanded);
+      const toggleBtn = column.querySelector('[data-toggle-stage]');
+      if (toggleBtn) toggleBtn.textContent = expanded ? 'Collapse' : 'Show all';
     }
   }
 
@@ -1293,13 +2719,23 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json(); const previous = State.items;
       const priorDispatch = new Map(previous.map((item) => [item.id, isDispatched(item.id)]));
+      // What the open editor is showing, captured before the new payload
+      // lands: an editor view is only redrawn when the thing it edits has
+      // actually changed, because redrawing it every two seconds would throw
+      // away whatever the human had typed into it.
+      const beforeEditable = JSON.stringify([State.stages, State.config, State.admin]);
       State.items = data.items || []; mergeEvents(data.events || []);
       State.stages = data.stages || State.stages; State.config = data.config || State.config; State.sync = data.sync || State.sync;
       State.runs = data.runs || []; State.scheduler = data.scheduler || State.scheduler;
+      State.admin = data.admin || { allowed: false };
       State.generatedAt = data.generatedAt || new Date().toISOString();
       State.lastLiveUpdate = Date.now(); State.liveError = null; State.pollingDelay = 2000;
       populateFilterOptions(); renderHeader();
-      if (State.view === 'board') updateBoardInPlace(previous, priorDispatch); else renderView();
+      if (State.view === 'board') updateBoardInPlace(previous, priorDispatch);
+      else if (isEditorView()) {
+        const changed = beforeEditable !== JSON.stringify([State.stages, State.config, State.admin]);
+        if (changed && !State.formDirty) renderView();
+      } else renderView();
       if (State.activePanelId) openPanel(State.activePanelId);
     } catch (error) {
       State.liveError = error.message || 'server unavailable'; State.pollingDelay = Math.min(State.pollingDelay * 2, 30000); renderHeader();
@@ -1330,6 +2766,18 @@
     });
 
     document.getElementById('gw-view').addEventListener('click', (e) => {
+      // The one click that shows a collapsed terminal column in full, or
+      // collapses it back (P8-12). Toggled in State so the 2-second poll
+      // reflects the choice instead of resetting it.
+      const toggleBtn = e.target.closest('[data-toggle-stage]');
+      if (toggleBtn) {
+        e.stopPropagation();
+        const stageId = toggleBtn.dataset.toggleStage;
+        if (State.expandedStages.has(stageId)) State.expandedStages.delete(stageId);
+        else State.expandedStages.add(stageId);
+        renderView();
+        return;
+      }
       const playBtn = e.target.closest('[data-play]');
       if (playBtn) { e.stopPropagation(); onDispatchClick(playBtn.dataset.play, 'dispatch', playBtn); return; }
       const stopBtn = e.target.closest('[data-stop]');
@@ -1338,6 +2786,15 @@
       // running, rather than withdrawing a dispatch that has not started.
       const stopRunBtn = e.target.closest('[data-stoprun]');
       if (stopRunBtn) { e.stopPropagation(); onDispatchClick(stopRunBtn.dataset.stoprun, 'stop', stopRunBtn); return; }
+      // Table row actions (P8-14). Stopped from bubbling to the row-open
+      // handler below for the same reason the card actions above are.
+      const claimRowBtn = e.target.closest('[data-claim-row]');
+      if (claimRowBtn) { e.stopPropagation(); onClaimClick(claimRowBtn.dataset.claimRow, claimRowBtn); return; }
+      const releaseRowBtn = e.target.closest('[data-release-row]');
+      if (releaseRowBtn) { e.stopPropagation(); onReleaseClick(releaseRowBtn.dataset.releaseRow, releaseRowBtn); return; }
+      // A click that opens the move picker itself must not also open the
+      // item's panel underneath it.
+      if (e.target.closest('select.row-move')) return;
       const card = e.target.closest('[data-id]');
       if (card) openPanel(card.dataset.id);
     });
@@ -1350,11 +2807,44 @@
       renderView();
     });
 
+    // Warm the transitions cache the moment a move picker is touched, same as
+    // the board warms it on mousedown before a drag -- so its options have
+    // real verdicts by the time it is actually opened, not just "checking…".
+    document.getElementById('gw-view').addEventListener('mousedown', (e) => {
+      if (!State.live || !e.target.closest) return;
+      const select = e.target.closest('select.row-move');
+      if (select) refreshTransitions(select.dataset.moveRow);
+    });
+
+    // The move picker itself: only a value dropAllowed() already approved can
+    // ever be selected (every other option is disabled), so this never has to
+    // re-check before sending the move.
+    document.getElementById('gw-view').addEventListener('change', (e) => {
+      const select = e.target.closest ? e.target.closest('select.row-move') : null;
+      if (!select || !select.value) return;
+      const id = select.dataset.moveRow;
+      const to = select.value;
+      const it = State.items.find((candidate) => candidate.id === id);
+      const force = Boolean(it && isBackwardTarget(it.stage, to));
+      onMoveClick(id, to, null, { force }).then(() => { select.value = ''; });
+    });
+
+    // Typing into the stages or settings editors marks the form dirty, which
+    // is what stops the poll loop redrawing the view and throwing the input
+    // away mid-edit. Cleared whenever one of those views is (re)rendered.
+    ['input', 'change'].forEach((type) => {
+      document.getElementById('gw-view').addEventListener(type, () => {
+        if (isEditorView()) State.formDirty = true;
+      });
+    });
+
+    wireDragAndDrop(document.getElementById('gw-view'));
+
     document.getElementById('gw-overlay').addEventListener('click', (e) => {
       if (e.target.id === 'gw-overlay') closePanel();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closePanel();
+      if (e.key === 'Escape') { closePanel(); hideBoardRefusal(); }
     });
 
     document.getElementById('f-new').addEventListener('click', openCreatePanel);
@@ -1383,7 +2873,7 @@
     if (location.protocol.indexOf('http') === 0) {
       State.live = true; State.lastLiveUpdate = Date.now(); renderHeader();
       schedulePoll(2000);
-      window.setInterval(() => { if (State.live) renderHeader(); }, 1000);
+      window.setInterval(() => { if (State.live) { renderHeader(); tickRunAges(); } }, 1000);
     }
   }
 

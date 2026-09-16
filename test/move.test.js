@@ -85,7 +85,8 @@ test('move prints exactly one confirmation line on success', () => {
 
 test('move refuses an out-of-order pipeline target without force but allows side stages', () => {
   const b = board();
-  assert.throws(() => run(ctx(b, ['P1-01', 'built'])), (error) => error instanceof RuleError && /use --force to skip stages/.test(error.message));
+  assert.throws(() => run(ctx(b, ['P1-01', 'built'])), (error) => error instanceof RuleError
+    && error.message === 'specified: move here first (built is 2 stages beyond specified): run `gw move P1-01 specified`');
   run(ctx(b, ['P1-01', 'paused']));
   assert.equal(b.store.readItems()[0].stage, 'paused');
   const dropped = board(); run(ctx(dropped, ['P1-01', 'dropped']));

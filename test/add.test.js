@@ -111,3 +111,35 @@ test('add uses the shared vocabulary validation message', () => {
     /invalid --type 'defect'; allowed values: feature/,
   );
 });
+
+test('child inherits parent\'s phase when --phase is not given', () => {
+  const { store } = repo({ vocab: { phase: ['P0', 'P1', 'P2'] } });
+  run({ store, root: store.root, actor: 'human:me', flags: { phase: 'P2' }, positionals: ['parent'], stdout: { write() {} } });
+  run({ store, root: store.root, actor: 'human:me', flags: { parent: 'P2-01' }, positionals: ['child'], stdout: { write() {} } });
+  const child = store.readItems().find((item) => item.id === 'P2-01.1');
+  assert.equal(child.phase, 'P2');
+});
+
+test('explicit --phase on child still wins over parent\'s phase', () => {
+  const { store } = repo({ vocab: { phase: ['P0', 'P1', 'P2'] } });
+  run({ store, root: store.root, actor: 'human:me', flags: { phase: 'P2' }, positionals: ['parent'], stdout: { write() {} } });
+  run({ store, root: store.root, actor: 'human:me', flags: { parent: 'P2-01', phase: 'P0' }, positionals: ['child'], stdout: { write() {} } });
+  const child = store.readItems().find((item) => item.id === 'P2-01.1');
+  assert.equal(child.phase, 'P0');
+});
+
+test('top-level item unaffected by phase inheritance logic', () => {
+  const { store } = repo({ vocab: { phase: ['P0', 'P1'] } });
+  run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: ['top-level'], stdout: { write() {} } });
+  const item = store.readItems()[0];
+  assert.equal(item.phase, 'P0');
+  assert.equal(item.parent, null);
+});
+
+test('parent with no phase falls back to vocab default', () => {
+  const { store } = repo({ vocab: { phase: ['P0', 'P1'] } });
+  store.writeItems([{ id: 'T-0001', phase: null, parent: null }]);
+  run({ store, root: store.root, actor: 'human:me', flags: { parent: 'T-0001' }, positionals: ['child'], stdout: { write() {} } });
+  const child = store.readItems().find((item) => item.parent === 'T-0001');
+  assert.equal(child.phase, 'P0');
+});

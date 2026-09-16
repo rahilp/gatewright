@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js';
 import { run as runBrief } from '../lib/commands/brief.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
-import { renderBrief } from '../lib/brief.js';
+import { renderBrief, inFlightTitles } from '../lib/brief.js';
 import { makeItems, makeEvents } from './fixtures/make-items.js';
 
 const stages = { stages: [
@@ -143,4 +143,238 @@ test('fixture titles vary in length for truncation and alignment coverage', () =
   assert.ok(new Set(titles).size > 3);
   assert.ok(titles.some((value) => value.length < 30));
   assert.ok(titles.some((value) => value.length > 80));
+});
+
+// P8-24 — claiming an item sets item.owner but never touches its stage, so
+// ownership alone used to be read as "in flight". A card sitting untouched in
+// backlog with someone's name on it is not in-progress work; it is a promise
+// that has not been kept yet, and burying it in IN FLIGHT hid the fact that
+// nobody had actually started.
+test('P8-24: an item that is claimed but never moved is not reported in flight', () => {
+  const claimed = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
+  const out = renderBrief({ items: [claimed], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 1 open · 0 in flight · 0 blocked/m);
+  assert.equal(out.includes('IN FLIGHT'), false, 'a claimed-but-unmoved item must not populate IN FLIGHT');
+});
+
+test('P8-24: an item is in flight once it has actually moved past its first stage, owned or not', () => {
+  const moved = { ...makeItems(1)[0], id: 'P1-01', stage: 'specified', owner: 'human:rahil', flag: null, deps: [] };
+  const out = renderBrief({ items: [moved], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 1 open · 1 in flight · 0 blocked/m);
+  assert.match(out, /IN FLIGHT[\s\S]*P1-01/);
+});
+
+test('P8-24: a claimed item with a live dispatch is in flight even before it has moved', () => {
+  // The dispatch is by the scheduler, not by `me` -- otherwise it would land
+  // in DISPATCHED TO YOU instead, which is exactly as correct but tests a
+  // different section. The point here is that the active dispatch alone (no
+  // stage movement yet) is what makes it count as in-flight work.
+  const claimed = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
+  const out = renderBrief({
+    items: [claimed],
+    events: [{ type: 'dispatch', item: 'P1-01', by: 'scheduler' }],
+    stages,
+    config: { brief: { max_lines: 25 } },
+  }, { me: 'human:rahil' });
+  assert.match(out, /^gw · 1 open · 1 in flight · 0 blocked/m);
+  assert.match(out, /IN FLIGHT[\s\S]*P1-01/, 'a live run makes an item in flight even while it is still in its first stage');
+});
+
+test('P8-24: inFlightTitles agrees with the brief -- claimed-but-unmoved is excluded, progressed is included', () => {
+  const claimed = { ...makeItems(1)[0], id: 'P1-01', title: 'Claimed only', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
+  const moved = { ...makeItems(1)[0], id: 'P1-02', title: 'Actually moved', stage: 'specified', owner: null, flag: null, deps: [] };
+  const titles = inFlightTitles({ items: [claimed, moved], events: [], stages });
+  assert.deepEqual(titles, ['Actually moved']);
+});
+
+// P8-26 — NEXT UNBLOCKED prints bare phase/gate codes ("P1 G0") with nothing
+// to say what they mean. config.glossary already carries that meaning, and
+// `gw show` already reads it via describeTerm; brief did not. A legend line
+// naming only the codes actually on screen keeps the digest from growing one
+// sentence per row while still answering the question a new agent has the
+// first time it sees "G0".
+const glossaryConfig = {
+  brief: { max_lines: 25 },
+  vocab: { gate: ['G0'], phase: ['P1'] },
+  glossary: {
+    gate: { G0: 'No gate: ship when the evidence rule is met.' },
+    phase: { P1: 'The first working version.' },
+  },
+};
+
+test('P8-26: a legend line explains only the phase/gate codes actually shown', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+  const out = renderBrief({ items: [next], events: [], stages, config: glossaryConfig });
+  // The legend contains the phase and gate descriptions (may wrap across lines)
+  // Use a regex that allows for line breaks within the legend
+  assert.match(out, /Legend: P1 = The first working version[\s\S]*G0 = No gate: ship when the[\s\S]*evidence rule is met\./);
+});
+
+test('P8-26: no glossary configured means no legend line at all', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+  const out = renderBrief({ items: [next], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.equal(out.includes('Legend:'), false);
+});
+
+test('P8-26: a code with no glossary entry is left out of the legend rather than printed blank', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P2', gate: 'G0' };
+  const config = { brief: { max_lines: 25 }, vocab: { gate: ['G0'], phase: ['P1', 'P2'] }, glossary: { gate: { G0: 'No gate.' } } };
+  const out = renderBrief({ items: [next], events: [], stages, config });
+  assert.match(out, /^Legend: G0 = No gate\.$/m);
+  assert.equal(out.includes('P2 ='), false, 'P2 has no glossary entry, so it is silently absent from the legend');
+});
+
+test('P8-26: the legend never pushes the brief past its line cap', () => {
+  const items = makeItems(20).map((item, index) => ({ ...item, stage: 'backlog', owner: null, flag: null, deps: [], phase: `P${index % 4}`, gate: `G${index % 3}` }));
+  const config = {
+    brief: { max_lines: 12 },
+    vocab: { phase: ['P0', 'P1', 'P2', 'P3'], gate: ['G0', 'G1', 'G2'] },
+    glossary: {
+      phase: { P0: 'Phase zero.', P1: 'Phase one.', P2: 'Phase two.', P3: 'Phase three.' },
+      gate: { G0: 'Gate zero.', G1: 'Gate one.', G2: 'Gate two.' },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  assert.ok(out.trimEnd().split('\n').length <= 12, 'the cap wins over legend completeness');
+});
+
+test('P8-27: the legend wraps to multiple rows and no row exceeds the computed width', () => {
+  // Create a legend with long descriptions that will wrap
+  const items = makeItems(2).map((item, index) => ({
+    ...item,
+    stage: 'backlog',
+    owner: null,
+    flag: null,
+    deps: [],
+    phase: index === 0 ? 'P1' : 'P2',
+    gate: index === 0 ? 'G0' : 'G1',
+  }));
+  const config = {
+    brief: { max_lines: 25 },
+    vocab: { phase: ['P1', 'P2'], gate: ['G0', 'G1'] },
+    glossary: {
+      phase: {
+        P1: 'The first working version: the core this product is useless without.',
+        P2: 'The work that makes the core usable day to day.',
+      },
+      gate: {
+        G0: 'Blocking: the phase cannot be called done while this is open.',
+        G1: 'Planned: meant for this phase, but the phase can ship without it.',
+      },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  const lines = out.split('\n');
+  const legendStart = lines.findIndex((line) => line.startsWith('Legend:'));
+  assert.ok(legendStart >= 0, 'legend should be present');
+
+  // Find all legend lines (first starts with "Legend:", continuations start with 7 spaces)
+  const legendLines = [];
+  for (let i = legendStart; i < lines.length; i++) {
+    if (i === legendStart) {
+      legendLines.push(lines[i]);
+    } else if (lines[i].startsWith('       ')) {
+      legendLines.push(lines[i]);
+    } else {
+      break;
+    }
+  }
+
+  // Legend should wrap to multiple lines
+  assert.ok(legendLines.length > 1, `legend should wrap to multiple lines, got ${legendLines.length}`);
+
+  // No row should exceed the wrap width of 76
+  const WRAP_WIDTH = 76;
+  for (const line of legendLines) {
+    assert.ok(line.length <= WRAP_WIDTH, `legend line exceeds width: ${line.length} chars: ${line}`);
+  }
+
+  // No wrap should happen mid-word
+  for (const line of legendLines) {
+    // Check that lines don't end with a space (which would indicate a word-break problem)
+    assert.ok(!line.endsWith(' '), `legend line should not end with space: ${line}`);
+  }
+});
+
+test('P8-27: wrapped legend rows are counted against the budget and dropped if they do not fit', () => {
+  // Create items with long phase/gate descriptions that will wrap to multiple lines
+  const items = makeItems(10).map((item, index) => ({
+    ...item,
+    stage: 'backlog',
+    owner: null,
+    flag: null,
+    deps: [],
+    phase: 'P1',
+    gate: 'G0',
+  }));
+  const config = {
+    brief: { max_lines: 10 }, // Very tight budget
+    vocab: { phase: ['P1'], gate: ['G0'] },
+    glossary: {
+      phase: {
+        P1: 'The first working version: the core this product is useless without. More text to ensure wrapping.',
+      },
+      gate: {
+        G0: 'Blocking: the phase cannot be called done while this is open. More text here too.',
+      },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  const lines = out.trimEnd().split('\n');
+
+  // With such a tight budget, the legend should be dropped if it wraps to multiple lines
+  assert.ok(lines.length <= 10, `output should respect line limit: ${lines.length} lines`);
+
+  // If the legend is present, it must fit entirely within the budget
+  const hasLegend = lines.some((line) => line.startsWith('Legend:'));
+  if (hasLegend) {
+    const legendStart = lines.findIndex((line) => line.startsWith('Legend:'));
+    let legendLineCount = 1;
+    for (let i = legendStart + 1; i < lines.length; i++) {
+      if (lines[i].startsWith('       ')) {
+        legendLineCount++;
+      } else {
+        break;
+      }
+    }
+    // Verify that the total lines including legend do not exceed the budget
+    assert.ok(lines.length <= 10, 'legend should not cause line limit to be exceeded');
+  }
+});
+
+test('P8-27: continuation lines are indented with 7 spaces to align with legend text', () => {
+  const items = makeItems(2).map((item, index) => ({
+    ...item,
+    stage: 'backlog',
+    owner: null,
+    flag: null,
+    deps: [],
+    phase: 'P1',
+    gate: 'G0',
+  }));
+  const config = {
+    brief: { max_lines: 25 },
+    vocab: { phase: ['P1'], gate: ['G0'] },
+    glossary: {
+      phase: {
+        P1: 'The first working version that is super duper long to ensure multiple lines of wrapping.',
+      },
+      gate: {
+        G0: 'Blocking gate with a very long description to make sure this wraps properly and stays aligned.',
+      },
+    },
+  };
+  const out = renderBrief({ items, events: [], stages, config });
+  const lines = out.split('\n');
+  const legendStart = lines.findIndex((line) => line.startsWith('Legend:'));
+  assert.ok(legendStart >= 0, 'legend should be present');
+
+  // All continuation lines should start with exactly 7 spaces
+  for (let i = legendStart + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('       ')) {
+      assert.ok(/^       [^ ]/.test(lines[i]), `continuation line should have exactly 7 spaces of indent: ${lines[i]}`);
+    } else if (lines[i].length > 0) {
+      break; // Legend section ended
+    }
+  }
 });

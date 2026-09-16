@@ -99,11 +99,21 @@ $ gw serve --port 17888
 Gatewright live board: http://127.0.0.1:17888/
 ```
 
-When a move is refused, the card shows the CLI's own refusal inline. For example, a skipped-stage move returned:
+Cards drag between columns. A column that would refuse the move says so while you drag rather than letting the card snap back, and a backward move — correcting a mis-drag — is offered separately and styled differently so it is never done by accident.
+
+A refused move is explained in English rather than in rule syntax, and where the board can clear the condition itself it offers the action instead of a command to type:
 
 ```
-use --force to skip stages
+Not met yet:
+  Someone must have claimed it     [Claim]
+  Needs at least one piece of evidence
 ```
+
+Stages, gates and settings are editable from the board. "Stages & rules" adds, renames, reorders and removes stages, and builds a gate from a form — evidence counts, an owner requirement, a dependency stage — showing the same English read-back the board uses when it refuses a move. The Settings view is generated from the same schema `gw config` validates against, so the two cannot drift.
+
+**Those three are loopback only.** Moving a card is available wherever the board is reachable, which is what `--host` is for; changing the rules of the board is not. Off loopback the controls are not drawn at all rather than offered and refused, and there is no authentication to configure — reachability is the whole mechanism.
+
+Finished columns collapse to a count with the most recent items visible, so a board that is mostly archive still shows the work that is live.
 
 Play queues a dispatch event. The scheduler can act on that event only when its runner controls permit it. Stop cancels a queued dispatch or stops a recorded run. Global pause stops new dispatches.
 
@@ -185,6 +195,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw claim <id> [--by <who>]` | Take ownership |
 | `gw release <id>` | Drop ownership |
 | `gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]` | Advance a stage; refused if its exit rule is unmet |
+| `gw next <id> [--json]` | Show the stage(s) an item can move to right now, and the unmet conditions in plain English for the rest |
 | `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--gate G] [--deps a,b] [--refs a,b] [--by <who>]` | Change non-stage, non-evidence, non-notes fields |
 | `gw note <id> "<text>" [--by <who>]` | Append a timestamped line to the item's notes |
 | `gw show <id> [--json]` | Print one item and its events |
@@ -259,9 +270,9 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 ## Status
 
-Gatewright is at v0.9.0.
+Gatewright is at v0.10.0.
 
-Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only — CSV and JSON return exit 2 today), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
+Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only at the time; CSV and JSON arrived in v0.9), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
 Shipped in v0.2: `gw serve`: a live board with write-back, editing, Play/Stop queuing, and global pause.
 
@@ -278,6 +289,10 @@ Shipped in v0.7: `gw config`, so settings can be changed without hand-editing `.
 Shipped in v0.8: `gw init` asks how you work — whether work reaches main directly or through pull requests, how items are numbered, which phases you use, and whether to arm the runner — and writes a pipeline that ends where you actually finish. A stage can now declare `"role": "done"`, and `gw brief` believes it: before this, a board whose pipeline assumed pull requests reported every completed item as still in flight forever, which turned the digest into a list of everything ever done. `gw config` also gained list-valued settings, so the vocabularies are settable without opening a file. Every non-interactive path is unchanged: no TTY, `--yes`, `GW_NO_INPUT` or `CI` all leave `init` byte-identical.
 
 Shipped in v0.9: `gw check` now reports items holding values the vocabulary no longer allows, which was only ever enforced when an item was created — so a direct write, an import, or narrowing a vocabulary later left drift the board called clean. `gw import` accepts CSV and JSON as well as markdown, carrying evidence through so finished work is not silently downgraded. `gw help <command>` and `gw <command> --help` print that command's own flags, rendered from the spec the parser uses. `mirror_children` opens an issue for an agent-created child of a linked parent. The `Specified` stage now requires the scope it is named after. On the live board, a card's button reflects what is actually true of it — nothing on finished work, Cancel on a queued dispatch, Stop run on a run already in progress — and stopping a run no longer blocks the server while it waits out the grace period.
+
+Shipped in v0.10: the board became something a human can manage the tracker with, rather than only read. Stages are added, renamed, reordered and removed from the UI; gates are built from a form showing the English read-back the board uses when it refuses a move; settings are edited from a view generated from the same schema `gw config` validates against. Those three are loopback only — moving a card is what `--host` is for, rewriting the rules of the board is not. Cards drag between columns, backward moves are offered separately for correcting a mis-drag, an unmet gate offers the action that clears it instead of a command to type, finished columns collapse so an archive-heavy board still shows live work, and `config.glossary` gives codes like `G0` a meaning wherever they appear.
+
+Agents got the larger fix. Following the shipped instruction block literally, an agent could not get an item through the pipeline: `gw move` refused a skipped stage with "use --force to skip stages", the one action the block forbids, and never named the stage to pass through first. It now names it and gives the command. `gw next <id>` answers what the browser could already ask and the CLI could not — the next stage and exactly what it needs. A child item inherits its parent's phase instead of being born into a different one, `brief` no longer counts a claimed-but-unstarted item as in flight, and it explains the codes it prints.
 
 Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 

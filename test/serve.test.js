@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { readConfig } from '../lib/config.js';
 import { createServeServer, listen } from '../lib/serve/server.js';
+import { describeStage } from '../lib/gates/describe.js';
 
 const item = { id: 'P1-01', title: 'Live board', phase: 'P1', priority: 'P1', gate: 'G0', type: 'feature', stage: 'backlog', flag: null, owner: null, scope: '', deps: [], evidence: [], notes: '', refs: [], parent: null, created_by: 'human', gh: null, created: '2026-01-01T00:00:00Z', updated: '2026-01-01T00:00:00Z' };
 
@@ -106,6 +107,77 @@ test('state transitions reject a skipped earlier gate even when the immediate ta
     assert.match(transition.failures.join('\\n'), /building: needs an owner/);
     assert.equal(transition.failures.length, 1);
   }, { items: [progressed], stages });
+});
+
+// viewer/board.html cannot import lib/gates/describe.js, so the descriptions
+// ride along with the stages payload it already reads. Asserting against
+// describeStage itself is the point: if the two ever disagree, the board is
+// describing a rule nobody enforces.
+test('state carries every stage gate in the English lib/gates/describe.js produces', async () => {
+  const stages = {
+    stages: [
+      { id: 'backlog', label: 'Backlog' },
+      { id: 'building', label: 'Building', requires: { owner: true } },
+      { id: 'built', label: 'Built', requires: { evidence_min: 1, deps_at_least: 'building' } },
+    ],
+    terminal: [], extra: [{ id: 'paused', label: 'Paused' }],
+  };
+  await withServer(async ({ url }) => {
+    const state = await (await fetch(url + '/api/state')).json();
+    assert.deepEqual(Object.keys(state.stages.gates), ['backlog', 'building', 'built', 'paused']);
+    assert.deepEqual(state.stages.gates.built, describeStage(stages.stages[2], stages));
+    assert.deepEqual(state.stages.gates.built.sentences, [
+      'Needs at least one piece of evidence',
+      'Every dependency must have reached Building',
+    ]);
+    assert.deepEqual(state.stages.gates.backlog.sentences, ['Nothing is checked here: this stage is advanced by hand']);
+    // The raw rules are still there; the sentences are an addition, not a
+    // replacement, because agents read this payload too.
+    assert.deepEqual(state.stages.stages[2].requires, { evidence_min: 1, deps_at_least: 'building' });
+  }, { stages });
+});
+
+test('a blocked transition names only the conditions it actually failed, in English', async () => {
+  const stages = {
+    stages: [
+      { id: 'backlog' },
+      { id: 'building', requires: { owner: true } },
+      { id: 'built', requires: { evidence_min: 2, deps_at_least: 'building' } },
+    ],
+    terminal: [], extra: [],
+  };
+  // Owned and with no dependencies, so the owner and deps_at_least rules pass;
+  // only the evidence minimum is unmet.
+  const owned = { ...item, stage: 'building', owner: 'human:rahil', deps: [], evidence: ['abc1234'] };
+  await withServer(async ({ url }) => {
+    const result = await (await transitions(url)).json();
+    assert.equal(result.built.ok, false);
+    assert.deepEqual(result.built.reasons, ['Needs at least two pieces of evidence']);
+    // The CLI wording survives untouched beside it: it carries the command.
+    assert.match(result.built.failures.join(' '), /gw move P1-01 built --evidence/);
+    // A transition that passes says nothing, rather than listing rules it met.
+    assert.equal(result.backlog.ok, true);
+    assert.equal('reasons' in result.backlog, false);
+  }, { items: [owned], stages });
+});
+
+test('a blocked transition explains an earlier gate it never reached', async () => {
+  const stages = {
+    stages: [
+      { id: 'backlog' },
+      { id: 'building', requires: { owner: true } },
+      { id: 'built', requires: { evidence_min: 1 } },
+    ],
+    terminal: [], extra: [],
+  };
+  const unowned = { ...item, stage: 'building', owner: null, evidence: [] };
+  await withServer(async ({ url }) => {
+    const result = await (await transitions(url)).json();
+    assert.deepEqual(result.built.reasons, [
+      'Someone must have claimed it',
+      'Needs at least one piece of evidence',
+    ], 'the cumulative gate explains the skipped stage as well as the target');
+  }, { items: [unowned], stages });
 });
 
 test('state offers side stages and marks force-only pipeline jumps', async () => {

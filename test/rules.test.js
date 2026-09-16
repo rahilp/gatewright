@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stageList, stageIndex, nextStage, evaluateRequires, evaluateCumulative, findCycles, missingDeps } from '../lib/rules.js';
+import { stageList, stageIndex, nextStage, evaluateRequires, evaluateCumulative, findCycles, missingDeps, stageOrderMessage } from '../lib/rules.js';
 
 const stages = { stages: [
   { id: 'backlog' }, { id: 'building', requires: { owner: true } },
@@ -53,4 +53,32 @@ test('findCycles deterministically finds self, two-item, and three-item cycles',
 
 test('missingDeps lists missing ids by item', () => {
   assert.deepEqual(missingDeps([item({ id: 'A', deps: ['B', 'X'] }), item({ id: 'B' })]), [{ id: 'A', missing: ['X'] }]);
+});
+
+test('stageOrderMessage names the immediate next stage and the exact command, never --force', () => {
+  assert.equal(
+    stageOrderMessage('A', 'backlog', 'built', stages),
+    'building: move here first: run `gw move A building`',
+  );
+});
+
+test('stageOrderMessage names how many further stages remain when several are skipped', () => {
+  assert.equal(
+    stageOrderMessage('A', 'backlog', 'review', stages),
+    'building: move here first (review is 2 stages beyond building): run `gw move A building`',
+  );
+});
+
+test('stageOrderMessage tells a backward jump to use --force since there is no forward fix', () => {
+  assert.equal(
+    stageOrderMessage('A', 'built', 'backlog', stages),
+    'backlog comes before built in the pipeline; moving backward needs --force: run `gw move A backlog --force`',
+  );
+});
+
+test('stageOrderMessage sends an off-pipeline current stage back onto the pipeline', () => {
+  assert.equal(
+    stageOrderMessage('A', 'paused', 'built', stages),
+    'paused is outside the pipeline; move it onto the pipeline first: run `gw move A backlog`',
+  );
 });
