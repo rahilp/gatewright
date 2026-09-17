@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
@@ -218,6 +218,19 @@ test('--pretool reads the provider tool call from stdin', () => {
   const result = ctx(b, { pretool: true });
   assert.equal(run(result.ctx, { git, readStdin: () => call }), 0);
   assert.equal(result.out(), '');
+});
+
+// The product consequence of the containment bug: the first tool call of any
+// new task is usually a Write to a file that does not exist yet.
+test('--pretool gates a file that does not exist yet, under a root reached by a symlink', () => {
+  const b = board();
+  const link = join(mkdtempSync(join(tmpdir(), 'gw-link-')), 'repo');
+  symlinkSync(b.root, link);
+  const git = fakeGit({ 'rev-parse --abbrev-ref HEAD': 'main\n' });
+  const call = JSON.stringify({ tool_name: 'Write', tool_input: { file_path: join(link, 'lib', 'brand-new.js') } });
+  const result = ctx(b, { pretool: true });
+  assert.equal(run(result.ctx, { git, readStdin: () => call }), 0);
+  assert.match(result.out(), /permissionDecision":"deny/, 'a new file inside the repository must still be gated');
 });
 
 test('--pretool never gates the board itself, or a file outside the repository', () => {

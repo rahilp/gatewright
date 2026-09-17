@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { win32, posix } from 'node:path';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isWithin } from '../lib/util/paths.js';
@@ -15,6 +15,23 @@ import { isWithin } from '../lib/util/paths.js';
 test('relative() cannot express containment with .. across Windows drives', () => {
   assert.equal(win32.relative('C:\\repo', 'D:\\etc\\hosts'), 'D:\\etc\\hosts');
   assert.equal(posix.relative('/repo', '/etc/hosts'), '../etc/hosts');
+});
+
+// The case the enforcement actually depends on: an agent's `Write` names a
+// file that does not exist yet, so it cannot be realpath'd -- while its root
+// can. Normalising only the side that exists compares a resolved parent
+// against an unresolved child, and on any machine whose repository sits under
+// a symlink (macOS /tmp -> /private/tmp, a Windows 8.3 short name) a brand-new
+// file inside the repository reads as outside it, and goes ungated.
+test('isWithin places a file that does not exist yet under a symlinked root', () => {
+  const base = mkdtempSync(join(tmpdir(), 'gw-symlink-'));
+  const real = join(base, 'real');
+  const link = join(base, 'link');
+  mkdirSync(real);
+  symlinkSync(real, link);
+  assert.equal(isWithin(join(link, 'brand-new.js'), link), true);
+  assert.equal(isWithin(join(link, 'lib', 'deep', 'brand-new.js'), link), true);
+  assert.equal(isWithin(join(base, 'elsewhere.js'), link), false, 'a sibling that does not exist is still outside');
 });
 
 test('isWithin answers containment for both shapes', () => {
