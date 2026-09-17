@@ -96,12 +96,11 @@ test('every shipped stage describes itself in prose, with no JSON leaking throug
 
 test('shipped stages render the exact wording the board will show', () => {
   const byId = Object.fromEntries([...shipped.stages, ...shipped.extra].map((stage) => [stage.id, stage]));
-  assert.deepEqual(describeStage(byId.specified, shipped).sentences, ['Scope must be filled in'], 'the Specified gate explains the scope it is named after');
   assert.deepEqual(describeStage(byId.building, shipped).sentences, ['Someone must have claimed it'], 'the Building gate explains the claim it requires');
   assert.deepEqual(
     describeStage(byId.built, shipped).sentences,
-    ['Needs at least one piece of evidence', 'Every dependency must have reached Built'],
-    'the Built gate explains both its evidence minimum and its dependency boundary',
+    ['Scope must be filled in', 'Needs at least one piece of evidence', 'Every dependency must have reached Built'],
+    'the Built gate explains the scope it is named after, its evidence minimum, and its dependency boundary',
   );
   assert.deepEqual(describeStage(byId.in_review, shipped).sentences, ['Evidence must include a link to a pull request'], 'the In review gate explains its regex as a pull request link');
   assert.deepEqual(describeStage(byId.merged, shipped).sentences, ['Every dependency must have reached Merged'], 'the Merged gate names the dependency boundary by label');

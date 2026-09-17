@@ -18,8 +18,10 @@ function board({ items = [], stages, config } = {}) {
   writeFileSync(store.paths.config, JSON.stringify(config ?? {
     version: 1,
     id_scheme: 'phase-seq',
-    vocab: { phase: ['P3'], priority: ['P0', 'P1', 'P2', 'P3'], type: ['feature', 'defect'], gate: ['G0', 'G1'] },
-    github: { enabled: true, repo: 'owner/repo', labels: { 'priority/P1': { priority: 'P1' }, 'type/defect': { type: 'defect' }, 'phase/3': { phase: 'P3' } }, milestone_to: 'gate' },
+    vocab: { phase: ['P3', 'P9'], priority: ['P0', 'P1', 'P2', 'P3'], type: ['feature', 'defect'] },
+    // milestone_to defaults to 'phase' (P0-15 dropped the item field `gate`),
+    // so a milestone -- not a label -- decides phase here.
+    github: { enabled: true, repo: 'owner/repo', labels: { 'priority/P1': { priority: 'P1' }, 'type/defect': { type: 'defect' } }, milestone_to: 'phase' },
   }));
   return store;
 }
@@ -27,8 +29,8 @@ function board({ items = [], stages, config } = {}) {
 function issue(over = {}) {
   return {
     number: 42, title: 'From GitHub', body: 'Done means it works.',
-    labels: [{ name: 'priority/P1' }, { name: 'type/defect' }, { name: 'phase/3' }],
-    milestone: { title: 'G1' }, state: 'OPEN', updatedAt: '2026-09-14T12:00:00Z', url: 'https://github.com/owner/repo/issues/42', ...over,
+    labels: [{ name: 'priority/P1' }, { name: 'type/defect' }],
+    milestone: { title: 'P9' }, state: 'OPEN', updatedAt: '2026-09-14T12:00:00Z', url: 'https://github.com/owner/repo/issues/42', ...over,
   };
 }
 
@@ -38,7 +40,7 @@ function hash(store) {
 }
 function item(over = {}) {
   return {
-    id: 'P3-01', title: 'Old title', phase: 'P3', priority: 'P3', gate: 'G0', type: 'feature',
+    id: 'P3-01', title: 'Old title', phase: 'P3', priority: 'P3', type: 'feature',
     stage: 'building', flag: 'blocked', owner: 'agent:r-1', scope: 'old scope', deps: ['P3-00'], evidence: ['abc'], notes: 'local note', refs: ['R1'], parent: null, created_by: 'human',
     gh: { number: 42, url: 'https://github.com/owner/repo/issues/42', updated_at: '2026-09-14T11:00:00Z' }, created: '2026-09-14T10:00:00Z', updated: '2026-09-14T10:00:00Z', ...over,
   };
@@ -59,7 +61,7 @@ test('existing items merge intake fields only and preserve tracker-owned fields 
   pull({ store, gh: gh([issue()]) });
   const updated = store.readItems()[0];
   assert.equal(updated.title, 'From GitHub'); assert.equal(updated.scope, 'Done means it works.');
-  assert.equal(updated.priority, 'P1'); assert.equal(updated.type, 'defect'); assert.equal(updated.phase, 'P3'); assert.equal(updated.gate, 'G1');
+  assert.equal(updated.priority, 'P1'); assert.equal(updated.type, 'defect'); assert.equal(updated.phase, 'P9', 'the milestone, not a label, decides phase');
   for (const field of ['stage', 'flag', 'owner', 'deps', 'evidence', 'notes', 'refs', 'id', 'created_by', 'parent', 'created', 'updated']) {
     assert.deepEqual(updated[field], original[field], `${field} is tracker-owned`);
   }
@@ -79,8 +81,8 @@ test('a closed issue flags an active item once without moving it', () => {
 test('an out-of-vocabulary label warns and leaves the old value intact', () => {
   const config = {
     version: 1, id_scheme: 'phase-seq',
-    vocab: { phase: ['P3'], priority: ['P0', 'P1', 'P2', 'P3'], type: ['feature', 'defect'], gate: ['G0', 'G1'] },
-    github: { enabled: true, repo: 'owner/repo', labels: { 'priority/bad': { priority: 'not-a-priority' } }, milestone_to: 'gate' },
+    vocab: { phase: ['P3', 'P9'], priority: ['P0', 'P1', 'P2', 'P3'], type: ['feature', 'defect'] },
+    github: { enabled: true, repo: 'owner/repo', labels: { 'priority/bad': { priority: 'not-a-priority' } }, milestone_to: 'phase' },
   };
   const store = board({ items: [item()], config }); let stderr = '';
   pull({ store, gh: gh([issue({ labels: [{ name: 'priority/bad' }] })]), stderr: { write: (text) => { stderr += text; } } });
@@ -102,7 +104,7 @@ test('--dry-run prints item changes while leaving the board untouched', () => {
   const before = hash(store);
   pull({ store, gh: gh([issue()]), dryRun: true, stdout: { write: (text) => { stdout += text; } } });
   assert.deepEqual(hash(store), before);
-  assert.match(stdout, /would create P3-01/);
+  assert.match(stdout, /would create P9-01/);
 });
 
 test('a custom pipeline uses its initial role rather than a hardcoded backlog', () => {

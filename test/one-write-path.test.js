@@ -17,7 +17,7 @@ const RULE_IDENTIFIERS = ['evaluateRequires', 'evaluateCumulative', 'findCycles'
 
 const fixture = {
   items: [{
-    id: 'P2-01', title: 'Fixture item', phase: 'P2', priority: 'P2', gate: 'G0', type: 'feature',
+    id: 'P2-01', title: 'Fixture item', phase: 'P2', priority: 'P2', type: 'feature',
     stage: 'specified', flag: null, owner: ACTOR, scope: 'fixture scope', deps: [], evidence: [],
     notes: '', refs: [], parent: null, created_by: 'human', gh: null,
     created: '2026-01-01T00:00:00.000Z', updated: '2026-01-01T00:00:00.000Z',
@@ -31,7 +31,7 @@ const fixture = {
     ],
     terminal: [], extra: [],
   },
-  config: { version: 1, id_scheme: 'phase-seq', vocab: { phase: ['P2'], priority: ['P2'], type: ['feature'], gate: ['G0'] } },
+  config: { version: 1, id_scheme: 'phase-seq', vocab: { phase: ['P2'], priority: ['P2'], type: ['feature'] } },
 };
 
 function makeBoard() {
@@ -136,8 +136,8 @@ test('CLI and HTTP move use one write path, including identical refused failures
 });
 
 test('CLI and HTTP add use one write path', async () => {
-  await assertWriteEquivalent(['add', 'Added through one path', '--phase', 'P2', '--priority', 'P2', '--gate', 'G0', '--type', 'feature', '--scope', 'same scope'], '/api/items', {
-    title: 'Added through one path', phase: 'P2', priority: 'P2', gate: 'G0', type: 'feature', scope: 'same scope',
+  await assertWriteEquivalent(['add', 'Added through one path', '--phase', 'P2', '--priority', 'P2', '--type', 'feature', '--scope', 'same scope'], '/api/items', {
+    title: 'Added through one path', phase: 'P2', priority: 'P2', type: 'feature', scope: 'same scope',
   });
 });
 

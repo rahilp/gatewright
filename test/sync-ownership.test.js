@@ -24,9 +24,11 @@ const intake = {
   labels: [
     { name: 'priority/P1' },
     { name: 'type/defect' },
-    { name: 'phase/3' },
   ],
-  milestone: { title: 'G1' },
+  // milestone_to defaults to 'phase' (P0-15 dropped the item field `gate`,
+  // and a milestone maps most naturally onto a phase), so this proves the
+  // milestone -- not a label -- is what decides phase here.
+  milestone: { title: 'P9' },
   state: 'OPEN',
   updatedAt: '2026-09-14T13:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
@@ -34,7 +36,7 @@ const intake = {
 
 function item(overrides = {}) {
   return {
-    id: 'P3-10', title: 'local title', phase: 'P3', priority: 'P3', gate: 'G0', type: 'feature',
+    id: 'P3-10', title: 'local title', phase: 'P3', priority: 'P3', type: 'feature',
     stage: 'building', flag: 'blocked', owner: 'human:rahil', scope: 'local scope',
     deps: ['P3-01', 'P3-02'], evidence: ['commit:abc123', 'test:local'],
     notes: 'local notes stay local', refs: ['REQ-9', 'R-42'], parent: 'P3-01', created_by: 'human',
@@ -48,11 +50,11 @@ function config() {
   return {
     version: 1,
     id_scheme: 'phase-seq',
-    vocab: { phase: ['P3'], priority: ['P0', 'P1', 'P2', 'P3'], type: ['feature', 'defect'], gate: ['G0', 'G1'] },
+    vocab: { phase: ['P3', 'P9'], priority: ['P0', 'P1', 'P2', 'P3'], type: ['feature', 'defect'] },
     github: {
       enabled: true, repo: 'owner/repo', dispatch_label: 'agent/go', close_on: 'verified',
-      labels: { 'priority/P1': { priority: 'P1' }, 'type/defect': { type: 'defect' }, 'phase/3': { phase: 'P3' } },
-      milestone_to: 'gate',
+      labels: { 'priority/P1': { priority: 'P1' }, 'type/defect': { type: 'defect' } },
+      milestone_to: 'phase',
     },
   };
 }
@@ -95,8 +97,8 @@ test('GitHub sync writes intake only and ignores hostile tracker-shaped issue ke
   const updated = store.readItems()[0];
 
   assert.deepEqual(
-    Object.fromEntries(['title', 'scope', 'priority', 'type', 'phase', 'gate'].map((field) => [field, updated[field]])),
-    { title: intake.title, scope: intake.body, priority: 'P1', type: 'defect', phase: 'P3', gate: 'G1' },
+    Object.fromEntries(['title', 'scope', 'priority', 'type', 'phase'].map((field) => [field, updated[field]])),
+    { title: intake.title, scope: intake.body, priority: 'P1', type: 'defect', phase: 'P9' },
   );
   for (const field of TRACKER_OWNED_FIELDS) {
     assert.equal(JSON.stringify(updated[field]), JSON.stringify(original[field]), `${field} is tracker-owned`);

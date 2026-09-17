@@ -15,14 +15,16 @@ Install once, then use `gw` from anywhere:
 ```sh
 npm install -g gatewright        # puts `gw` on PATH
 gw init
-gw add "Wire the scheduler tick loop" --phase P1 --type feature --gate G0
-gw claim P1-01
-gw move P1-01 specified
-gw move P1-01 building
-gw move P1-01 built --evidence abc1234 --evidence test/scheduler.test.js
+gw add "Wire the scheduler tick loop"
+gw claim T-0001
+gw move T-0001 building
+gw edit T-0001 --scope "Scheduler tick fires once per tick_s and never overlaps a run in flight"
+gw move T-0001 built --evidence abc1234 --evidence test/scheduler.test.js
 gw brief
 gw open
 ```
+
+Capture is one command with no required flags: `phase`, `type` and `priority` start out null, because at the moment you write a title down you genuinely may not know them yet, and guessing is worse than leaving them unset. `add` → `claim` → `move … building` is the whole path to "I am working on this" — no mandatory edit stands in the way. Rigor still applies; it just applies where a claim of completion is made. Reaching `built` needs a scope (what "done" means) and evidence, because that is the step where the claim needs to hold up, not the step where the idea got written down.
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
@@ -37,18 +39,20 @@ The first question is the one that matters most. If you commit straight to main,
 A card in Built has evidence because it could not have got there without it. `gw move` evaluates the target stage's exit rule from `stages.json` and refuses the move if the rule is unmet.
 
 ```
-$ gw move P1-01 built
+$ gw move T-0001 built
 target stage requirements are not met
-needs at least 1 evidence entry: run `gw move P1-01 built --evidence <e>`
+needs a scope: run `gw edit T-0001 --scope "<what done looks like>"`
+needs at least 1 evidence entry: run `gw move T-0001 built --evidence <e>`
 $ echo $?
 1
 ```
 
-Add the evidence and the same command succeeds:
+Add the scope and the evidence and the same command succeeds:
 
 ```
-$ gw move P1-01 built --evidence abc1234 --evidence test/scheduler.test.js
-P1-01  building → built  ·  evidence: abc1234, test/scheduler.test.js
+$ gw edit T-0001 --scope "Scheduler tick fires once per tick_s and never overlaps a run in flight"
+$ gw move T-0001 built --evidence abc1234 --evidence test/scheduler.test.js
+T-0001  building → built  ·  evidence: abc1234, test/scheduler.test.js
 ```
 
 `--force` exists to skip stages, not to skip rules. Use it when the pipeline order is wrong, not when the rule is — reopening finished work and re-entering from a side stage are order, and the refusal prints the forced command for you. No refusal ever asks you to force your way past a gate.
@@ -218,12 +222,12 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw init [--gh] [--repo owner/name] [--force]` | Create `.gatewright/` and write the instruction block to `AGENTS.md`; `--gh` enables GitHub sync, and `--repo` supplies the repository when no GitHub origin is available |
 | `gw init --mirror claude,cursor,copilot` | Also write the instruction block to `CLAUDE.md`, `.cursor/rules/gatewright.mdc`, and `.github/copilot-instructions.md` |
 | `gw brief [--me <owner>] [--json] [--recall]` | Print in-flight, blocked, owned, and next-unblocked items in 25 lines or fewer. `--recall` is accepted but has no effect until the v0.5 memory backend is enabled. |
-| `gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--gate G] [--scope "..."] [--by <who>]` | Create an item; print its id |
+| `gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--scope "..."] [--by <who>]` | Create an item; print its id |
 | `gw claim <id> [--by <who>]` | Take ownership |
 | `gw release <id>` | Drop ownership |
 | `gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]` | Advance a stage; refused if its exit rule is unmet |
 | `gw next <id> [--json]` | Show the stage(s) an item can move to right now, and the unmet conditions in plain English for the rest |
-| `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--gate G] [--deps a,b] [--refs a,b] [--by <who>]` | Change non-stage, non-evidence, non-notes fields |
+| `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--deps a,b] [--refs a,b] [--by <who>]` | Change non-stage, non-evidence, non-notes fields |
 | `gw note <id> "<text>" [--by <who>]` | Append a timestamped line to the item's notes |
 | `gw show <id> [--json]` | Print one item and its events |
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
@@ -276,7 +280,7 @@ To move an existing board, truncate `stages.json` after the stage you actually f
 `.gatewright/stages.json` defines the pipeline. The default is:
 
 ```
-backlog → specified → building → built → in_review → reviewed → merged → verified
+backlog → building → built → in_review → reviewed → merged → verified
 ```
 
 with `paused` and `dropped` as side states. Each stage has:
@@ -284,7 +288,7 @@ with `paused` and `dropped` as side states. Each stage has:
 - `label` — shown on the board.
 - `exit` — a human-readable description of what "done" means at this stage. Shown in the brief and the board. No machine meaning.
 - `auto` — when `true`, the scheduler (v0.4) may move items into this stage. When `false`, only a human can. The default is `auto: false` for `reviewed`, `merged`, and `verified`.
-- `requires` — the machine-checked rule for **entering** the next stage. Keys: `owner: true`, `evidence_min: n`, `evidence_match: regex`, `deps_at_least: stage`.
+- `requires` — the machine-checked rule for **entering** the next stage. Keys: `scope: true`, `owner: true`, `evidence_min: n`, `evidence_match: regex`, `deps_at_least: stage`.
 
 `stages.json` is the entire process definition. There is no hardcoded logic outside it. Add a stage, rename a stage, change the rule for entering `built`, mark `reviewed` as auto, drop a stage entirely — edit the JSON and `gw check` will pick it up. The board re-renders from it; `brief` reads the same file; the scheduler (when it lands) will too.
 

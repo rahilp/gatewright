@@ -92,7 +92,7 @@ Edge cases that are stories in their own right:
 | R3 | `gw add`, `edit`, `claim`, `move`, `note` write to items and events atomically | Each command appends exactly one event; a crash mid-write leaves valid JSONL |
 | R4 | `gw move` enforces stage exit rules from `stages.json` (evidence required, deps must be at or past a stage) | Move to Built with no evidence → non-zero exit and reason; with evidence → succeeds |
 | R5 | `gw check` reports every item that violates an exit rule or has unmet deps, and reports when `items.jsonl` was written outside `gw` | Exit code 1 if anything is reported; an out-of-band write is reported once, then the digest is re-baselined |
-| R6 | `gw open` writes `.gatewright/board.html` with the data files inlined as JSON blocks and opens it; the board renders board and table views with no build step and no network | `gw open` in a fresh repo → board renders in Chrome, Firefox and Safari with the network disabled; filters by phase, gate, type, stage work |
+| R6 | `gw open` writes `.gatewright/board.html` with the data files inlined as JSON blocks and opens it; the board renders board and table views with no build step and no network | `gw open` in a fresh repo → board renders in Chrome, Firefox and Safari with the network disabled; filters by phase, type, stage work |
 | R7 | Zero runtime dependencies. Node 22+ (18 and 20 are EOL) | `npm ls --prod` shows nothing |
 | R8 | `gw import` ingests a markdown task list (this repo's `tasks.md` format) and CSV | All items land with stage, deps, evidence, notes preserved |
 
