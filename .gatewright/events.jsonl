@@ -731,3 +731,4 @@
 {"ts":"2026-09-17T10:46:45.972Z","type":"move","item":"P2-10","from":"building","to":"built","by":"agent:claude","evidence":["test/guard.test.js","test/hook.test.js","491 tests green"]}
 {"ts":"2026-09-17T11:01:10.406Z","type":"move","item":"P2-10","from":"built","to":"building","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:01:10.468Z","type":"add","item":"P2-11","by":"agent:claude","parent":null}
+{"ts":"2026-09-17T11:01:28.707Z","type":"move","item":"P2-10","from":"building","to":"built","by":"agent:claude","evidence":["33ec977","test/guard.test.js","test/hook.test.js"]}
