@@ -742,3 +742,4 @@
 {"ts":"2026-09-17T11:19:25.672Z","type":"claim","item":"P2-11","by":"agent:claude"}
 {"ts":"2026-09-17T11:19:25.728Z","type":"move","item":"P2-11","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:19:25.787Z","type":"move","item":"P2-11","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:22:06.600Z","type":"move","item":"P2-11","from":"building","to":"built","by":"agent:claude","evidence":["e83f685","test/rules.test.js","495 tests green"]}
