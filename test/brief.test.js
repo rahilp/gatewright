@@ -29,6 +29,16 @@ test('brief reproduces the fixed section order and filters dispatches by owner',
   assert.match(out, /P2-01.*specified → building/);
 });
 
+// P0-15 removed the item field `gate`, with no migration path. An item
+// loaded from disk that still carries a legacy `gate` key must not disturb
+// brief in any way: NEXT UNBLOCKED shows phase alone, with no trace of it.
+test('brief tolerates a legacy gate key on disk and shows phase alone in NEXT UNBLOCKED', () => {
+  const legacy = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+  const out = renderBrief({ items: [legacy], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /NEXT UNBLOCKED[\s\S]*P1-01[\s\S]* P1$/m);
+  assert.equal(out.includes('G0'), false, 'a legacy gate value must never surface in the digest');
+});
+
 test('brief shows each parent its open child count', () => {
   const parent = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', flag: null, deps: [] };
   const child = { ...makeItems(1)[0], id: 'P1-01.1', parent: 'P1-01', stage: 'backlog', flag: null, deps: [] };
@@ -187,51 +197,50 @@ test('P8-24: inFlightTitles agrees with the brief -- claimed-but-unmoved is excl
   assert.deepEqual(titles, ['Actually moved']);
 });
 
-// P8-26 — NEXT UNBLOCKED prints bare phase/gate codes ("P1 G0") with nothing
-// to say what they mean. config.glossary already carries that meaning, and
-// `gw show` already reads it via describeTerm; brief did not. A legend line
-// naming only the codes actually on screen keeps the digest from growing one
+// P8-26 — NEXT UNBLOCKED prints a bare phase code ("P1") with nothing to say
+// what it means. config.glossary already carries that meaning, and `gw show`
+// already reads it via describeTerm; brief did not. A legend line naming
+// only the codes actually on screen keeps the digest from growing one
 // sentence per row while still answering the question a new agent has the
-// first time it sees "G0".
+// first time it sees "P1".
+//
+// P0-15 removed the item field `gate` (it duplicated priority and no rule
+// ever read it), so NEXT UNBLOCKED and its legend now carry phase alone.
 const glossaryConfig = {
   brief: { max_lines: 25 },
-  vocab: { gate: ['G0'], phase: ['P1'] },
+  vocab: { phase: ['P1'] },
   glossary: {
-    gate: { G0: 'No gate: ship when the evidence rule is met.' },
     phase: { P1: 'The first working version.' },
   },
 };
 
-test('P8-26: a legend line explains only the phase/gate codes actually shown', () => {
-  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+test('P8-26: a legend line explains only the phase codes actually shown', () => {
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1' };
   const out = renderBrief({ items: [next], events: [], stages, config: glossaryConfig });
-  // The legend contains the phase and gate descriptions (may wrap across lines)
-  // Use a regex that allows for line breaks within the legend
-  assert.match(out, /Legend: P1 = The first working version[\s\S]*G0 = No gate: ship when the[\s\S]*evidence rule is met\./);
+  // The legend contains the phase description (may wrap across lines)
+  assert.match(out, /Legend: P1 = The first working version\./);
 });
 
 test('P8-26: no glossary configured means no legend line at all', () => {
-  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1', gate: 'G0' };
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P1' };
   const out = renderBrief({ items: [next], events: [], stages, config: { brief: { max_lines: 25 } } });
   assert.equal(out.includes('Legend:'), false);
 });
 
 test('P8-26: a code with no glossary entry is left out of the legend rather than printed blank', () => {
-  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P2', gate: 'G0' };
-  const config = { brief: { max_lines: 25 }, vocab: { gate: ['G0'], phase: ['P1', 'P2'] }, glossary: { gate: { G0: 'No gate.' } } };
+  const next = { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: [], phase: 'P2' };
+  const config = { brief: { max_lines: 25 }, vocab: { phase: ['P1', 'P2'] }, glossary: { phase: { P1: 'Phase one.' } } };
   const out = renderBrief({ items: [next], events: [], stages, config });
-  assert.match(out, /^Legend: G0 = No gate\.$/m);
-  assert.equal(out.includes('P2 ='), false, 'P2 has no glossary entry, so it is silently absent from the legend');
+  assert.equal(out.includes('Legend:'), false, 'P2 has no glossary entry, so no legend is printed at all');
 });
 
 test('P8-26: the legend never pushes the brief past its line cap', () => {
-  const items = makeItems(20).map((item, index) => ({ ...item, stage: 'backlog', owner: null, flag: null, deps: [], phase: `P${index % 4}`, gate: `G${index % 3}` }));
+  const items = makeItems(20).map((item, index) => ({ ...item, stage: 'backlog', owner: null, flag: null, deps: [], phase: `P${index % 4}` }));
   const config = {
     brief: { max_lines: 12 },
-    vocab: { phase: ['P0', 'P1', 'P2', 'P3'], gate: ['G0', 'G1', 'G2'] },
+    vocab: { phase: ['P0', 'P1', 'P2', 'P3'] },
     glossary: {
       phase: { P0: 'Phase zero.', P1: 'Phase one.', P2: 'Phase two.', P3: 'Phase three.' },
-      gate: { G0: 'Gate zero.', G1: 'Gate one.', G2: 'Gate two.' },
     },
   };
   const out = renderBrief({ items, events: [], stages, config });
@@ -247,19 +256,14 @@ test('P8-27: the legend wraps to multiple rows and no row exceeds the computed w
     flag: null,
     deps: [],
     phase: index === 0 ? 'P1' : 'P2',
-    gate: index === 0 ? 'G0' : 'G1',
   }));
   const config = {
     brief: { max_lines: 25 },
-    vocab: { phase: ['P1', 'P2'], gate: ['G0', 'G1'] },
+    vocab: { phase: ['P1', 'P2'] },
     glossary: {
       phase: {
         P1: 'The first working version: the core this product is useless without.',
-        P2: 'The work that makes the core usable day to day.',
-      },
-      gate: {
-        G0: 'Blocking: the phase cannot be called done while this is open.',
-        G1: 'Planned: meant for this phase, but the phase can ship without it.',
+        P2: 'The work that makes the core usable day to day, and stays useful long after that.',
       },
     },
   };
@@ -297,7 +301,7 @@ test('P8-27: the legend wraps to multiple rows and no row exceeds the computed w
 });
 
 test('P8-27: wrapped legend rows are counted against the budget and dropped if they do not fit', () => {
-  // Create items with long phase/gate descriptions that will wrap to multiple lines
+  // Create items with a long phase description that will wrap to multiple lines
   const items = makeItems(10).map((item, index) => ({
     ...item,
     stage: 'backlog',
@@ -305,17 +309,13 @@ test('P8-27: wrapped legend rows are counted against the budget and dropped if t
     flag: null,
     deps: [],
     phase: 'P1',
-    gate: 'G0',
   }));
   const config = {
     brief: { max_lines: 10 }, // Very tight budget
-    vocab: { phase: ['P1'], gate: ['G0'] },
+    vocab: { phase: ['P1'] },
     glossary: {
       phase: {
-        P1: 'The first working version: the core this product is useless without. More text to ensure wrapping.',
-      },
-      gate: {
-        G0: 'Blocking: the phase cannot be called done while this is open. More text here too.',
+        P1: 'The first working version: the core this product is useless without. More text to ensure wrapping and force it past the tight budget here too.',
       },
     },
   };
@@ -350,17 +350,13 @@ test('P8-27: continuation lines are indented with 7 spaces to align with legend 
     flag: null,
     deps: [],
     phase: 'P1',
-    gate: 'G0',
   }));
   const config = {
     brief: { max_lines: 25 },
-    vocab: { phase: ['P1'], gate: ['G0'] },
+    vocab: { phase: ['P1'] },
     glossary: {
       phase: {
-        P1: 'The first working version that is super duper long to ensure multiple lines of wrapping.',
-      },
-      gate: {
-        G0: 'Blocking gate with a very long description to make sure this wraps properly and stays aligned.',
+        P1: 'The first working version that is super duper long to ensure multiple lines of wrapping and stays aligned across every continuation row it produces.',
       },
     },
   };

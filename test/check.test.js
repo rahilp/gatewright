@@ -176,6 +176,22 @@ test('check reports items holding values the vocabulary no longer allows', () =>
   assert.match(result.output(), /gw edit <id> --priority <value>/);
 });
 
+// P0-15 removed the item field `gate` entirely, with no migration: `gw
+// upgrade` promises data files stay byte-identical, and the tool has no users
+// yet beyond one board migrated by hand. An item that still carries a legacy
+// `gate` key on disk (from before the field was removed) must be completely
+// inert to `check` -- gate is no longer a vocabulary field, so nothing
+// evaluates it, and the board reports clean.
+test('check tolerates a legacy gate key on disk and never reports it as drift', () => {
+  const b = board([
+    item({ id: 'P1-01', gate: 'G0' }),
+    item({ id: 'P1-02', gate: 'not-even-in-the-old-vocab' }),
+  ], { vocab: { priority: ['P0', 'P1'], type: ['feature', 'defect'] } });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'a legacy gate key must not fail the board');
+  assert.doesNotMatch(result.output(), /gate/i, 'gate is no longer a vocabulary field, so check never mentions it');
+});
+
 test('a null field and an unconfigured vocabulary are not drift', () => {
   const b = board([
     item({ id: 'P1-01', priority: null, type: null }),

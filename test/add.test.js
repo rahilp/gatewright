@@ -19,6 +19,24 @@ test('add creates a fully defaulted item and exactly one add event', () => {
   const item = store.readItems()[0]; assert.equal(item.id, 'P1-01'); assert.equal(item.stage, 'backlog'); assert.equal(item.created_by, 'human'); assert.equal(item.owner, null); assert.deepEqual(item.deps, []); assert.deepEqual(item.refs, []); assert.equal(store.readEvents().length, 1); assert.equal(store.readEvents()[0].type, 'add');
 });
 
+// P0-15 removed the item field `gate` entirely: it duplicated priority and no
+// rule ever read it. A bare add must carry no trace of it, and the CLI must
+// refuse the flag outright rather than silently accepting and ignoring it.
+test('add creates an item with no gate key at all', () => {
+  const { store } = repo();
+  run({ store, root: store.root, actor: 'human:me', flags: { phase: 'P1' }, positionals: ['no gate here'], stdout: { write: () => {} } });
+  const item = store.readItems()[0];
+  assert.equal(Object.hasOwn(item, 'gate'), false, 'gate must not exist on a freshly created item, not even as null');
+});
+
+test('gw add --gate is rejected as an unknown flag', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-add-'));
+  execFileSync(process.execPath, [BIN, 'init', '--yes'], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [BIN, 'add', 'nope', '--gate', 'G0'], { cwd: root, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /unknown flag: --gate/);
+});
+
 test('a fresh default board goes from a bare `gw add` to "working on it" in add, claim, move -- no mandatory edit', () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-capture-'));
   execFileSync(process.execPath, [BIN, 'init', '--yes'], { cwd: root, encoding: 'utf8' });

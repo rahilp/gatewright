@@ -81,7 +81,7 @@ test('the interactive editor walks every setting and saves what was answered', a
   const { input, output, read, remaining } = tty([
     'y', '1', '3', '5', '60', '30', 'n', 'n', '2', '2', '1', 'n',
     'y', '15',
-    'P0,P1,P2', 'P0,P1', 'G0,G1', 'feature,defect,doc',
+    'P0,P1,P2', 'P0,P1', 'feature,defect,doc',
   ]);
   const code = await config(ctxFor({ store, stdin: input, stdout: output, env: {} }));
   assert.equal(code, 0);

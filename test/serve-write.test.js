@@ -313,7 +313,7 @@ test('an unknown config key is refused with the CLI message and writes nothing',
   });
 });
 
-// P8-19 — `gw config glossary.gate.G0 "..."` worked, but the board's Settings
+// P8-19 — `gw config glossary.phase.P1 "..."` worked, but the board's Settings
 // UI could never reach the same key: /api/config validated only through
 // SETTINGS_BY_KEY, which does not (and should not) enumerate a map keyed by
 // the user's own vocab. The fix moves the glossary write into
@@ -322,11 +322,11 @@ test('an unknown config key is refused with the CLI message and writes nothing',
 // and refuses what the CLI refuses, in the CLI's exact words.
 test('P8-19: POST /api/config sets a glossary entry the CLI accepts, and it round-trips through config.json', async () => {
   await withServer(async ({ store, url }) => {
-    const response = await write(url, '/api/config', { key: 'glossary.gate.G0', value: 'No gate: ship when the evidence rule is met.' });
+    const response = await write(url, '/api/config', { key: 'glossary.phase.P1', value: 'The first working version.' });
     assert.equal(response.status, 200, 'the board must be able to set a glossary entry, not only the CLI');
-    assert.deepEqual((await response.json()).config, { 'glossary.gate.G0': 'No gate: ship when the evidence rule is met.' });
+    assert.deepEqual((await response.json()).config, { 'glossary.phase.P1': 'The first working version.' });
     const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
-    assert.equal(saved.glossary.gate.G0, 'No gate: ship when the evidence rule is met.');
+    assert.equal(saved.glossary.phase.P1, 'The first working version.');
     assert.deepEqual(store.readEvents().map((event) => event.type), ['config']);
   });
 });
@@ -347,21 +347,34 @@ test('P8-19: POST /api/config refuses an unknown glossary field with the exact C
 
 test('P8-19: an empty glossary value removes the entry through the endpoint, same as the CLI', async () => {
   await withServer(async ({ store, url }) => {
-    await write(url, '/api/config', { key: 'glossary.gate.G0', value: 'Something.' });
-    const response = await write(url, '/api/config', { key: 'glossary.gate.G0', value: '' });
+    await write(url, '/api/config', { key: 'glossary.phase.P1', value: 'Something.' });
+    const response = await write(url, '/api/config', { key: 'glossary.phase.P1', value: '' });
     assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).config, { 'glossary.gate.G0': null });
-    assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')).glossary.gate, {});
+    assert.deepEqual((await response.json()).config, { 'glossary.phase.P1': null });
+    assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')).glossary.phase, {});
   });
 });
 
 test('P8-19: glossary and ordinary settings can be set together in one request', async () => {
   await withServer(async ({ store, url }) => {
-    const response = await write(url, '/api/config', { settings: { 'glossary.gate.G0': 'No gate.', 'runner.max_concurrent': 5 } });
+    const response = await write(url, '/api/config', { settings: { 'glossary.phase.P1': 'The first working version.', 'runner.max_concurrent': 5 } });
     assert.equal(response.status, 200);
     const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
-    assert.equal(saved.glossary.gate.G0, 'No gate.');
+    assert.equal(saved.glossary.phase.P1, 'The first working version.');
     assert.equal(saved.runner.max_concurrent, 5);
+  });
+});
+
+// P0-15 removed the item field `gate` entirely, so `glossary.gate.*` is now
+// refused the same way `glossary.colour.*` always was: an unknown field.
+test('P8-19: POST /api/config refuses the removed gate field the same way it refuses any unknown field', async () => {
+  await withServer(async ({ store, url }) => {
+    const before = readFileSync(store.paths.config);
+    const response = await write(url, '/api/config', { key: 'glossary.gate.G0', value: 'nope' });
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.match(body.error, /glossary\.gate\.G0 names an unknown vocab field: gate/);
+    assert.deepEqual(readFileSync(store.paths.config), before, 'a refused glossary write leaves config.json byte-identical');
   });
 });
 

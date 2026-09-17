@@ -87,6 +87,20 @@ test('serve returns state, filters events, serves an empty-shell viewer, and ref
   });
 });
 
+// P0-15 removed the item field `gate`, with no migration path (`gw upgrade`
+// promises data files stay byte-identical). The default `item` fixture above
+// already carries a legacy `gate: 'G0'` key for exactly this reason: the
+// serve state payload must round-trip it like any other unrecognized item
+// property, never choke on it or strip it silently.
+test('the state payload tolerates a legacy gate key on disk without crashing', async () => {
+  await withServer(async ({ url }) => {
+    const response = await fetch(url + '/api/state');
+    assert.equal(response.status, 200);
+    const state = await response.json();
+    assert.equal(state.items[0].gate, 'G0', 'a legacy field round-trips through state exactly like any other item property');
+  });
+});
+
 test('state transitions reject a skipped earlier gate even when the immediate target passes', async () => {
   const stages = {
     stages: [

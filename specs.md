@@ -35,7 +35,6 @@ One JSON object per line. Lines are rewritten in place on change (read all, muta
   "title": "Operation Enabled group readiness barrier before the plan clock starts",
   "phase": "P2",
   "priority": "P2",
-  "gate": "G0",
   "type": "defect",
   "stage": "specified",
   "flag": null,
@@ -59,7 +58,7 @@ Field rules:
 |---|---|---|---|
 | `id` | string | tracker | Unique. Format set in config (`id_scheme`); default `seq` → `T-0001`. Boards that choose `phase-seq` mint `<phase>-<nn>` instead (children `<parent>.<n>` under either scheme), and cannot mint an id for an item with no phase. Never reused, and never rewritten: an item that changes `phase` keeps the ID it was created with, because evidence links and the event log point at it. The prefix records where the item started, `phase` records where it is. |
 | `title` | string | github if linked, else human/agent | ≤120 chars |
-| `phase`, `priority`, `gate`, `type` | string | github if linked (via label map), else human/agent | Values are free-form but validated against `config.vocab` if present |
+| `phase`, `priority`, `type` | string | github if linked (via label map), else human/agent | Values are free-form but validated against `config.vocab` if present |
 | `stage` | string | tracker | Must be a key in `stages.json` |
 | `flag` | `null` \| `"blocked"` \| `"needs-triage"` \| `"paused"` \| `"conflict"` | tracker | One flag at a time. Blocked and needs-triage prevent scheduling. |
 | `owner` | string \| null | tracker | `human:<name>` or `agent:<run-id>` |
@@ -271,7 +270,7 @@ optional and additive — `glossary.<field>.<code>` is a sentence in plain
 language, and a code with no entry renders exactly as it always has. This is
 help text, never a requirement: nothing validates against it, and a missing or
 malformed `glossary` block means "no descriptions", not an error. Set one
-entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
+entry with `gw config glossary.phase.P1 "..."`; an empty value removes it.
 
 ```json
 {
@@ -289,11 +288,6 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
       "P1",
       "P2",
       "P3"
-    ],
-    "gate": [
-      "G0",
-      "G1",
-      "G2"
     ],
     "type": [
       "decision",
@@ -315,11 +309,6 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
       "P1": "Do it in this phase.",
       "P2": "Do it when the P1 work is clear.",
       "P3": "Do it if there is room; fine to never do."
-    },
-    "gate": {
-      "G0": "Blocking: the phase cannot be called done while this is open.",
-      "G1": "Planned: meant for this phase, but the phase can ship without it.",
-      "G2": "Optional: picked up only if there is room."
     },
     "type": {
       "decision": "A choice to make and write down, so later work can rely on it.",
@@ -369,7 +358,7 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
         "phase": "P2"
       }
     },
-    "milestone_to": "gate"
+    "milestone_to": "phase"
   },
   "runner": {
     "enabled": false,
@@ -444,11 +433,11 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
 ```
 gw init [--gh] [--force]
 gw brief [--me <owner>] [--json] [--recall]        (--recall: v0.5, opt-in)
-gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--gate G] [--scope "..."] [--by <who>]
+gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--scope "..."] [--by <who>]
 gw claim <id> [--by <who>]
 gw release <id>
 gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]
-gw edit <id> [--title "..."] [--scope "..."] [--priority P] [--type T] [--phase P] [--gate G] [--deps a,b] [--refs a,b] [--by <who>]
+gw edit <id> [--title "..."] [--scope "..."] [--priority P] [--type T] [--phase P] [--deps a,b] [--refs a,b] [--by <who>]
 gw note <id> "<text>" [--by <who>]
 gw check [--json]
 gw guard [--message-file F | --message "..."] [--branch B] [--range A..B] [--pretool] [--warn] [--json]
@@ -489,8 +478,8 @@ NEEDS TRIAGE (2)
   P2-01.1  Jog timeout not reset on abort            created by agent:r-0040
 
 NEXT UNBLOCKED
-  P0-04  Reject / clamp / halt / fault / disarm policy table   P0 G0
-  P0-05  Jog network transport and clock conversion policy    P0 G0
+  P0-04  Reject / clamp / halt / fault / disarm policy table   P0
+  P0-05  Jog network transport and clock conversion policy    P0
 
 Rules: use `gw add` for work someone else could pick up; checklists go in notes.
        `gw move` needs evidence past Building. Never edit .gatewright/ by hand.
@@ -595,7 +584,7 @@ Changes item fields that aren't stage, owner, evidence, or notes — those have 
 
 1. Load the item. Unknown ID → exit 2.
 2. Collect the flags given. None → exit 2.
-3. **Field ownership is enforced here exactly as it is in the API (§2, §9).** If the item is GitHub-linked (`gh` is not null) and any given field is GitHub-owned (`title`, `scope`, `priority`, `type`, `phase`, `gate` — whatever the label map covers), refuse the whole command: exit 1, naming each refused field and printing the issue URL. Edit it on the issue and let `sync` bring it back; otherwise the next sync silently reverts the edit, which is worse than a refusal.
+3. **Field ownership is enforced here exactly as it is in the API (§2, §9).** If the item is GitHub-linked (`gh` is not null) and any given field is GitHub-owned (`title`, `scope`, `priority`, `type`, `phase` — whatever the label map covers), refuse the whole command: exit 1, naming each refused field and printing the issue URL. Edit it on the issue and let `sync` bring it back; otherwise the next sync silently reverts the edit, which is worse than a refusal.
 4. Validate against `config.vocab` where a list exists for that field. `--deps` and `--refs` take comma-separated lists and replace the array; deps are checked for existence and cycles as on `add`.
 5. Write the changed fields and `updated`, append one `edit` event whose `fields` is the list of changed keys (not their values; the values are in `items.jsonl` and its history).
 
@@ -617,7 +606,7 @@ Nothing is partially applied: a command that touches three fields and fails vali
   JSONL becomes a JSON array in the block; `</` inside any string is escaped as `<\/` so a title can never close the script element. The shell reads these with `JSON.parse(document.getElementById('gw-items').textContent)` and renders. No network, no build, works from `file://` in every browser.
 - The injected snapshot carries the timestamp it was written at, shown in the header: this is a snapshot, and the board says so rather than pretending to be live.
 - Under `serve`, the same shell is served with empty data blocks and hydrates from `GET /api/state` instead, then polls. One shell, two data sources.
-- Views: Overview (counts by stage/phase/gate), Board (columns from `stages.json`, filters by phase/gate/type/stage/flag), Table (sortable), Stages & rules (rendered from `stages.json`), Export/import (JSON download; import only under `serve`).
+- Views: Overview (counts by stage/phase/type), Board (columns from `stages.json`, filters by phase/type/stage/flag), Table (sortable), Stages & rules (rendered from `stages.json`), Export/import (JSON download; import only under `serve`).
 - Item panel: all fields, stage buttons (disabled when `requires` fails, with the reason), evidence and notes editors, Play/Stop/Resume buttons (v0.2+), triage approve/drop (v0.4), run log tail (v0.4).
 - Under `file://` (a `gw open` snapshot), every editor is read-only and a banner says so, with the `gw` command that would make the change.
 - Under `serve`, writes go to `POST /api/items/:id`, `POST /api/items/:id/move`, `POST /api/items`, `POST /api/events` and the page re-fetches after each.
@@ -722,7 +711,7 @@ Uses the `gh` CLI. Never handles tokens.
 
 Pull:
 1. `gh issue list --repo <r> --state all --search "updated:>=<last_sync>" --json number,title,body,labels,milestone,state,updatedAt,url --limit 200`
-2. For each issue: find item by `gh.number`. If none and state is open → create item (`created_by: github`, stage `backlog`). If found → merge GitHub-owned fields only (`title`, `scope` from body, mapped labels, `gate` from milestone).
+2. For each issue: find item by `gh.number`. If none and state is open → create item (`created_by: github`, stage `backlog`). If found → merge GitHub-owned fields only (`title`, `scope` from body, mapped labels, `phase` from milestone by default — see `github.milestone_to`).
 3. If issue state is `closed` and item stage is not terminal → `flag: conflict`, event `flag`, do not change stage.
 4. If issue has `dispatch_label` and item has no dispatch event since the label was applied → append `dispatch` event, remove label via `gh issue edit --remove-label`.
 

@@ -632,7 +632,6 @@
 
   <div id="gw-filters">
     <select id="f-phase"><option value="">phase: all</option></select>
-    <select id="f-gate"><option value="">gate: all</option></select>
     <select id="f-type"><option value="">type: all</option></select>
     <select id="f-stage"><option value="">stage: all</option></select>
     <select id="f-flag"><option value="">flag: all</option></select>
@@ -699,7 +698,7 @@
   // configs and compares them, because two notions of "described" in one
   // product is how a board starts inventing help text.
   // The vocab fields a glossary may describe, as lib/glossary.js declares them.
-  const GLOSSARY_FIELDS = ['phase', 'priority', 'gate', 'type'];
+  const GLOSSARY_FIELDS = ['phase', 'priority', 'type'];
 
   function glossaryFor(field) {
     const config = State.config;
@@ -891,7 +890,7 @@
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     runLogs: {}, runLogLoading: {}, runLogErrors: {},
     view: 'overview',
-    filters: { phase: '', gate: '', type: '', stage: '', flag: '', search: '' },
+    filters: { phase: '', type: '', stage: '', flag: '', search: '' },
     sort: { key: 'updated', dir: 'desc' },
     pendingEvidence: {},
     creatingItem: false,
@@ -1088,7 +1087,6 @@
     const q = f.search.trim().toLowerCase();
     return State.items.filter((it) => {
       if (f.phase && it.phase !== f.phase) return false;
-      if (f.gate && it.gate !== f.gate) return false;
       if (f.type && it.type !== f.type) return false;
       if (f.stage && it.stage !== f.stage) return false;
       if (f.flag && it.flag !== f.flag) return false;
@@ -1118,7 +1116,6 @@
       }
     }
     fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase, 'phase');
-    fill(document.getElementById('f-gate'), vocab.gate || [...new Set(State.items.map((i) => i.gate).filter(Boolean))], State.filters.gate, 'gate');
     fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type, 'type');
     fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
     fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
@@ -1226,7 +1223,7 @@
   }
 
   // -- Overview as "what should I do next" (P8-13) ------------------------
-  // The Overview tab used to be four census charts (by stage/phase/gate/type)
+  // The Overview tab used to be four census charts (by stage/phase/type)
   // and nothing else -- a distribution, not an answer to the question a human
   // actually opens the board with. `gw brief` already answers that question
   // over the same data, so this mirrors its definitions instead of inventing
@@ -1307,7 +1304,7 @@
       briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
       briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
       briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
-      briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-') + ' ' + (it.gate || '-'), 'Nothing is unblocked and unowned.') +
+      briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-'), 'Nothing is unblocked and unowned.') +
       '</div>';
 
     function counts(key) {
@@ -1335,13 +1332,12 @@
     const distribution = '<div class="overview-grid">' +
       card('By stage', byStageOrdered, stageLabel) +
       card('By phase', counts('phase'), null, 'phase') +
-      card('By gate', counts('gate'), null, 'gate') +
       card('By type', counts('type'), null, 'type') +
       '</div>';
 
     container.innerHTML =
       '<div class="overview-section"><h2 class="overview-heading">What next</h2>' + whatNext + '</div>' +
-      '<details class="overview-distribution"><summary>Distribution (by stage, phase, gate, type)</summary>' + distribution + '</details>';
+      '<details class="overview-distribution"><summary>Distribution (by stage, phase, type)</summary>' + distribution + '</details>';
   }
 
   // -- card badges (P8-16) -------------------------------------------------
@@ -1697,7 +1693,7 @@
   function renderTable(container) {
     const items = filteredItems();
     const cols = [
-      ['id', 'ID'], ['title', 'Title'], ['type', 'Type'], ['phase', 'Phase'], ['gate', 'Gate'],
+      ['id', 'ID'], ['title', 'Title'], ['type', 'Type'], ['phase', 'Phase'],
       ['priority', 'Priority'], ['stage', 'Stage'], ['flag', 'Flag'], ['owner', 'Owner'], ['updated', 'Updated'],
     ];
     const key = State.sort.key, dir = State.sort.dir;
@@ -1715,7 +1711,6 @@
         '<td>' + escapeHtml(it.title) + '</td>' +
         '<td' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</td>' +
         '<td' + termTitle('phase', it.phase) + '>' + escapeHtml(it.phase) + '</td>' +
-        '<td' + termTitle('gate', it.gate) + '>' + escapeHtml(it.gate) + '</td>' +
         '<td' + termTitle('priority', it.priority) + '>' + escapeHtml(it.priority) + '</td>' +
         '<td>' + escapeHtml(stageLabel(it.stage)) + '</td>' +
         '<td>' + (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') + '</td>' +
@@ -1955,7 +1950,6 @@
     { key: 'github.sync_interval_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes between automatic syncs while `gw serve` runs.' },
     { key: 'vocab.phase', type: 'list', summary: 'Allowed --phase values, in order. Comma-separated.' },
     { key: 'vocab.priority', type: 'list', summary: 'Allowed --priority values, most urgent first.' },
-    { key: 'vocab.gate', type: 'list', summary: 'Allowed --gate values.' },
     { key: 'vocab.type', type: 'list', summary: 'Allowed --type values.' },
   ];
 
@@ -2095,7 +2089,7 @@
     // and settings, and hiding those behind "add an item first" is how this
     // tool stayed configurable only by hand-editing JSON.
     const itemView = State.view === 'overview' || State.view === 'board' || State.view === 'table';
-    // The filter bar (phase/gate/type/stage/flag/search) and "+ new item"
+    // The filter bar (phase/type/stage/flag/search) and "+ new item"
     // filter and create ITEMS -- they control nothing on Stages & rules,
     // Settings, or Export (P8-17), so they render only on the views they
     // actually affect. itemView is exactly that set of views, and this must
@@ -2304,13 +2298,13 @@
       ? '<div class="note-add"><textarea id="note-input" rows="2" placeholder="append a note"></textarea><button id="note-add-btn">add note</button></div>'
       : '';
 
-    const editableFields = ['title', 'scope', 'priority', 'type', 'phase', 'gate', 'deps', 'refs'];
-    const ghOwned = new Set(['title', 'scope', 'priority', 'type', 'phase', 'gate']);
+    const editableFields = ['title', 'scope', 'priority', 'type', 'phase', 'deps', 'refs'];
+    const ghOwned = new Set(['title', 'scope', 'priority', 'type', 'phase']);
     const linked = Boolean(it.gh);
     const fieldRows = editableFields.map((f) => {
       const raw = it[f];
       const value = Array.isArray(raw) ? raw.join(', ') : (raw == null ? '' : raw);
-      // phase, priority, gate and type hold codes; the glossary says what this
+      // phase, priority and type hold codes; the glossary says what this
       // item's code means, right where the item shows it.
       const glossed = termTitle(GLOSSARY_FIELDS.indexOf(f) === -1 ? null : f, value);
       if (!State.live) {
@@ -2636,7 +2630,6 @@
       '<label>Phase<select name="phase">' + options(vocab.phase) + '</select></label>' +
       '<label>Type<select name="type">' + options(vocab.type) + '</select></label>' +
       '<label>Priority<select name="priority">' + options(vocab.priority) + '</select></label>' +
-      '<label>Gate<select name="gate">' + options(vocab.gate) + '</select></label>' +
       '<label>Scope<textarea name="scope" rows="3"></textarea></label>' +
       '<label>Parent<input type="text" name="parent" placeholder="item id, optional"></label>' +
       '<button type="submit">create</button>' +
@@ -2756,13 +2749,13 @@
       });
     });
 
-    ['phase', 'gate', 'type', 'stage', 'flag'].forEach((key) => {
+    ['phase', 'type', 'stage', 'flag'].forEach((key) => {
       const el = document.getElementById('f-' + key);
       el.addEventListener('change', () => { State.filters[key] = el.value; renderView(); });
     });
     document.getElementById('f-search').addEventListener('input', (e) => { State.filters.search = e.target.value; renderView(); });
     document.getElementById('f-clear').addEventListener('click', () => {
-      State.filters = { phase: '', gate: '', type: '', stage: '', flag: '', search: '' };
+      State.filters = { phase: '', type: '', stage: '', flag: '', search: '' };
       document.querySelectorAll('#gw-filters select').forEach((s) => { s.value = ''; });
       document.getElementById('f-search').value = '';
       renderView();

@@ -14,11 +14,6 @@
       "P2",
       "P3"
     ],
-    "gate": [
-      "G0",
-      "G1",
-      "G2"
-    ],
     "type": [
       "decision",
       "defect",
@@ -39,11 +34,6 @@
       "P1": "Do it in this phase.",
       "P2": "Do it when the P1 work is clear.",
       "P3": "Do it if there is room; fine to never do."
-    },
-    "gate": {
-      "G0": "Blocking: the phase cannot be called done while this is open.",
-      "G1": "Planned: meant for this phase, but the phase can ship without it.",
-      "G2": "Optional: picked up only if there is room."
     },
     "type": {
       "decision": "A choice to make and write down, so later work can rely on it.",
@@ -93,7 +83,7 @@
         "phase": "P2"
       }
     },
-    "milestone_to": "gate"
+    "milestone_to": "phase"
   },
   "runner": {
     "enabled": false,
