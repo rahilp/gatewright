@@ -797,3 +797,7 @@
 {"ts":"2026-09-17T23:07:40.339Z","type":"move","item":"P0-16","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:07:40.392Z","type":"move","item":"P0-16","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:07:40.456Z","type":"move","item":"P0-16","from":"building","to":"built","by":"human:rahil","evidence":["ce0fd7d","516 tests green on main"]}
+{"ts":"2026-09-17T23:40:17.819Z","type":"add","item":"P0-17","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T23:40:17.874Z","type":"claim","item":"P0-17","by":"human:rahil"}
+{"ts":"2026-09-17T23:40:17.933Z","type":"move","item":"P0-17","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T23:40:17.990Z","type":"move","item":"P0-17","from":"specified","to":"building","by":"human:rahil","evidence":[]}
