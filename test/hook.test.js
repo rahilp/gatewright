@@ -99,6 +99,10 @@ test('an unknown action is a usage error, not a silent no-op', () => {
 test('git refuses an untracked commit and accepts one that names an item', (t) => {
   const probe = spawnSync('git', ['--version']);
   if (probe.error) { t.skip('git is unavailable'); return; }
+  // The shim below is a shell script and the PATH separator is ':'; both are
+  // POSIX assumptions. Windows keeps the unit coverage above, which reaches
+  // the same decision without a shell.
+  if (process.platform === 'win32') { t.skip('POSIX shim and PATH separator'); return; }
   const r = repo();
   r.store.writeItems([{ id: 'P1-01', title: 'a', stage: 'building', owner: null, deps: [], evidence: [], updated: new Date().toISOString() }]);
   run(ctx(r, {}, ['install']).ctx);
@@ -177,7 +181,10 @@ test('malformed project settings are a fixable error, not a clobbered file', () 
 // The hook has to survive the CLI it calls being absent or out of date: an
 // installed gatewright is not a promise about what is on PATH a year later.
 test('the hook steps aside rather than blocking commits when gw cannot answer', (t) => {
-  const probe = spawnSync('sh', ['-c', 'true']);
+  // The hook is a POSIX shell script. Git for Windows runs it through its own
+  // bundled sh, which this test cannot assume is on PATH as /bin/sh.
+  if (process.platform === 'win32') { t.skip('no POSIX shell at /bin/sh'); return; }
+  const probe = spawnSync('/bin/sh', ['-c', 'true']);
   if (probe.error) { t.skip('no POSIX shell'); return; }
   const r = repo();
   run(ctx(r, {}, ['install']).ctx);

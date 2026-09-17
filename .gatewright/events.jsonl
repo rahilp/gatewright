@@ -743,3 +743,7 @@
 {"ts":"2026-09-17T11:19:25.728Z","type":"move","item":"P2-11","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:19:25.787Z","type":"move","item":"P2-11","from":"specified","to":"building","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:22:06.600Z","type":"move","item":"P2-11","from":"building","to":"built","by":"agent:claude","evidence":["e83f685","test/rules.test.js","495 tests green"]}
+{"ts":"2026-09-17T11:33:11.206Z","type":"add","item":"P2-10.2","by":"agent:claude","parent":"P2-10"}
+{"ts":"2026-09-17T11:33:11.261Z","type":"claim","item":"P2-10.2","by":"agent:claude"}
+{"ts":"2026-09-17T11:33:11.327Z","type":"move","item":"P2-10.2","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:33:11.382Z","type":"move","item":"P2-10.2","from":"specified","to":"building","by":"agent:claude","evidence":[]}
