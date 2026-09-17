@@ -788,3 +788,4 @@
 {"ts":"2026-09-17T16:21:53.991Z","type":"move","item":"P0-13","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/check.js","verified: INBOX at exit 0, NEEDS TRIAGE at exit 1 past stale_days"]}
 {"ts":"2026-09-17T16:21:54.051Z","type":"move","item":"P0-14","from":"building","to":"built","by":"human:rahil","evidence":["templates/stages.json","verified: built requires scope AND evidence; specified gone"]}
 {"ts":"2026-09-17T16:22:15.238Z","type":"move","item":"P0-11","from":"built","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T16:22:16.003Z","type":"move","item":"P0-11","from":"building","to":"built","by":"human:rahil","evidence":["141383c","lib/commands/add.js"]}
