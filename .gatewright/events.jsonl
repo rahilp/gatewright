@@ -801,3 +801,4 @@
 {"ts":"2026-09-17T23:40:17.874Z","type":"claim","item":"P0-17","by":"human:rahil"}
 {"ts":"2026-09-17T23:40:17.933Z","type":"move","item":"P0-17","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:40:17.990Z","type":"move","item":"P0-17","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T23:40:25.769Z","type":"move","item":"P0-17","from":"building","to":"built","by":"human:rahil","evidence":["7c8d513","verified: net zero growth across runs; /tmp inodes 97% -> 1%"]}
