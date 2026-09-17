@@ -794,3 +794,6 @@
 {"ts":"2026-09-17T20:32:02.189Z","type":"move","item":"P0-15","from":"building","to":"built","by":"human:rahil","evidence":["3467495","verified: mechanism refuses and describes; --gate rejected; legacy key invisible"]}
 {"ts":"2026-09-17T23:07:29.799Z","type":"add","item":"P0-16","by":"human:rahil","parent":null}
 {"ts":"2026-09-17T23:07:29.853Z","type":"claim","item":"P0-16","by":"human:rahil"}
+{"ts":"2026-09-17T23:07:40.339Z","type":"move","item":"P0-16","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T23:07:40.392Z","type":"move","item":"P0-16","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T23:07:40.456Z","type":"move","item":"P0-16","from":"building","to":"built","by":"human:rahil","evidence":["ce0fd7d","516 tests green on main"]}
