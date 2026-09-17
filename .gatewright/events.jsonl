@@ -761,3 +761,8 @@
 {"ts":"2026-09-17T11:40:45.097Z","type":"move","item":"P0-09","from":"building","to":"built","by":"human:rahil","evidence":["templates/config.json","lib/commands/init.js","test/serve.test.js","verified: board reports enabled/idle/5min after gw config"]}
 {"ts":"2026-09-17T11:41:19.626Z","type":"move","item":"P0-09","from":"built","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T11:41:28.659Z","type":"move","item":"P0-09","from":"building","to":"built","by":"human:rahil","evidence":["d86816f","test/serve.test.js","verified: board reports enabled/idle/5min"]}
+{"ts":"2026-09-17T14:25:19.201Z","type":"add","item":"P0-10","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T14:25:19.310Z","type":"claim","item":"P0-10","by":"human:rahil"}
+{"ts":"2026-09-17T14:25:19.366Z","type":"move","item":"P0-10","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T14:25:19.425Z","type":"move","item":"P0-10","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:05.823Z","type":"move","item":"P0-10","from":"building","to":"built","by":"human:rahil","evidence":["5e16dad",".gitignore"]}
