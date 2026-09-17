@@ -51,7 +51,7 @@ $ gw move P1-01 built --evidence abc1234 --evidence test/scheduler.test.js
 P1-01  building → built  ·  evidence: abc1234, test/scheduler.test.js
 ```
 
-`--force` exists to skip stages, not to skip rules. Use it when the pipeline order is wrong, not when the rule is.
+`--force` exists to skip stages, not to skip rules. Use it when the pipeline order is wrong, not when the rule is — reopening finished work and re-entering from a side stage are order, and the refusal prints the forced command for you. No refusal ever asks you to force your way past a gate.
 
 ## Opting in is the part instructions cannot enforce
 
@@ -257,7 +257,7 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`. Your own plan steps: `gw note <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
-- If `gw move` refuses, fix the reason; do not use --force.
+- If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.
 <!-- gatewright:end -->
 ```
 

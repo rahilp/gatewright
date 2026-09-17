@@ -737,3 +737,8 @@
 {"ts":"2026-09-17T11:03:16.626Z","type":"move","item":"P2-10.1","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:03:16.681Z","type":"move","item":"P2-10.1","from":"specified","to":"building","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:03:31.421Z","type":"move","item":"P2-10.1","from":"building","to":"built","by":"agent:claude","evidence":["de88d02","test/guard.test.js","493 tests green"]}
+{"ts":"2026-09-17T11:16:54.123Z","type":"flag","item":"P2-11","flag":null,"by":"human:rahil","reason":"triage approved"}
+{"ts":"2026-09-17T11:19:25.617Z","type":"edit","item":"P2-11","by":"agent:claude","fields":["title","scope"]}
+{"ts":"2026-09-17T11:19:25.672Z","type":"claim","item":"P2-11","by":"agent:claude"}
+{"ts":"2026-09-17T11:19:25.728Z","type":"move","item":"P2-11","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:19:25.787Z","type":"move","item":"P2-11","from":"specified","to":"building","by":"agent:claude","evidence":[]}

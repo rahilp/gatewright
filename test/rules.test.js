@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { stageList, stageIndex, nextStage, evaluateRequires, evaluateCumulative, findCycles, missingDeps, stageOrderMessage } from '../lib/rules.js';
 
 const stages = { stages: [
@@ -76,9 +77,44 @@ test('stageOrderMessage tells a backward jump to use --force since there is no f
   );
 });
 
-test('stageOrderMessage sends an off-pipeline current stage back onto the pipeline', () => {
+// This function exists to hand back a command that works. It used to answer an
+// off-pipeline stage with `gw move A backlog` -- which the very same rule
+// refuses, with the very same sentence, forever. A side stage has no next
+// stage, so re-entering the pipeline is a jump, and a jump is what --force is.
+test('stageOrderMessage re-enters the pipeline from a side stage with a command move accepts', () => {
   assert.equal(
     stageOrderMessage('A', 'paused', 'built', stages),
-    'paused is outside the pipeline; move it onto the pipeline first: run `gw move A backlog`',
+    'paused is outside the pipeline, so no stage follows it; re-entering at built needs --force: run `gw move A built --force`',
   );
+});
+
+// The trunk-shaped board that found this: its last stage is the finish line,
+// and leaving it reported the item as outside the pipeline it was standing in.
+test('stageOrderMessage treats the last stage as in the pipeline, not outside it', () => {
+  const trunk = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built', role: 'done' }], terminal: ['dropped'], extra: [{ id: 'dropped' }, { id: 'paused' }] };
+  const message = stageOrderMessage('A', 'built', 'building', trunk);
+  assert.equal(message, 'building comes before built in the pipeline; moving backward needs --force: run `gw move A building --force`');
+  assert.doesNotMatch(message, /outside the pipeline/);
+});
+
+// The property that matters more than any single sentence: whatever the
+// refusal tells you to run, `move` has to accept it. Checked over every
+// ordered pair of stages on the shipped board, because a dead end in one
+// corner of one pipeline is how this shipped in the first place.
+test('every refusal names a command move would accept, from every stage to every other', () => {
+  const shipped = JSON.parse(readFileSync(new URL('../templates/stages.json', import.meta.url), 'utf8'));
+  const ids = [...shipped.stages, ...shipped.extra].map((stage) => stage.id);
+  for (const from of ids) {
+    for (const to of ids) {
+      if (from === to || stageIndex(shipped, to) < 0) continue; // side targets are never order-refused
+      if (nextStage(shipped, from) === to) continue;            // the lawful single step
+      const message = stageOrderMessage('A', from, to, shipped);
+      const command = /run `gw (move A [^`]+)`/.exec(message);
+      assert.ok(command, `${from} -> ${to}: the refusal names no command: ${message}`);
+      const [, argv] = command;
+      const [, , target, force] = argv.split(' ');
+      const accepted = force === '--force' || nextStage(shipped, from) === target;
+      assert.ok(accepted, `${from} -> ${to}: move would refuse the command it just told you to run (${argv})`);
+    }
+  }
 });

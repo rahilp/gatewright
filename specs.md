@@ -509,11 +509,23 @@ Hard cap from `config.brief.max_lines`. Sections are truncated with `(+n more)` 
 ### 6.2 move
 
 1. Load item and target stage.
-2. If target is not the next stage in order and `--force` is absent → exit 1, naming the stage that must be passed through first and the command to get there: `specified: move here first: run \`gw move P1-01 specified\``. A backward target says so and names `--force`, which is the only lawful way to move backward. The refusal must never answer with `--force` alone: the shipped AGENTS.md block tells agents not to use it, so a message offering nothing else leaves a compliant agent stuck.
+2. If target is not the next stage in order and `--force` is absent → exit 1, naming the stage that must be passed through first and the command to get there: `specified: move here first: run \`gw move P1-01 specified\``. A backward target says so and names `--force`, which is the only lawful way to move backward. The refusal must never answer with a bare `--force`: it prints the whole command, and the shipped AGENTS.md block permits `--force` exactly when a refusal names it — for order, never for a gate — so that a compliant agent is never left without a next step.
 3. Evaluate target's `requires`. Any failure → exit 1 with each failed rule on its own line.
 4. Update `stage`, `updated`; append provided evidence; clear `flag` if it was `paused`.
 5. Append `move` event.
 6. If `github.enabled` and item is linked and `comment_on_move` → queue a comment (written on next `sync` or immediately if `serve` is running).
+
+#### Refusing a move
+
+Two refusals, and they are different kinds of thing. A **gate** refusal (`target stage requirements are not met`) is fixed by meeting the rule; `--force` past a gate is never the answer, and no refusal ever suggests it. An **order** refusal is fixed by taking a different step, and the message names the exact command to take it.
+
+`stageOrderMessage` is bound by one property, which is the whole reason it exists: **`move` must accept the command the refusal prints.** The cases, in the order they must be tested:
+
+1. The current stage is outside the pipeline (any `extra` stage — the shipped board's own `paused` and `dropped`): nothing follows it, so every pipeline target is a jump → name the forced command.
+2. The target comes before the current stage — which includes *every* pipeline target when the item stands in the last stage → name the forced command.
+3. Otherwise → name the immediate next stage, unforced, and say how many stages lie beyond it.
+
+Order 1 before 2 before 3 is load-bearing. Reading "no next stage" as "outside the pipeline" put an item standing in the final stage outside the pipeline it was in, and answered a side stage with `gw move <id> <first-stage>` — a command this same rule then refused in the same words, forever. Both were dead ends, which is the one outcome this function exists to prevent.
 
 ### 6.3 add
 
@@ -953,7 +965,7 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`. Your own plan steps: `gw note <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
-- If `gw move` refuses, fix the reason; do not use --force. Unsure what's next? `gw next <id>`.
+- If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.
 <!-- gatewright:end -->
 ```
 
