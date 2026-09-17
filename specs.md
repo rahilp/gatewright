@@ -361,7 +361,7 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
   "github": {
     "enabled": false,
     "repo": null,
-    "sync_interval_min": null,
+    "sync_interval_min": 5,
     "dispatch_label": "agent/go",
     "mirror_children": false,
     "comment_on_move": true,

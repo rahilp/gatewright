@@ -1,0 +1,1 @@
+Introducing Gatewright: evidence-gated work tracking for coding agents. `gw move` refuses the stage until you attach the commit, the test, or the PR — and the board refuses the same drag, in plain English. File-first, zero dependencies, MIT.

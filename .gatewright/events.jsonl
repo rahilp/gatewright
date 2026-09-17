@@ -755,3 +755,8 @@
 {"ts":"2026-09-17T11:35:46.381Z","type":"move","item":"P2-10.3","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:35:46.441Z","type":"move","item":"P2-10.3","from":"specified","to":"building","by":"agent:claude","evidence":[]}
 {"ts":"2026-09-17T11:35:52.361Z","type":"move","item":"P2-10.3","from":"building","to":"built","by":"agent:claude","evidence":["cd6b1be","test/paths.test.js","499 tests green"]}
+{"ts":"2026-09-17T11:40:44.882Z","type":"claim","item":"P0-09","by":"human:rahil"}
+{"ts":"2026-09-17T11:40:44.939Z","type":"move","item":"P0-09","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T11:40:45.044Z","type":"move","item":"P0-09","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T11:40:45.097Z","type":"move","item":"P0-09","from":"building","to":"built","by":"human:rahil","evidence":["templates/config.json","lib/commands/init.js","test/serve.test.js","verified: board reports enabled/idle/5min after gw config"]}
+{"ts":"2026-09-17T11:41:19.626Z","type":"move","item":"P0-09","from":"built","to":"building","by":"human:rahil","evidence":[]}

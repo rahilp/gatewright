@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Gatewright — Work that earns its way forward</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "GW Mono";
+        src: url("assets/fonts/NotoSansMono-Regular.ttf") format("truetype");
+        font-weight: 400;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: "GW Mono";
+        src: url("assets/fonts/NotoSansMono-Medium.ttf") format("truetype");
+        font-weight: 500 600;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: "GW Mono";
+        src: url("assets/fonts/NotoSansMono-Bold.ttf") format("truetype");
+        font-weight: 700;
+        font-style: normal;
+      }
+      /* Palette lifted verbatim from gatewright's viewer/board.html :root dark theme. */
+      :root {
+        --bg: #17181a;
+        --raised: #1f2124;
+        --sunken: #131415;
+        --border: #33363a;
+        --text: #e7e7e4;
+        --dim: #a3a39c;
+        --faint: #8e8e88;
+        --accent: #6badde;
+        --accent-bg: #1d3245;
+        --danger: #e0806e;
+        --danger-bg: #3a231f;
+        --warn: #d8b458;
+        --ok: #7fc394;
+        --ok-bg: #1f3527;
+        --mono: "GW Mono", monospace;
+        --sans: system-ui, sans-serif;
+        --energy: 0;
+        --sparkle: 0;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .fill {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* ---------- scene 1 + 2 : the terminal ---------- */
+      #term-bg {
+        background: var(--sunken);
+      }
+      #term-vig {
+        background: radial-gradient(
+          ellipse 70% 60% at 50% 46%,
+          rgba(107, 173, 222, calc(0.035 + var(--energy) * 0.05)) 0%,
+          rgba(19, 20, 21, 0) 72%
+        );
+      }
+      #term-wrap {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #term {
+        width: 1500px;
+        box-sizing: border-box;
+        background: #0f1011;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 34px 48px 44px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55),
+          0 0 calc(30px + var(--energy) * 70px)
+            rgba(107, 173, 222, calc(0.02 + var(--energy) * 0.045));
+      }
+      #term-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 26px;
+        border-bottom: 1px solid #232528;
+        margin-bottom: 30px;
+      }
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #2c2f33;
+      }
+      #term-title {
+        margin-left: 14px;
+        font-family: var(--mono);
+        font-size: 18px;
+        color: var(--faint);
+        letter-spacing: 0.04em;
+      }
+      .ln {
+        font-family: var(--mono);
+        font-size: 30px;
+        line-height: 1.62;
+        color: var(--text);
+        white-space: pre;
+        letter-spacing: 0.01em;
+      }
+      .pr {
+        color: var(--faint);
+      }
+      .flag {
+        color: var(--accent);
+      }
+      .err {
+        color: var(--danger);
+      }
+      .ok {
+        color: var(--ok);
+      }
+      #r1 {
+        margin-top: 18px;
+      }
+      #l2 {
+        margin-top: 30px;
+      }
+      #s1 {
+        margin-top: 2px;
+      }
+      .cur {
+        display: inline-block;
+        width: 16px;
+        height: 31px;
+        vertical-align: -5px;
+        background: var(--dim);
+      }
+      #r1,
+      #r2,
+      #l2,
+      #s1 {
+        opacity: 0;
+      }
+      #c2 {
+        opacity: 0;
+      }
+      .cap {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 828px;
+        text-align: center;
+        font-family: var(--sans);
+        font-size: 31px;
+        color: var(--dim);
+        letter-spacing: 0.015em;
+        opacity: 0;
+      }
+
+      /* ---------- scene 3 : the board ---------- */
+      #board-wrap {
+        position: absolute;
+        inset: 0;
+        background: var(--bg);
+        opacity: 0;
+      }
+      #board-head {
+        position: absolute;
+        left: 60px;
+        top: 44px;
+        right: 60px;
+        display: flex;
+        align-items: center;
+      }
+      #brand {
+        font-family: var(--mono);
+        font-size: 30px;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: 0.01em;
+      }
+      #snapchip {
+        margin-left: 20px;
+        font-family: var(--mono);
+        font-size: 17px;
+        color: var(--warn, #d8b458);
+        border: 1px solid #4a3f22;
+        background: #2a2416;
+        border-radius: 4px;
+        padding: 5px 12px;
+      }
+      #counts {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 19px;
+        color: var(--dim);
+        letter-spacing: 0.02em;
+      }
+      #board-nav {
+        position: absolute;
+        left: 60px;
+        top: 112px;
+        display: flex;
+        gap: 42px;
+        font-family: var(--sans);
+        font-size: 21px;
+        color: var(--dim);
+      }
+      #board-nav .on {
+        color: var(--accent);
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 7px;
+      }
+      #board-rule {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 160px;
+        height: 1px;
+        background: var(--border);
+      }
+      .col {
+        position: absolute;
+        top: 210px;
+        width: 429px;
+        height: 790px;
+        box-sizing: border-box;
+        background: #1a1c1e;
+        border: 1px solid #2a2d31;
+        border-radius: 8px;
+      }
+      .col-h {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        top: 16px;
+        display: flex;
+        align-items: baseline;
+        font-family: var(--sans);
+      }
+      .col-h b {
+        font-size: 23px;
+        font-weight: 650;
+        color: var(--text);
+      }
+      .cnt {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 19px;
+        color: var(--faint);
+        position: relative;
+      }
+      .cnt span {
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+      .card {
+        position: absolute;
+        width: 393px;
+        box-sizing: border-box;
+        background: var(--raised);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 15px 17px 17px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, calc(0.35 + var(--energy) * 0.25));
+      }
+      .cid {
+        font-family: var(--mono);
+        font-size: 16px;
+        color: var(--faint);
+        letter-spacing: 0.05em;
+      }
+      .ctitle {
+        font-family: var(--sans);
+        font-size: 20px;
+        line-height: 1.34;
+        color: var(--text);
+        margin: 8px 0 13px;
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+      }
+      .chip {
+        font-family: var(--mono);
+        font-size: 14px;
+        color: var(--dim);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 3px 8px;
+      }
+      .chip.blocked {
+        color: var(--danger);
+        background: var(--danger-bg);
+        border-color: #5a3229;
+      }
+      .chip.good {
+        color: var(--ok);
+        background: var(--ok-bg);
+        border-color: #2d4d37;
+      }
+      #drag {
+        z-index: 5;
+      }
+      #ev-before,
+      #ev-after {
+        position: absolute;
+      }
+      #ev-after {
+        opacity: 0;
+      }
+      #cursor {
+        position: absolute;
+        left: 1150px;
+        top: 300px;
+        width: 22px;
+        height: 30px;
+        opacity: 0;
+        z-index: 6;
+      }
+      #gate {
+        position: absolute;
+        left: 535px;
+        top: 452px;
+        width: 452px;
+        box-sizing: border-box;
+        background: var(--raised);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px 22px 22px;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+        opacity: 0;
+        z-index: 7;
+      }
+      #gate-h {
+        font-family: var(--mono);
+        font-size: 16px;
+        color: var(--dim);
+        letter-spacing: 0.04em;
+        margin-bottom: 14px;
+      }
+      .gate-row {
+        display: flex;
+        align-items: center;
+        font-family: var(--sans);
+        font-size: 19px;
+        color: var(--text);
+        line-height: 1.3;
+        margin-top: 11px;
+        opacity: 0;
+      }
+      .gate-row .bullet {
+        color: var(--danger);
+        margin-right: 10px;
+      }
+      #claim {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 15px;
+        color: var(--accent);
+        background: var(--accent-bg);
+        border: 1px solid #2f5a7d;
+        border-radius: 4px;
+        padding: 5px 12px;
+      }
+
+      /* ---------- scene 4 : outro ---------- */
+      #outro-wrap {
+        position: absolute;
+        inset: 0;
+        background: var(--sunken);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+      }
+      #wordmark {
+        font-family: var(--mono);
+        font-size: 98px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        color: var(--text);
+        opacity: 0;
+      }
+      #orule {
+        width: 560px;
+        height: 1px;
+        margin: 40px 0 38px;
+        background: rgba(107, 173, 222, calc(0.22 + var(--sparkle) * 0.55));
+        opacity: 0;
+      }
+      #tagline {
+        font-family: var(--sans);
+        font-size: 37px;
+        color: var(--dim);
+        letter-spacing: 0.01em;
+        opacity: 0;
+      }
+      #install {
+        margin-top: 64px;
+        font-family: var(--mono);
+        font-size: 29px;
+        color: var(--accent);
+        letter-spacing: 0.02em;
+        opacity: 0;
+      }
+      #meta {
+        margin-top: 20px;
+        font-family: var(--mono);
+        font-size: 20px;
+        color: var(--faint);
+        letter-spacing: 0.06em;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="brag"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="20"
+      data-fps="30"
+    >
+      <!-- ============ SCENES 1 + 2 : the terminal (one unbroken frame) ============ -->
+      <section id="sc-term" class="clip" data-start="0" data-duration="11" data-track-index="0">
+        <div id="term-outer" class="fill">
+          <div id="term-bg" class="fill"></div>
+          <div id="term-vig" class="fill"></div>
+          <div id="term-wrap">
+            <div id="term">
+              <div id="term-bar">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div id="term-title">~/projects/widget — gw</div>
+              </div>
+              <div class="ln" id="l1"><span class="pr">$ </span><span id="t1"></span><span class="cur" id="c1"></span></div>
+              <div class="ln err" id="r1">target stage requirements are not met</div>
+              <div class="ln err" id="r2">needs at least 1 evidence entry</div>
+              <div class="ln" id="l2"><span class="pr">$ </span><span id="t2b">gw move P1-01 built</span><span id="t2"></span><span class="cur" id="c2"></span></div>
+              <div class="ln ok" id="s1">P1-01  building → built  ·  evidence: abc1234, test/scheduler.test.js</div>
+            </div>
+          </div>
+          <div class="cap" id="cap1">A tracker that says no.</div>
+          <div class="cap" id="cap2">Evidence, or it doesn't move.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 3 : the board ============ -->
+      <section id="sc-board" class="clip" data-start="10.5" data-duration="5.6" data-track-index="1">
+        <div id="board-wrap">
+          <div id="board-head">
+            <div id="brand">gatewright</div>
+            <div id="snapchip">live · 127.0.0.1:17888</div>
+            <div id="counts">30 items&nbsp;&nbsp;·&nbsp;&nbsp;24 open&nbsp;&nbsp;·&nbsp;&nbsp;7 flagged</div>
+          </div>
+          <div id="board-nav">
+            <div>Overview</div>
+            <div class="on">Board</div>
+            <div>Table</div>
+            <div>Stages &amp; rules</div>
+            <div>Export</div>
+          </div>
+          <div id="board-rule"></div>
+
+          <div class="col" style="left: 60px">
+            <div class="col-h"><b>Backlog</b><div class="cnt"><span>1</span></div></div>
+          </div>
+          <div class="col" style="left: 517px">
+            <div class="col-h"><b>Specified</b><div class="cnt"><span>1</span></div></div>
+          </div>
+          <div class="col" style="left: 974px">
+            <div class="col-h">
+              <b>Building</b>
+              <div class="cnt" data-layout-allow-overlap="true"><span id="cnt-bldg-a">2</span><span id="cnt-bldg-b" style="opacity: 0">1</span></div>
+            </div>
+          </div>
+          <div class="col" style="left: 1431px">
+            <div class="col-h">
+              <b>Built</b>
+              <div class="cnt" data-layout-allow-overlap="true"><span id="cnt-built-a">1</span><span id="cnt-built-b" style="opacity: 0">2</span></div>
+            </div>
+          </div>
+
+          <div class="card" id="card-a" style="left: 78px; top: 280px">
+            <div class="cid">P2-03</div>
+            <div class="ctitle">CLI --json output for gw show on an unknown id</div>
+            <div class="chips"><div class="chip">decision</div><div class="chip">ev:0</div></div>
+          </div>
+
+          <div class="card" id="card-b" style="left: 535px; top: 280px">
+            <div class="cid">P3-03</div>
+            <div class="ctitle">Worktree cleanup policy for cancelled runs</div>
+            <div class="chips"><div class="chip">defect</div><div class="chip blocked">blocked</div><div class="chip">ev:0</div></div>
+          </div>
+
+          <div class="card" id="card-c" style="left: 992px; top: 448px">
+            <div class="cid">P2-01</div>
+            <div class="ctitle">Reject / clamp / halt / fault / disarm policy table</div>
+            <div class="chips"><div class="chip">feature</div><div class="chip">ev:0</div></div>
+          </div>
+
+          <div class="card" id="card-d" style="left: 1449px; top: 280px">
+            <div class="cid">P3-01</div>
+            <div class="ctitle">Jog network transport and clock conversion policy</div>
+            <div class="chips"><div class="chip">test</div><div class="chip">ev:1</div></div>
+          </div>
+
+          <div class="card" id="drag" style="left: 992px; top: 280px">
+            <div class="cid">P1-01</div>
+            <div class="ctitle">Wire the scheduler tick loop</div>
+            <div class="chips">
+              <div class="chip">feature</div>
+              <div class="chip" style="position: relative; width: 44px">
+                <span id="ev-before">ev:0</span>
+              </div>
+            </div>
+            <div class="chip good" id="ev-after" style="left: 105px; bottom: 17px">ev:2</div>
+          </div>
+
+          <svg id="cursor" viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 1 L1 23 L7 17.5 L11 27 L15 25 L11 16 L19 15.5 Z" fill="#e7e7e4" stroke="#17181a" stroke-width="1.4" />
+          </svg>
+
+          <div id="gate">
+            <div id="gate-h">Not met yet:</div>
+            <div class="gate-row" id="gr1"><span class="bullet">•</span>Someone must have claimed it<span id="claim">Claim</span></div>
+            <div class="gate-row" id="gr2"><span class="bullet">•</span>Needs at least one piece of evidence</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 : outro ============ -->
+      <section id="sc-outro" class="clip" data-start="15.6" data-duration="4.4" data-track-index="2">
+        <div id="outro-wrap">
+          <div id="wordmark">gatewright</div>
+          <div id="orule"></div>
+          <div id="tagline">Work that earns its way forward.</div>
+          <div id="install">npm i -g gatewright</div>
+          <div id="meta">gatewright.dev · zero dependencies · MIT</div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-start="0" data-duration="20" data-track-index="9" data-volume="0.2"></audio>
+
+      <audio id="k1" src="assets/sfx/keyboard/keypress-003.wav" data-start="0.32" data-duration="0.12" data-track-index="8" data-volume="0.16"></audio>
+      <audio id="k2" src="assets/sfx/keyboard/keypress-007.wav" data-start="0.51" data-duration="0.12" data-track-index="8" data-volume="0.14"></audio>
+      <audio id="k3" src="assets/sfx/keyboard/keypress-011.wav" data-start="0.69" data-duration="0.12" data-track-index="8" data-volume="0.16"></audio>
+      <audio id="k4" src="assets/sfx/keyboard/keypress-003.wav" data-start="0.88" data-duration="0.12" data-track-index="8" data-volume="0.14"></audio>
+      <audio id="k5" src="assets/sfx/keyboard/keypress-007.wav" data-start="1.06" data-duration="0.12" data-track-index="8" data-volume="0.16"></audio>
+      <audio id="k6" src="assets/sfx/keyboard/keypress-011.wav" data-start="1.25" data-duration="0.12" data-track-index="8" data-volume="0.14"></audio>
+      <audio id="k7" src="assets/sfx/keyboard/keypress-003.wav" data-start="1.6" data-duration="0.12" data-track-index="8" data-volume="0.2"></audio>
+      <audio id="sfx-refuse" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="2.12" data-duration="0.2" data-track-index="7" data-volume="0.5"></audio>
+
+      <audio id="k8" src="assets/sfx/keyboard/keypress-007.wav" data-start="6.6" data-duration="0.12" data-track-index="8" data-volume="0.14"></audio>
+      <audio id="k9" src="assets/sfx/keyboard/keypress-011.wav" data-start="6.9" data-duration="0.12" data-track-index="8" data-volume="0.16"></audio>
+      <audio id="k10" src="assets/sfx/keyboard/keypress-003.wav" data-start="7.2" data-duration="0.12" data-track-index="8" data-volume="0.14"></audio>
+      <audio id="k11" src="assets/sfx/keyboard/keypress-007.wav" data-start="7.5" data-duration="0.12" data-track-index="8" data-volume="0.16"></audio>
+      <audio id="k12" src="assets/sfx/keyboard/keypress-011.wav" data-start="7.8" data-duration="0.12" data-track-index="8" data-volume="0.14"></audio>
+      <audio id="k13" src="assets/sfx/keyboard/keypress-003.wav" data-start="8.2" data-duration="0.12" data-track-index="8" data-volume="0.2"></audio>
+      <audio id="sfx-ok" src="assets/sfx/interface/bong_001.ogg" data-start="8.44" data-duration="0.16" data-track-index="7" data-volume="0.42"></audio>
+
+      <audio id="sfx-card" src="assets/sfx/casino/card-slide-1.ogg" data-start="12.6" data-duration="0.45" data-track-index="7" data-volume="0.36"></audio>
+      <audio id="sfx-g1" src="assets/sfx/interface/click_003.ogg" data-start="13.18" data-duration="0.08" data-track-index="7" data-volume="0.3"></audio>
+      <audio id="sfx-g2" src="assets/sfx/interface/click_003.ogg" data-start="13.7" data-duration="0.08" data-track-index="7" data-volume="0.3"></audio>
+      <audio id="sfx-mark" src="assets/sfx/impact/impactSoft_heavy_002.ogg" data-start="15.81" data-duration="0.6" data-track-index="7" data-volume="0.46"></audio>
+    </div>
+
+    <script>
+      // Per-frame music energy: [bass, treble], 30fps, first 600 frames of the bed.
+      // Pre-extracted with hyperframes-creative/scripts/extract-audio-data.py — no runtime analysis.
+      var ENERGY = /*ENERGY*/ [[0.369,0.141],[0.236,0.099],[0.272,0.069],[0.22,0.059],[0.222,0.045],[0.214,0.029],[0.217,0.038],[0.205,0.069],[0.214,0.105],[0.209,0.03],[0.208,0.028],[0.191,0.121],[0.223,0.1],[0.214,0.062],[0.196,0.047],[0.287,0.221],[0.633,0.159],[0.223,0.079],[0.122,0.073],[0.165,0.09],[0.189,0.106],[0.165,0.062],[0.18,0.024],[0.186,0.059],[0.167,0.051],[0.175,0.019],[0.17,0.017],[0.163,0.081],[0.168,0.096],[0.154,0.019],[0.135,0.018],[0.14,0.12],[0.414,0.085],[0.151,0.016],[0.059,0.01],[0.118,0.015],[0.112,0.016],[0.135,0.008],[0.125,0.016],[0.135,0.084],[0.132,0.064],[0.141,0.011],[0.147,0.023],[0.155,0.067],[0.147,0.061],[0.151,0.015],[0.152,0.06],[0.249,0.255],[0.346,0.161],[0.108,0.126],[0.161,0.127],[0.128,0.114],[0.141,0.05],[0.139,0.032],[0.146,0.041],[0.14,0.114],[0.134,0.058],[0.148,0.016],[0.148,0.042],[0.174,0.114],[0.155,0.063],[0.107,0.029],[0.073,0.041],[0.346,0.095],[0.452,0.05],[0.102,0.022],[0.019,0.017],[0.013,0.026],[0.012,0.021],[0.003,0.016],[0.01,0.046],[0.01,0.117],[0.011,0.035],[0.011,0.016],[0.015,0.074],[0.014,0.141],[0.007,0.06],[0.005,0.022],[0.044,0.123],[0.477,0.202],[0.299,0.101],[0.08,0.096],[0.011,0.093],[0.007,0.134],[0.005,0.079],[0.004,0.036],[0.006,0.06],[0.008,0.084],[0.006,0.03],[0.007,0.016],[0.005,0.078],[0.007,0.105],[0.003,0.026],[0.005,0.015],[0.103,0.092],[0.483,0.079],[0.201,0.018],[0.071,0.009],[0.003,0.013],[0.005,0.015],[0.003,0.009],[0.003,0.011],[0.003,0.083],[0.004,0.075],[0.005,0.017],[0.002,0.023],[0.006,0.089],[0.005,0.077],[0.004,0.022],[0.007,0.033],[0.233,0.217],[0.518,0.212],[0.144,0.183],[0.03,0.104],[0.008,0.111],[0.005,0.056],[0.004,0.038],[0.007,0.026],[0.004,0.055],[0.008,0.033],[0.007,0.013],[0.004,0.036],[0.001,0.104],[0.006,0.063],[0.009,0.022],[0.015,0.049],[0.328,0.095],[0.514,0.064],[0.085,0.065],[0.07,0.037],[0.018,0.033],[0.017,0.029],[0.011,0.023],[0.026,0.037],[0.024,0.083],[0.018,0.038],[0.018,0.016],[0.022,0.047],[0.016,0.179],[0.013,0.089],[0.011,0.02],[0.044,0.084],[0.426,0.233],[0.411,0.109],[0.078,0.104],[0.007,0.09],[0.024,0.149],[0.011,0.092],[0.013,0.031],[0.017,0.045],[0.022,0.046],[0.015,0.02],[0.009,0.015],[0.014,0.073],[0.007,0.097],[0.007,0.039],[0.009,0.015],[0.048,0.059],[0.467,0.078],[0.242,0.023],[0.097,0.011],[0.007,0.014],[0.005,0.021],[0.006,0.012],[0.011,0.012],[0.013,0.08],[0.006,0.099],[0.013,0.021],[0.01,0.016],[0.006,0.081],[0.005,0.089],[0.007,0.028],[0.016,0.016],[0.11,0.205],[0.514,0.256],[0.185,0.175],[0.073,0.108],[0.015,0.121],[0.013,0.07],[0.011,0.048],[0.009,0.033],[0.011,0.09],[0.009,0.092],[0.01,0.031],[0.008,0.031],[0.012,0.096],[0.003,0.1],[0.004,0.034],[0.006,0.035],[0.215,0.112],[0.535,0.077],[0.108,0.044],[0.05,0.034],[0.02,0.037],[0.021,0.039],[0.029,0.023],[0.009,0.03],[0.027,0.085],[0.023,0.045],[0.026,0.021],[0.023,0.04],[0.017,0.104],[0.011,0.083],[0.031,0.025],[0.023,0.069],[0.365,0.175],[0.427,0.101],[0.056,0.076],[0.025,0.089],[0.011,0.102],[0.01,0.05],[0.011,0.03],[0.021,0.028],[0.017,0.056],[0.017,0.03],[0.014,0.016],[0.023,0.048],[0.018,0.157],[0.016,0.06],[0.018,0.017],[0.036,0.049],[0.46,0.345],[0.272,0.301],[0.131,0.09],[0.017,0.109],[0.009,0.07],[0.011,0.037],[0.015,0.029],[0.03,0.072],[0.016,0.13],[0.014,0.038],[0.015,0.021],[0.016,0.092],[0.017,0.151],[0.006,0.105],[0.012,0.058],[0.088,0.137],[0.521,0.198],[0.222,0.115],[0.102,0.066],[0.006,0.073],[0.012,0.093],[0.013,0.05],[0.014,0.03],[0.012,0.081],[0.006,0.141],[0.005,0.041],[0.007,0.024],[0.014,0.073],[0.01,0.09],[0.011,0.032],[0.022,0.017],[0.139,0.067],[0.474,0.064],[0.285,0.052],[0.275,0.028],[0.241,0.04],[0.267,0.046],[0.271,0.027],[0.257,0.027],[0.269,0.081],[0.276,0.068],[0.282,0.022],[0.265,0.042],[0.264,0.114],[0.26,0.101],[0.25,0.03],[0.245,0.075],[0.468,0.209],[0.609,0.165],[0.158,0.086],[0.229,0.073],[0.197,0.12],[0.239,0.125],[0.223,0.041],[0.224,0.027],[0.228,0.067],[0.223,0.045],[0.211,0.015],[0.214,0.041],[0.234,0.098],[0.218,0.052],[0.184,0.013],[0.213,0.042],[0.224,0.095],[0.469,0.038],[0.097,0.014],[0.109,0.01],[0.153,0.021],[0.152,0.02],[0.145,0.01],[0.153,0.05],[0.163,0.119],[0.165,0.036],[0.154,0.009],[0.154,0.047],[0.169,0.105],[0.168,0.046],[0.181,0.022],[0.216,0.169],[0.488,0.197],[0.162,0.143],[0.228,0.134],[0.113,0.083],[0.134,0.07],[0.132,0.039],[0.131,0.024],[0.128,0.056],[0.139,0.087],[0.132,0.028],[0.145,0.017],[0.15,0.064],[0.14,0.088],[0.142,0.043],[0.094,0.022],[0.106,0.055],[0.628,0.055],[0.247,0.033],[0.071,0.023],[0.011,0.022],[0.028,0.025],[0.018,0.019],[0.015,0.015],[0.012,0.089],[0.026,0.095],[0.011,0.021],[0.01,0.032],[0.033,0.099],[0.02,0.105],[0.018,0.033],[0.039,0.03],[0.23,0.176],[0.514,0.144],[0.103,0.138],[0.06,0.102],[0.019,0.1],[0.009,0.111],[0.015,0.05],[0.015,0.034],[0.021,0.071],[0.02,0.066],[0.013,0.018],[0.016,0.024],[0.015,0.1],[0.021,0.069],[0.016,0.019],[0.016,0.023],[0.263,0.102],[0.419,0.048],[0.095,0.014],[0.016,0.01],[0.013,0.018],[0.014,0.017],[0.015,0.01],[0.014,0.025],[0.017,0.107],[0.011,0.049],[0.021,0.011],[0.022,0.033],[0.025,0.086],[0.018,0.046],[0.014,0.011],[0.033,0.085],[0.384,0.162],[0.394,0.123],[0.111,0.082],[0.015,0.067],[0.011,0.073],[0.017,0.044],[0.015,0.029],[0.005,0.046],[0.017,0.064],[0.013,0.025],[0.01,0.013],[0.013,0.053],[0.012,0.079],[0.009,0.043],[0.005,0.015],[0.042,0.044],[0.584,0.092],[0.355,0.044],[0.104,0.019],[0.009,0.018],[0.01,0.023],[0.016,0.018],[0.011,0.012],[0.024,0.069],[0.023,0.109],[0.014,0.034],[0.019,0.03],[0.012,0.116],[0.007,0.15],[0.012,0.046],[0.016,0.028],[0.094,0.151],[0.484,0.154],[0.157,0.113],[0.064,0.081],[0.011,0.073],[0.016,0.102],[0.015,0.049],[0.009,0.025],[0.013,0.057],[0.015,0.059],[0.009,0.026],[0.009,0.025],[0.009,0.099],[0.006,0.072],[0.01,0.019],[0.006,0.021],[0.229,0.084],[0.51,0.068],[0.124,0.025],[0.033,0.016],[0.004,0.02],[0.002,0.02],[0.004,0.014],[0.008,0.024],[0.006,0.112],[0.007,0.063],[0.004,0.023],[0.007,0.032],[0.006,0.081],[0.007,0.053],[0.007,0.022],[0.015,0.087],[0.252,0.208],[0.296,0.191],[0.057,0.15],[0.013,0.118],[0.001,0.081],[0.004,0.045],[0.006,0.028],[0.006,0.029],[0.014,0.095],[0.008,0.051],[0.003,0.024],[0.008,0.041],[0.01,0.108],[0.003,0.051],[0.002,0.027],[0.044,0.056],[0.377,0.082],[0.396,0.036],[0.088,0.037],[0.026,0.036],[0.033,0.035],[0.019,0.03],[0.024,0.025],[0.014,0.046],[0.048,0.062],[0.03,0.031],[0.02,0.027],[0.019,0.068],[0.051,0.088],[0.021,0.054],[0.035,0.07],[0.016,0.184],[0.065,0.253],[0.012,0.168],[0.019,0.13],[0.012,0.116],[0.009,0.117],[0.012,0.073],[0.007,0.072],[0.009,0.1],[0.007,0.085],[0.007,0.065],[0.018,0.07],[0.011,0.109],[0.003,0.1],[0.006,0.054],[0.005,0.063],[0.014,0.245],[0.028,0.341],[0.024,0.177],[0.014,0.124],[0.007,0.11],[0.011,0.105],[0.015,0.098],[0.008,0.085],[0.009,0.168],[0.009,0.15],[0.006,0.093],[0.008,0.095],[0.006,0.131],[0.006,0.138],[0.006,0.1],[0.011,0.117],[0.016,0.255],[0.009,0.232],[0.003,0.187],[0.004,0.114],[0.003,0.139],[0.007,0.115],[0.002,0.112],[0.002,0.123],[0.013,0.148],[0.024,0.127],[0.008,0.089],[0.006,0.103],[0.025,0.141],[0.008,0.153],[0.005,0.142],[0.011,0.241],[0.429,0.327],[0.761,0.185],[0.623,0.155],[0.617,0.148],[0.599,0.14],[0.583,0.134],[0.585,0.139],[0.536,0.159],[0.642,0.27],[0.598,0.23],[0.449,0.139],[0.393,0.138],[0.453,0.163],[0.417,0.129],[0.394,0.161],[0.35,0.213],[0.649,0.248],[0.272,0.184],[0.511,0.154],[0.399,0.122],[0.373,0.169],[0.403,0.128],[0.391,0.073],[0.404,0.132],[0.473,0.184],[0.548,0.113],[0.46,0.108],[0.406,0.114],[0.374,0.13],[0.371,0.093],[0.356,0.084],[0.28,0.145],[0.437,0.159],[0.702,0.101],[0.494,0.094],[0.499,0.097],[0.508,0.096],[0.525,0.089],[0.505,0.079],[0.523,0.114],[0.557,0.125],[0.547,0.074],[0.474,0.058],[0.488,0.101],[0.517,0.126],[0.454,0.086],[0.46,0.074],[0.476,0.25],[0.42,0.26],[0.548,0.194],[0.604,0.167],[0.548,0.12],[0.571,0.099],[0.561,0.066],[0.539,0.058],[0.552,0.134],[0.603,0.144],[0.582,0.066],[0.5,0.045],[0.48,0.09],[0.496,0.097],[0.465,0.038],[0.443,0.086],[0.174,0.191],[0.577,0.112],[0.147,0.082],[0.019,0.059],[0.031,0.063],[0.028,0.054],[0.026,0.047],[0.049,0.083],[0.163,0.162],[0.185,0.155],[0.017,0.091],[0.018,0.074],[0.024,0.125],[0.049,0.109],[0.028,0.057],[0.027,0.168],[0.434,0.268],[0.483,0.18],[0.105,0.138],[0.016,0.121],[0.024,0.161],[0.038,0.111],[0.018,0.064],[0.083,0.105],[0.146,0.154],[0.089,0.106],[0.049,0.061],[0.032,0.072],[0.035,0.11],[0.019,0.076],[0.025,0.044],[0.065,0.126]];
+
+      var root = document.getElementById("root");
+
+      // Type `segments` into `el` one character at a time by toggling display, so the
+      // block cursor that follows in normal flow advances with the text. Every reveal is
+      // a zero-duration timeline set, which stays correct under arbitrary seeks.
+      function typeInto(tl, el, segments, start, end) {
+        var chars = [];
+        segments.forEach(function (seg) {
+          var wrap = document.createElement("span");
+          if (seg.cls) wrap.className = seg.cls;
+          for (var i = 0; i < seg.text.length; i++) {
+            var s = document.createElement("span");
+            s.textContent = seg.text[i];
+            s.style.display = "none";
+            wrap.appendChild(s);
+            chars.push(s);
+          }
+          el.appendChild(wrap);
+        });
+        var step = (end - start) / chars.length;
+        chars.forEach(function (s, i) {
+          tl.set(s, { display: "inline" }, start + i * step);
+        });
+      }
+
+      var tl = gsap.timeline({ paused: true });
+
+      /* ---------------- Scene 1 — the refusal ---------------- */
+      typeInto(tl, document.getElementById("t1"), [{ text: "gw move P1-01 built" }], 0.3, 1.4);
+      tl.set("#c1", { opacity: 0 }, 1.62);
+
+      // beat-locked: 2.12s (beat grid) — the refusal lands as one block, not line by line.
+      tl.fromTo("#r1", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.26, ease: "power2.out" }, 2.12);
+      tl.fromTo("#r2", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.26, ease: "power2.out" }, 2.14);
+
+      // beat-locked: 4.23s (strongCue 1.00)
+      tl.fromTo("#cap1", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 4.23);
+
+      /* ---------------- Scene 2 — evidence earns it ---------------- */
+      tl.to("#l2", { opacity: 1, duration: 0.2 }, 6.4);
+      tl.set("#c2", { opacity: 1 }, 6.45);
+      typeInto(
+        tl,
+        document.getElementById("t2"),
+        [
+          { text: " --evidence", cls: "flag" },
+          { text: " abc1234" },
+          { text: " --evidence", cls: "flag" },
+          { text: " test/scheduler.test.js" },
+        ],
+        6.55,
+        8.1,
+      );
+      tl.set("#c2", { opacity: 0 }, 8.22);
+
+      // beat-locked: 8.44s (strongCue 0.99) — the accepted move.
+      tl.fromTo("#s1", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 8.44);
+      tl.to("#cap1", { opacity: 0, duration: 0.35, ease: "power1.inOut" }, 8.6);
+      tl.fromTo("#cap2", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 8.9);
+
+      /* ---------------- Scene 3 — the board ---------------- */
+      // beat-locked: 10.54s (strongCue 1.00) — board reveal.
+      tl.to("#term-outer", { opacity: 0, duration: 0.5, ease: "power1.inOut" }, 10.5);
+      tl.fromTo("#board-wrap", { opacity: 0, scale: 0.985 }, { opacity: 1, scale: 1, duration: 0.55, ease: "power2.out" }, 10.54);
+
+      // Cursor grabs P1-01 in Building and drags it into Built.
+      tl.fromTo("#cursor", { opacity: 0, x: -30, y: 40 }, { opacity: 1, x: 0, y: 0, duration: 0.45, ease: "power2.out" }, 11.35);
+      tl.fromTo("#drag", { x: 0, y: 0, rotation: 0, scale: 1 }, { x: 4, y: -6, rotation: -1.2, scale: 1.02, duration: 0.2, ease: "power2.out" }, 11.8);
+      tl.to("#drag", { x: 457, y: 168, rotation: 0.6, duration: 0.65, ease: "power2.inOut" }, 12.0);
+      tl.to("#cursor", { x: 457, y: 174, duration: 0.65, ease: "power2.inOut" }, 12.0);
+      // beat-locked: 12.65s (strongCue 1.00) — the card lands in Built.
+      tl.to("#drag", { rotation: 0, scale: 1, y: 168, duration: 0.18, ease: "power3.out" }, 12.65);
+      tl.to("#ev-before", { opacity: 0, duration: 0.14 }, 12.65);
+      tl.fromTo("#ev-after", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.28, ease: "back.out(2)" }, 12.68);
+      tl.to("#card-c", { y: -168, duration: 0.38, ease: "power2.inOut" }, 12.72);
+      tl.to("#cnt-bldg-a", { opacity: 0, duration: 0.18 }, 12.68);
+      tl.to("#cnt-bldg-b", { opacity: 1, duration: 0.18 }, 12.68);
+      tl.to("#cnt-built-a", { opacity: 0, duration: 0.18 }, 12.68);
+      tl.to("#cnt-built-b", { opacity: 1, duration: 0.18 }, 12.68);
+      tl.to("#cursor", { opacity: 0, duration: 0.3, ease: "power1.in" }, 12.95);
+
+      // The board refuses the next card the same way the CLI does, in English.
+      // beat-grid: panel + row 1 at 13.18s, row 2 at 13.70s (0.52s grid at 114.84 BPM);
+      // the full set then holds 2.3s so both lines are read as a set, not a rush.
+      tl.fromTo("#gate", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 13.18);
+      tl.to("#gr1", { opacity: 1, duration: 0.22 }, 13.22);
+      tl.to("#gr2", { opacity: 1, duration: 0.22 }, 13.7);
+
+      /* ---------------- Scene 4 — outro ---------------- */
+      tl.to("#board-wrap", { opacity: 0, duration: 0.45, ease: "power1.inOut" }, 15.6);
+      tl.to("#outro-wrap", { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 15.6);
+      // beat-locked: 15.81s (beat grid) — the wordmark settles.
+      tl.fromTo("#wordmark", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 15.81);
+      tl.fromTo("#orule", { opacity: 0, scaleX: 0.2 }, { opacity: 1, scaleX: 1, duration: 0.7, ease: "power2.out" }, 16.1);
+      tl.fromTo("#tagline", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 16.86);
+      tl.fromTo("#install", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 17.91);
+      tl.fromTo("#meta", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out" }, 18.15);
+
+      /* ---------------- Audio bed ---------------- */
+      var music = document.getElementById("music");
+      tl.to(music, { volume: 0.26, duration: 1.0, ease: "power1.inOut" }, 10.4);
+      tl.to(music, { volume: 0, duration: 1.5, ease: "power1.in" }, 18.5);
+
+      /* ---------------- Subtle audio-reactive presence ----------------
+         Bass breathes the terminal glow and card depth; treble brightens the outro
+         rule. Nothing moves text, and there is no waveform or equalizer anywhere. */
+      for (var f = 0; f < ENERGY.length; f++) {
+        tl.call(
+          (function (pair) {
+            return function () {
+              root.style.setProperty("--energy", pair[0].toFixed(3));
+              root.style.setProperty("--sparkle", pair[1].toFixed(3));
+            };
+          })(ENERGY[f]),
+          [],
+          f / 30,
+        );
+      }
+
+      window.__timelines["brag"] = tl;
+    </script>
+  </body>
+</html>

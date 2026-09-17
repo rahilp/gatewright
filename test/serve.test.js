@@ -417,3 +417,46 @@ test('an allowed host is served while a foreign host and a foreign origin are st
     assert.equal(store.readItems().length, 1, 'and nothing was created');
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });
+
+// A config saying github.enabled: true while the board reports sync "off" is
+// how an issue sits unsynced for days with nothing on screen to explain it.
+// The two states are different facts and must not report the same way.
+test('a repo with sync enabled but no interval reports unscheduled, not off', async () => {
+  const withInterval = { github: { enabled: true, repo: 'o/r', sync_interval_min: 5 } };
+  const withoutInterval = { github: { enabled: true, repo: 'o/r' } };
+  const disabled = { github: { enabled: false, repo: 'o/r', sync_interval_min: 5 } };
+
+  for (const [config, expected, note] of [
+    [withInterval, 'idle', 'scheduled'],
+    [withoutInterval, 'unscheduled', 'enabled but never scheduled'],
+    [disabled, 'off', 'genuinely off'],
+  ]) {
+    const root = mkdtempSync(join(tmpdir(), 'gw-syncstate-'));
+    const store = createStore(root); store.ensure(); store.writeItems([]);
+    writeFileSync(store.paths.config, JSON.stringify(config));
+    const server = createServeServer({ store });
+    const address = await listen(server, { port: 0 });
+    const state = await (await fetch(`http://127.0.0.1:${address.port}/api/state`)).json();
+    assert.equal(state.sync.status, expected, `${note} must report "${expected}"`);
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+// Enabling sync has to mean it syncs.
+test('init --gh schedules the sync it enables', async () => {
+  const { run: init } = await import('../lib/commands/init.js');
+  const cwd = mkdtempSync(join(tmpdir(), 'gw-ghinit-'));
+  let out = '';
+  await init({
+    cwd, flags: { gh: true, repo: 'o/r', yes: true }, positionals: [], env: {},
+    stdout: { write: (t) => { out += t; } }, stderr: { write() {} },
+    // The gh boundary returns a result object, not a string: authStatus checks
+    // `status`, which is what makes the whole sync layer testable without a
+    // network or a logged-in gh.
+    ghRun: () => ({ status: 0, stdout: '' }),
+  });
+  const config = JSON.parse(readFileSync(join(cwd, '.gatewright', 'config.json'), 'utf8'));
+  assert.equal(config.github.enabled, true);
+  assert.ok(config.github.sync_interval_min > 0, 'enabling sync without an interval leaves a board that never syncs');
+  assert.match(out, /polling every \d+ min/, 'and the user is told the cadence rather than having to discover it');
+});
