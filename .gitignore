@@ -4,3 +4,4 @@ node_modules/
 .gatewright/runs/
 .gatewright/.worktrees/
 .gatewright/.lock
+brag-output/
