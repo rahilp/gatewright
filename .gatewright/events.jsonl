@@ -720,3 +720,14 @@
 {"ts":"2026-09-15T23:45:48.753Z","type":"move","item":"P8-14","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: row move select offers only permitted moves, 'Built (not ready)' disabled without evidence"]}
 {"ts":"2026-09-15T23:45:48.814Z","type":"move","item":"P8-16","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: owner noise gone, ev badge only when the next gate is short, tooltip explains it"]}
 {"ts":"2026-09-15T23:45:48.880Z","type":"move","item":"P8-17","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: filter bar display:none on Stages and Settings"]}
+{"ts":"2026-09-16T09:30:44.005Z","type":"claim","item":"P5-13","by":"human:rahil"}
+{"ts":"2026-09-16T09:31:33.130Z","type":"move","item":"P8-08","from":"built","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T10:37:23.991Z","type":"add","item":"P2-10","by":"agent:claude","parent":null}
+{"ts":"2026-09-17T10:37:31.097Z","type":"edit","item":"P2-10","by":"agent:claude","fields":["scope"]}
+{"ts":"2026-09-17T10:37:31.150Z","type":"claim","item":"P2-10","by":"agent:claude"}
+{"ts":"2026-09-17T10:37:31.206Z","type":"move","item":"P2-10","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T10:37:31.262Z","type":"move","item":"P2-10","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T10:46:45.919Z","type":"note","item":"P2-10","by":"agent:claude","note":"Three gates, one decision module (lib/guard.js): pre-edit (provider PreToolUse), commit-msg hook, and gw guard --range in CI. Found by running guard against this repo's own board: items in a role:'done' stage were still vouching for later commits; fixed via isTerminalStage."}
+{"ts":"2026-09-17T10:46:45.972Z","type":"move","item":"P2-10","from":"building","to":"built","by":"agent:claude","evidence":["test/guard.test.js","test/hook.test.js","491 tests green"]}
+{"ts":"2026-09-17T11:01:10.406Z","type":"move","item":"P2-10","from":"built","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:01:10.468Z","type":"add","item":"P2-11","by":"agent:claude","parent":null}

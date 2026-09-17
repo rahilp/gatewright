@@ -346,6 +346,18 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
       "merged"
     ]
   },
+  "guard": {
+    "enabled": true,
+    "mode": "block",
+    "accept": [
+      "message",
+      "branch",
+      "owner"
+    ],
+    "exempt_paths": [
+      ".gatewright/"
+    ]
+  },
   "github": {
     "enabled": false,
     "repo": null,
@@ -447,6 +459,9 @@ gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]
 gw edit <id> [--title "..."] [--scope "..."] [--priority P] [--type T] [--phase P] [--gate G] [--deps a,b] [--refs a,b] [--by <who>]
 gw note <id> "<text>" [--by <who>]
 gw check [--json]
+gw guard [--message-file F | --message "..."] [--branch B] [--range A..B] [--pretool] [--warn] [--json]
+gw hook install [--ci] [--agent] [--force]
+gw hook status | gw hook uninstall [--ci] [--agent]
 gw show <id> [--json]
 gw list [--stage S] [--phase P] [--flag F] [--json]
 gw import <file> [--format md|csv|json]
@@ -536,7 +551,40 @@ item that hasn't been touched in a month is finished, not stale.
 
 Exit 1 if anything is reported.
 
-### 6.5 edit
+### 6.5 guard
+
+Every other rule in this document governs work that is already on the board. `guard` governs whether it got there at all — it is the only command whose failure is meant to stop something outside `gw` from happening, and it is the only enforcement point that is opt-in per repository (§6.6 installs it).
+
+One question: **which item accounts for this change?** Answered against the board's own ids, in this order, stopping at the first hit:
+
+1. **Exempt** — every changed path is under `guard.exempt_paths` (default `.gatewright/`). A commit that only records the board needs no item about itself.
+2. **Message** — the commit message names an id that exists on the board.
+3. **Branch** — the branch name names one. `feat/P1-07-thing` counts; `P1-011` is a different item and does not count as `P1-01`.
+4. **Owner** — the actor (§6, `--by` resolution) holds a claim on a non-terminal item.
+
+`guard.accept` (default `["message","branch","owner"]`) narrows the list. An id that is *not* on the board, and an id whose item is in a terminal stage, are each refused with their own sentence: both mean the author believes they are tracked and is not.
+
+Weak evidence is accepted deliberately. Any of the four proves someone opened the board before touching code, which is the whole claim being enforced. Anything stricter becomes the kind of hook people delete.
+
+Three modes, one decision module:
+
+- **commit** (default, or `--message-file` from the hook) — judges the staged files and the message. Exit 1 refuses the commit; `git commit --no-verify` remains available, and remains visible in the log.
+- **`--range A..B`** — judges every non-merge commit in the range on its own message and paths. A claim is local state that does not travel with a commit, so `owner` never applies here: CI judges what the commit itself says.
+- **`--pretool`** — judges an editor tool call read as JSON on stdin, *before* the edit happens, and answers on stdout in the provider hook contract (`permissionDecision: deny` with a reason naming `gw add` and `gw claim`). Exit is always 0: a refused edit is a decision, and a non-zero exit would read as a broken hook. This is the gate that keeps a plan from being written down only after the code is.
+
+`guard.mode: "warn"` reports and permits everywhere. `guard.enabled: false` is silent. A passing guard prints nothing at all.
+
+### 6.6 hook
+
+Installs the places `guard` can stand. Nothing here decides anything; each installation is a thin route to `gw guard`, so an old hook still asks the current CLI.
+
+- `gw hook install` — a `commit-msg` hook, fenced by `# gatewright:start`/`# gatewright:end` markers so it can live inside a hook the repository already had, and be removed again without taking that hook with it. Installed under `core.hooksPath` when the repository sets one, and `chmod +x`, because git skips a non-executable hook silently. If `gw` is not on `PATH` the block steps aside: a missing tool must never make a repository uncommittable.
+- `gw hook install --ci` — `.github/workflows/gatewright.yml`, running `gw check` and `gw guard --range` over a pull request, pinned to the installing version.
+- `gw hook install --agent` — the `PreToolUse` guard in the project's `.claude/settings.json`, merged into whatever hooks are already there and matched by command so re-running replaces rather than stacks. The Claude Code plugin in `adapters/claude-code` ships the same hook.
+
+`gw hook status` reports all three. `gw hook uninstall` reverses them, and deletes a hook file only when nothing but the shebang `gw` wrote is left.
+
+### 6.7 edit
 
 Changes item fields that aren't stage, owner, evidence, or notes — those have their own commands, because they have their own rules.
 
@@ -901,15 +949,17 @@ skipped, naming the flag, so the choice is visible rather than silent.
 ## Work tracking
 This repo uses gatewright. At the start of every session run `gw brief` and act on it.
 - Record progress only through the `gw` CLI. Never edit files in `.gatewright/` directly.
+- Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`. Your own plan steps: `gw note <id>`.
+- If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
 - If `gw move` refuses, fix the reason; do not use --force. Unsure what's next? `gw next <id>`.
 <!-- gatewright:end -->
 ```
 
 ## 12. Adapters (v0.4)
 
-`adapters/claude-code/` — plugin manifest with a `SessionStart` hook running `gw brief`, and a skill file pointing at the AGENTS.md rules.
+`adapters/claude-code/` — plugin manifest with a `SessionStart` hook running `gw brief`, a `PreToolUse` hook running `gw guard --pretool` before any edit or write (§6.5), and a skill file pointing at the AGENTS.md rules.
 `adapters/cursor/` — `.cursor/rules/gatewright.mdc` with the same block.
 `adapters/codex/` — snippet for `AGENTS.md` (Codex already reads it; adapter is docs only).
 `adapters/generic/` — the block above, for anything else.

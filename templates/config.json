@@ -62,6 +62,18 @@
       "merged"
     ]
   },
+  "guard": {
+    "enabled": true,
+    "mode": "block",
+    "accept": [
+      "message",
+      "branch",
+      "owner"
+    ],
+    "exempt_paths": [
+      ".gatewright/"
+    ]
+  },
   "github": {
     "enabled": false,
     "repo": null,

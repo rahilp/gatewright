@@ -1,0 +1,25 @@
+# Installed by `gw hook install --ci`. Two questions, both answered from the
+# committed board: is the board internally sound, and is every commit in this
+# pull request accounted for by an item on it?
+name: gatewright
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # guard walks the commits of the pull request, so the merge-base has
+          # to be in the clone.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: The board obeys its own rules
+        run: npx -y gatewright@0.10.0 check
+      - name: Every commit is on the board
+        run: npx -y gatewright@0.10.0 guard --range "${{ github.event.pull_request.base.sha }}..HEAD" --branch "${{ github.head_ref }}"
