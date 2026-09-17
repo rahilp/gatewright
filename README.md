@@ -305,7 +305,7 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 ## Status
 
-Gatewright is at v0.10.0.
+Gatewright is at v0.11.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only at the time; CSV and JSON arrived in v0.9), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
@@ -328,6 +328,12 @@ Shipped in v0.9: `gw check` now reports items holding values the vocabulary no l
 Shipped in v0.10: the board became something a human can manage the tracker with, rather than only read. Stages are added, renamed, reordered and removed from the UI; gates are built from a form showing the English read-back the board uses when it refuses a move; settings are edited from a view generated from the same schema `gw config` validates against. Those three are loopback only — moving a card is what `--host` is for, rewriting the rules of the board is not. Cards drag between columns, backward moves are offered separately for correcting a mis-drag, an unmet gate offers the action that clears it instead of a command to type, finished columns collapse so an archive-heavy board still shows live work, and `config.glossary` gives codes like `G0` a meaning wherever they appear.
 
 Agents got the larger fix. Following the shipped instruction block literally, an agent could not get an item through the pipeline: `gw move` refused a skipped stage with "use --force to skip stages", the one action the block forbids, and never named the stage to pass through first. It now names it and gives the command. `gw next <id>` answers what the browser could already ask and the CLI could not — the next stage and exactly what it needs. A child item inherits its parent's phase instead of being born into a different one, `brief` no longer counts a claimed-but-unstarted item as in flight, and it explains the codes it prints.
+
+Shipped in v0.11, and it breaks things on purpose. Capturing work costs one command: `gw add "Fix the login bug"` produces an item you can work on immediately, and phase, type and priority stay empty because they are genuinely unknown rather than guessed. That needed the default id scheme to become `seq` (`T-0001`), since `phase-seq` mints ids as `<phase>-<NN>` and so could not let a phase be absent — which is why an unlabelled GitHub issue and a bare `gw add` both used to land in P0. Unclassified work is now visibly untriaged instead of silently mislabelled, and `gw check` reports it without failing, because an inbox is not a defect.
+
+The `Specified` stage is gone and its scope rule moved to `Built`, beside the evidence rule: rigor belongs where completion is claimed, not where an idea is written down. Five commands became three.
+
+The item field `gate` was deleted rather than renamed. It was read by no rule, and its vocabulary duplicated `priority` — `G0` "the phase cannot be called done while this is open" against `P1` "do it in this phase". What remains is `requires` on a stage, which is what actually gates and is now the only thing the word means.
 
 Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 
