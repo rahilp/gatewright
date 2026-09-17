@@ -53,6 +53,25 @@ test('check catches a hand-placed verified item with no evidence', () => {
   assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*needs at least 2 evidence/i);
 });
 
+// The wording is the point: an untriaged item names BOTH ways out, because
+// classifying it and simply working it as-is are equally valid answers.
+// Superseded on the exit code only -- a fresh capture is reported without
+// failing; see the inbox tests below for why.
+test('check reports an untriaged item, naming both the classify and the claim-as-is fix', () => {
+  const b = board([item({ flag: 'needs-triage' })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'reported, but capturing an idea is not a violation');
+  assert.match(result.output(), /INBOX/);
+  assert.match(result.output(), /P1-01: classify with `gw edit P1-01 --phase P --type T --priority P`, or claim and work it as-is with `gw claim P1-01`/);
+});
+
+test('check does not report a classified item as needing triage', () => {
+  const b = board([item({ flag: null })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0);
+  assert.equal(result.output(), 'Board is clean.\n');
+});
+
 test('check does not report a legitimately verified item with two evidence entries', () => {
   const b = board([item({ stage: 'verified', owner: 'human:test', evidence: ['abc123', 'https://github.com/a/b/pull/1'] })]);
   const result = ctx(b);
@@ -165,4 +184,35 @@ test('a null field and an unconfigured vocabulary are not drift', () => {
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'an absent value is not a wrong value, and a vocabulary nobody configured constrains nothing');
   assert.match(result.output(), /clean/i);
+});
+
+// `gw check` runs in CI (.github/workflows/gatewright.yml). If a bare capture
+// failed it, jotting an idea would break the build and you would have to
+// classify it before you could commit — exactly the ceremony that one-command
+// capture exists to remove. An inbox is not a defect.
+test('a freshly captured untriaged item is reported but does not fail the check', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'capturing an idea must not break a build');
+  assert.match(result.output(), /INBOX — 1 item not classified yet/);
+  assert.doesNotMatch(result.output(), /NEEDS TRIAGE/, 'a fresh capture is not a violation');
+});
+
+// A rotting inbox is a different thing.
+test('an item left untriaged past stale_days becomes a violation', () => {
+  const old = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: old })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /NEEDS TRIAGE/);
+  assert.match(result.output(), /untriaged for over 7 days/);
+});
+
+test('json output carries notes separately from problems', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  const result = ctx(b, { json: true });
+  assert.equal(run(result.ctx), 0);
+  const parsed = JSON.parse(result.output());
+  assert.equal(parsed.problems.length, 0, 'an inbox entry is not a problem');
+  assert.equal(parsed.notes.length, 1, 'but it is still reported to anything reading json');
 });

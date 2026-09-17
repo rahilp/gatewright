@@ -36,10 +36,10 @@ test('templates/agents-block.md is a byte-exact copy of the AGENTS.md block in s
 
 test('stages.json parses: pipeline order, auto gates, terminal and side states match the spec default', () => {
   const parsed = JSON.parse(readTemplate('stages.json'));
-  assert.deepEqual(parsed.stages.map((s) => s.id), ['backlog', 'specified', 'building', 'built', 'in_review', 'reviewed', 'merged', 'verified']);
-  assert.deepEqual(parsed.stages.map((s) => s.label), ['Backlog', 'Specified', 'Building', 'Built', 'In review', 'Reviewed', 'Merged', 'Verified']);
+  assert.deepEqual(parsed.stages.map((s) => s.id), ['backlog', 'building', 'built', 'in_review', 'reviewed', 'merged', 'verified']);
+  assert.deepEqual(parsed.stages.map((s) => s.label), ['Backlog', 'Building', 'Built', 'In review', 'Reviewed', 'Merged', 'Verified']);
   const auto = Object.fromEntries(parsed.stages.map((s) => [s.id, s.auto === true]));
-  assert.deepEqual(auto, { backlog: false, specified: true, building: true, built: true, in_review: true, reviewed: false, merged: false, verified: false });
+  assert.deepEqual(auto, { backlog: false, building: true, built: true, in_review: true, reviewed: false, merged: false, verified: false });
   assert.equal(parsed.stages.find((s) => s.id === 'in_review').exit, 'PR opened and reviewer assigned.');
   assert.deepEqual(parsed.terminal, ['verified', 'dropped']);
   assert.deepEqual(parsed.extra.map((s) => s.id), ['dropped', 'paused']);
@@ -68,7 +68,7 @@ test('every deps_at_least in stages.json names a real stage', () => {
 test('config.json ships the ordered priority vocab, stale_days, tick_s, and disabled github and memory blocks', () => {
   const parsed = JSON.parse(readTemplate('config.json'));
   assert.equal(parsed.version, 1);
-  assert.equal(parsed.id_scheme, 'phase-seq');
+  assert.equal(parsed.id_scheme, 'seq');
   assert.deepEqual(parsed.vocab.priority, ['P0', 'P1', 'P2', 'P3']);
   assert.equal(parsed.check.stale_days, 7);
   assert.equal(parsed.runner.tick_s, 5);

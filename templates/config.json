@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "id_scheme": "phase-seq",
+  "id_scheme": "seq",
   "vocab": {
     "phase": [
       "P0",

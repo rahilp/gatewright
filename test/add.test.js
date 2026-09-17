@@ -14,9 +14,38 @@ const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 function repo(config = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-add-')); mkdirSync(join(root, '.gatewright')); writeFileSync(join(root, '.gatewright/config.json'), JSON.stringify({ vocab: { phase: ['P1', 'P2'] }, policy: {}, ...config })); const store = createStore(root); store.ensure(); return { root, store }; }
 
 test('add creates a fully defaulted item and exactly one add event', () => {
-  const { store } = repo(); let out = ''; const id = run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: ['hello'], stdout: { write: s => { out += s; } } });
+  const { store } = repo(); let out = ''; const id = run({ store, root: store.root, actor: 'human:me', flags: { phase: 'P1' }, positionals: ['hello'], stdout: { write: s => { out += s; } } });
   assert.equal(id, undefined); assert.equal(out, 'P1-01\n');
   const item = store.readItems()[0]; assert.equal(item.id, 'P1-01'); assert.equal(item.stage, 'backlog'); assert.equal(item.created_by, 'human'); assert.equal(item.owner, null); assert.deepEqual(item.deps, []); assert.deepEqual(item.refs, []); assert.equal(store.readEvents().length, 1); assert.equal(store.readEvents()[0].type, 'add');
+});
+
+test('a fresh default board goes from a bare `gw add` to "working on it" in add, claim, move -- no mandatory edit', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-capture-'));
+  execFileSync(process.execPath, [BIN, 'init', '--yes'], { cwd: root, encoding: 'utf8' });
+  const id = execFileSync(process.execPath, [BIN, 'add', 'Fix the login bug'], { cwd: root, encoding: 'utf8' }).trim();
+  assert.equal(id, 'T-0001', 'the shipped default id_scheme is seq, so a bare add needs no phase');
+
+  const store = createStore(root);
+  const created = store.readItems().find((item) => item.id === id);
+  assert.equal(created.phase, null);
+  assert.equal(created.type, null);
+  assert.equal(created.priority, null);
+  assert.equal(created.stage, 'backlog');
+
+  execFileSync(process.execPath, [BIN, 'claim', id], { cwd: root, encoding: 'utf8' });
+  execFileSync(process.execPath, [BIN, 'move', id, 'building'], { cwd: root, encoding: 'utf8' });
+  const building = store.readItems().find((item) => item.id === id);
+  assert.equal(building.stage, 'building');
+  assert.match(building.owner, /^human:/, 'claim assigns an owner with no --scope, --phase, or other edit required first');
+});
+
+test('add with no flags at all produces a workable item: no phase, type or priority guessed', () => {
+  const { store } = repo({ id_scheme: 'seq', vocab: null }); let out = '';
+  const id = run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: ['Fix the login bug'], stdout: { write: s => { out += s; } } });
+  assert.equal(id, undefined); assert.equal(out, 'T-0001\n');
+  const item = store.readItems()[0];
+  assert.equal(item.id, 'T-0001'); assert.equal(item.phase, null); assert.equal(item.type, null); assert.equal(item.priority, null);
+  assert.equal(item.stage, 'backlog'); assert.equal(item.flag, 'needs-triage', 'unclassified capture is held from the scheduler, not silently marked ready');
 });
 
 test('seq config produces board-wide ids and children', () => {
@@ -45,15 +74,17 @@ test('seq remains usable without vocabulary on the same board shape', () => {
 test('add uses the custom pipeline initial stage', () => {
   const { root, store } = repo();
   writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'icebox', label: 'Icebox' }, { id: 'building', label: 'Building' }], terminal: [] }));
-  const result = spawnSync(process.execPath, [BIN, 'add', 'custom stage item'], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [BIN, 'add', 'custom stage item', '--phase', 'P1'], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.equal(store.readItems()[0].stage, 'icebox');
 });
 
-test('add defaults phase from vocabulary, or null without vocabulary', () => {
-  const configured = repo({ vocab: { phase: ['Discovery', 'Delivery'] } });
+test('add never guesses a phase from vocabulary; phase is null unless given', () => {
+  // Capture must not invent a classification: a board with a phase vocabulary
+  // configured still leaves phase null when the caller does not name one.
+  const configured = repo({ id_scheme: 'seq', vocab: { phase: ['Discovery', 'Delivery'] } });
   run({ store: configured.store, root: configured.root, actor: 'human:me', flags: {}, positionals: ['configured'], stdout: { write() {} } });
-  assert.equal(configured.store.readItems()[0].phase, 'Discovery');
+  assert.equal(configured.store.readItems()[0].phase, null);
 
   const unconfigured = repo({ id_scheme: 'seq', vocab: null });
   run({ store: unconfigured.store, root: unconfigured.root, actor: 'human:me', flags: {}, positionals: ['unconfigured'], stdout: { write() {} } });
@@ -82,7 +113,10 @@ test('agent creation is held, is capped per parent, and a human is not subject t
   store.writeItems([{ id: 'P1-01', parent: null }, ...Array.from({ length: 10 }, (_, n) => ({ id: `P1-01.${n + 1}`, parent: 'P1-01' }))]);
   assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: ['eleventh'], stdout: { write() {} } }), /P1-01.*max_children_per_item \(10\)/);
   run({ store, root: store.root, actor: 'human:lead', flags: { parent: 'P1-01' }, positionals: ['human child'], stdout: { write() {} } });
-  assert.equal(store.readItems().at(-1).flag, null);
+  // Not subject to the agent cap. It is still unclassified (no phase/type/priority
+  // -- the parent stub carries none to inherit), so it is held from the scheduler
+  // exactly like an agent-held item -- but claim/move never consult that flag.
+  assert.equal(store.readItems().at(-1).flag, 'needs-triage');
 });
 
 test('a fourth-generation child is refused at the default max_depth of 3', () => {
@@ -95,10 +129,10 @@ test('a fourth-generation child is refused at the default max_depth of 3', () =>
 });
 
 test('agent child-creation loop terminates at the cap with every created item held and none schedulable', () => {
-  const { store } = repo({ policy: { max_children_per_item: 10, triage_required_for: ['agent'], auto_dispatch_children: false } });
+  const { store } = repo({ id_scheme: 'seq', policy: { max_children_per_item: 10, triage_required_for: ['agent'], auto_dispatch_children: false } });
   run({ store, root: store.root, actor: 'agent:r', flags: {}, positionals: ['root'], stdout: { write() {} } });
-  for (let n = 0; n < 10; n += 1) run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: [`child ${n}`], stdout: { write() {} } });
-  assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: ['one too many'], stdout: { write() {} } }), /max_children_per_item \(10\)/);
+  for (let n = 0; n < 10; n += 1) run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'T-0001' }, positionals: [`child ${n}`], stdout: { write() {} } });
+  assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'T-0001' }, positionals: ['one too many'], stdout: { write() {} } }), /max_children_per_item \(10\)/);
   const items = store.readItems();
   assert.equal(items.length, 11); assert.equal(items.filter((item) => item.flag === 'needs-triage').length, 11);
   assert.equal(items.filter((item) => isSchedulable(item, { config: {}, stages: readStages(store), items })).length, 0);
@@ -128,18 +162,18 @@ test('explicit --phase on child still wins over parent\'s phase', () => {
   assert.equal(child.phase, 'P0');
 });
 
-test('top-level item unaffected by phase inheritance logic', () => {
-  const { store } = repo({ vocab: { phase: ['P0', 'P1'] } });
+test('top-level item is unaffected by parent phase-inheritance logic', () => {
+  const { store } = repo({ id_scheme: 'seq', vocab: { phase: ['P0', 'P1'] } });
   run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: ['top-level'], stdout: { write() {} } });
   const item = store.readItems()[0];
-  assert.equal(item.phase, 'P0');
+  assert.equal(item.phase, null, 'no parent to inherit from, and capture never guesses a phase from vocab');
   assert.equal(item.parent, null);
 });
 
-test('parent with no phase falls back to vocab default', () => {
-  const { store } = repo({ vocab: { phase: ['P0', 'P1'] } });
+test('parent with no phase leaves the child phase null; no vocab fallback', () => {
+  const { store } = repo({ id_scheme: 'seq', vocab: { phase: ['P0', 'P1'] } });
   store.writeItems([{ id: 'T-0001', phase: null, parent: null }]);
   run({ store, root: store.root, actor: 'human:me', flags: { parent: 'T-0001' }, positionals: ['child'], stdout: { write() {} } });
   const child = store.readItems().find((item) => item.parent === 'T-0001');
-  assert.equal(child.phase, 'P0');
+  assert.equal(child.phase, null);
 });

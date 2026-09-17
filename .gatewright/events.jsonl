@@ -766,3 +766,25 @@
 {"ts":"2026-09-17T14:25:19.366Z","type":"move","item":"P0-10","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T14:25:19.425Z","type":"move","item":"P0-10","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T15:59:05.823Z","type":"move","item":"P0-10","from":"building","to":"built","by":"human:rahil","evidence":["5e16dad",".gitignore"]}
+{"ts":"2026-09-17T15:59:22.839Z","type":"add","item":"P0-11","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T15:59:22.898Z","type":"add","item":"P0-12","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T15:59:22.982Z","type":"add","item":"P0-13","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T15:59:23.064Z","type":"add","item":"P0-14","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T15:59:30.963Z","type":"claim","item":"P0-11","by":"human:rahil"}
+{"ts":"2026-09-17T15:59:31.022Z","type":"move","item":"P0-11","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.078Z","type":"move","item":"P0-11","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.133Z","type":"claim","item":"P0-12","by":"human:rahil"}
+{"ts":"2026-09-17T15:59:31.196Z","type":"move","item":"P0-12","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.280Z","type":"move","item":"P0-12","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.335Z","type":"claim","item":"P0-13","by":"human:rahil"}
+{"ts":"2026-09-17T15:59:31.388Z","type":"move","item":"P0-13","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.445Z","type":"move","item":"P0-13","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.516Z","type":"claim","item":"P0-14","by":"human:rahil"}
+{"ts":"2026-09-17T15:59:31.577Z","type":"move","item":"P0-14","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:31.638Z","type":"move","item":"P0-14","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T16:03:13.467Z","type":"add","item":"P0-15","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T16:21:53.872Z","type":"move","item":"P0-11","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/add.js","verified: gw add 'Fix the login bug' -> T-0001, workable in 3 commands"]}
+{"ts":"2026-09-17T16:21:53.930Z","type":"move","item":"P0-12","from":"building","to":"built","by":"human:rahil","evidence":["templates/config.json","verified: seq default, phase null, phase-seq still refuses null"]}
+{"ts":"2026-09-17T16:21:53.991Z","type":"move","item":"P0-13","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/check.js","verified: INBOX at exit 0, NEEDS TRIAGE at exit 1 past stale_days"]}
+{"ts":"2026-09-17T16:21:54.051Z","type":"move","item":"P0-14","from":"building","to":"built","by":"human:rahil","evidence":["templates/stages.json","verified: built requires scope AND evidence; specified gone"]}
+{"ts":"2026-09-17T16:22:15.238Z","type":"move","item":"P0-11","from":"built","to":"building","by":"human:rahil","evidence":[]}

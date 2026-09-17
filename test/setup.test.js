@@ -47,7 +47,7 @@ test('choosing the trunk workflow ends the pipeline at built and marks it done',
   const { input, output } = fakeTty(['1', '1', '', 'n']);
   await init(ctxFor(cwd, { stdin: input, stdout: output }));
   const stages = read(cwd, 'stages.json');
-  assert.deepEqual(stages.stages.map((stage) => stage.id), ['backlog', 'specified', 'building', 'built']);
+  assert.deepEqual(stages.stages.map((stage) => stage.id), ['backlog', 'building', 'built']);
   assert.equal(stages.stages.at(-1).role, 'done');
   assert.equal(isTerminalStage('built', stages), true, 'finished work must not read as still in flight');
   assert.equal(read(cwd, 'config.json').runner.enabled, false);

@@ -31,24 +31,24 @@ test('the full binary workflow uses a foreign pipeline exclusively', () => {
 
   const output = [];
   output.push(run(root, ['add', 'Ship the first item']));
-  assert.equal(store.readItems().find((item) => item.id === 'P0-01').stage, 'icebox');
-  output.push(run(root, ['claim', 'P0-01']));
-  output.push(run(root, ['move', 'P0-01', 'speccing']));
-  output.push(run(root, ['move', 'P0-01', 'coding']));
+  assert.equal(store.readItems().find((item) => item.id === 'T-0001').stage, 'icebox');
+  output.push(run(root, ['claim', 'T-0001']));
+  output.push(run(root, ['move', 'T-0001', 'speccing']));
+  output.push(run(root, ['move', 'T-0001', 'coding']));
   assert.throws(
-    () => run(root, ['move', 'P0-01', 'shipped']),
+    () => run(root, ['move', 'T-0001', 'shipped']),
     (error) => error.status === 1 && /needs at least 1 evidence/.test(error.stderr),
   );
-  output.push(run(root, ['move', 'P0-01', 'shipped', '--evidence', 'commit:abc123']));
+  output.push(run(root, ['move', 'T-0001', 'shipped', '--evidence', 'commit:abc123']));
 
   const markdown = join(root, 'import.md');
-  writeFileSync(markdown, '## P0 — Imported\n- **P0-03** · Checked item · feature · G0 · P0-02 · Done ✅\n');
+  writeFileSync(markdown, '## P0 — Imported\n- **P0-03** · Checked item · feature · G0 · T-0002 · Done ✅\n');
   output.push(run(root, ['add', 'Bin the dependency']));
-  output.push(run(root, ['move', 'P0-02', 'binned']));
+  output.push(run(root, ['move', 'T-0002', 'binned']));
   output.push(run(root, ['import', markdown]));
   const imported = store.readItems().find((item) => item.id === 'P0-03');
   assert.equal(imported.stage, 'icebox');
-  assert.deepEqual(imported.deps, ['P0-02']);
+  assert.deepEqual(imported.deps, ['T-0002']);
 
   let checkFailure;
   try {
@@ -59,7 +59,7 @@ test('the full binary workflow uses a foreign pipeline exclusively', () => {
   assert.equal(checkFailure?.status, 1);
   const checkOutput = checkFailure.stdout;
   assert.match(checkOutput, /P0-03/);
-  assert.match(checkOutput, /P0-02/);
+  assert.match(checkOutput, /T-0002/);
   output.push(run(root, ['brief']));
 
   const emitted = output.join('');

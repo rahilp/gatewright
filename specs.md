@@ -57,7 +57,7 @@ Field rules:
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
-| `id` | string | tracker | Unique. Format set in config (`id_scheme`); default `phase-seq` → `P2-01`, children `P2-01.1`. Never reused, and never rewritten: an item that changes `phase` keeps the ID it was created with, because evidence links and the event log point at it. The prefix records where the item started, `phase` records where it is. |
+| `id` | string | tracker | Unique. Format set in config (`id_scheme`); default `seq` → `T-0001`. Boards that choose `phase-seq` mint `<phase>-<nn>` instead (children `<parent>.<n>` under either scheme), and cannot mint an id for an item with no phase. Never reused, and never rewritten: an item that changes `phase` keeps the ID it was created with, because evidence links and the event log point at it. The prefix records where the item started, `phase` records where it is. |
 | `title` | string | github if linked, else human/agent | ≤120 chars |
 | `phase`, `priority`, `gate`, `type` | string | github if linked (via label map), else human/agent | Values are free-form but validated against `config.vocab` if present |
 | `stage` | string | tracker | Must be a key in `stages.json` |
@@ -115,15 +115,6 @@ The event log is the source of truth for "what happened." `items.jsonl` is a mat
       "label": "Backlog"
     },
     {
-      "id": "specified",
-      "label": "Specified",
-      "exit": "Scope is written: what done looks like. Someone can now pick it up.",
-      "auto": true,
-      "requires": {
-        "scope": true
-      }
-    },
-    {
       "id": "building",
       "label": "Building",
       "exit": "Change is complete locally with tests passing.",
@@ -135,9 +126,10 @@ The event log is the source of truth for "what happened." `items.jsonl` is a mat
     {
       "id": "built",
       "label": "Built",
-      "exit": "Evidence recorded: commit and test path.",
+      "exit": "Scope is written and evidence recorded: commit and test path.",
       "auto": true,
       "requires": {
+        "scope": true,
         "evidence_min": 1,
         "deps_at_least": "built"
       }
@@ -249,7 +241,7 @@ same choice already made for `auto`.
 - `dropped` and `paused` — a stage with that `id`, if one exists, whether in the
   pipeline or in `extra`.
 
-The shipped eight-stage default therefore declares no roles at all: `backlog` is
+The shipped seven-stage default therefore declares no roles at all: `backlog` is
 first, `verified` is last, and `dropped` and `paused` are found by id. An
 existing board keeps working with no migration.
 
@@ -284,7 +276,7 @@ entry with `gw config glossary.gate.G0 "..."`; an empty value removes it.
 ```json
 {
   "version": 1,
-  "id_scheme": "phase-seq",
+  "id_scheme": "seq",
   "vocab": {
     "phase": [
       "P0",
@@ -484,14 +476,14 @@ Output format (fixed order, sections omitted when empty):
 gw · 12 open · 3 in flight · 1 blocked · main@895e249
 
 DISPATCHED TO YOU
-  P2-01  Operation Enabled group readiness barrier   specified → building
+  P2-01  Operation Enabled group readiness barrier   backlog → building
 
 IN FLIGHT
   P0-03  Budgets: input age, Stop response...        building   agent:r-0041
   P2-07  ...                                          in_review  human:rahil
 
 BLOCKED
-  P2-12  ...                                          waiting on P2-01 (specified)
+  P2-12  ...                                          waiting on P2-01 (backlog)
 
 NEEDS TRIAGE (2)
   P2-01.1  Jog timeout not reset on abort            created by agent:r-0040
@@ -509,7 +501,7 @@ Hard cap from `config.brief.max_lines`. Sections are truncated with `(+n more)` 
 ### 6.2 move
 
 1. Load item and target stage.
-2. If target is not the next stage in order and `--force` is absent → exit 1, naming the stage that must be passed through first and the command to get there: `specified: move here first: run \`gw move P1-01 specified\``. A backward target says so and names `--force`, which is the only lawful way to move backward. The refusal must never answer with a bare `--force`: it prints the whole command, and the shipped AGENTS.md block permits `--force` exactly when a refusal names it — for order, never for a gate — so that a compliant agent is never left without a next step.
+2. If target is not the next stage in order and `--force` is absent → exit 1, naming the stage that must be passed through first and the command to get there: `building: move here first: run \`gw move P1-01 building\``. A backward target says so and names `--force`, which is the only lawful way to move backward. The refusal must never answer with a bare `--force`: it prints the whole command, and the shipped AGENTS.md block permits `--force` exactly when a refusal names it — for order, never for a gate — so that a compliant agent is never left without a next step.
 3. Evaluate target's `requires`. Any failure → exit 1 with each failed rule on its own line.
 4. Update `stage`, `updated`; append provided evidence; clear `flag` if it was `paused`.
 5. Append `move` event.
@@ -530,8 +522,8 @@ Order 1 before 2 before 3 is load-bearing. Reading "no next stage" as "outside t
 ### 6.3 add
 
 1. Validate parent exists if given.
-2. If `--by` is `agent:*`: enforce `max_children_per_item` on the parent; set `flag: needs-triage` if `policy.triage_required_for` includes `agent` and `auto_dispatch_children` is false.
-3. Assign ID per `id_scheme`. `phase-seq`: `<phase>-<nn>`, children get `<parent>.<n>`.
+2. If `--by` is `agent:*`: enforce `max_children_per_item` on the parent; set `flag: needs-triage` if `policy.triage_required_for` includes `agent` and `auto_dispatch_children` is false. Independently of actor: an item with no `phase`, `type` and `priority` also gets `flag: needs-triage` — capture never guesses a classification, so an unclassified item is held from the scheduler's eligibility check the same way, but `claim` and `move` never consult that check, so a human can still pick it up and work it immediately.
+3. Assign ID per `id_scheme`. `seq` (default): `T-<nnnn>`. `phase-seq`: `<phase>-<nn>`, and refuses when `phase` is null. Children get `<parent>.<n>` under either scheme.
 4. Append item line, append `add` event, print the new ID on stdout (and only the ID, so agents can capture it).
 
 ### 6.4 check
@@ -547,6 +539,7 @@ Then the board itself. Two different scopes, and the difference matters:
 **Every item, terminal included:**
 - exit-rule violations at its current stage (should not happen through the CLI; catches the hand edits the digest just flagged)
 - deps that don't exist, dep cycles, deps in `dropped`
+- `flag: needs-triage` — reported, never silent. It is invisible to the *scheduler* by design (§10), but a board is not; `check` names the item and offers both outs, classifying it or claiming it as-is.
 
 Terminal items are checked precisely *because* they are terminal. Editing an
 item into `verified` by hand is the cheapest way to fake a finished board, so
