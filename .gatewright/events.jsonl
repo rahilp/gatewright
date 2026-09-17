@@ -720,3 +720,49 @@
 {"ts":"2026-09-15T23:45:48.753Z","type":"move","item":"P8-14","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: row move select offers only permitted moves, 'Built (not ready)' disabled without evidence"]}
 {"ts":"2026-09-15T23:45:48.814Z","type":"move","item":"P8-16","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: owner noise gone, ev badge only when the next gate is short, tooltip explains it"]}
 {"ts":"2026-09-15T23:45:48.880Z","type":"move","item":"P8-17","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: filter bar display:none on Stages and Settings"]}
+{"ts":"2026-09-16T09:30:44.005Z","type":"claim","item":"P5-13","by":"human:rahil"}
+{"ts":"2026-09-16T09:31:33.130Z","type":"move","item":"P8-08","from":"built","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T10:37:23.991Z","type":"add","item":"P2-10","by":"agent:claude","parent":null}
+{"ts":"2026-09-17T10:37:31.097Z","type":"edit","item":"P2-10","by":"agent:claude","fields":["scope"]}
+{"ts":"2026-09-17T10:37:31.150Z","type":"claim","item":"P2-10","by":"agent:claude"}
+{"ts":"2026-09-17T10:37:31.206Z","type":"move","item":"P2-10","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T10:37:31.262Z","type":"move","item":"P2-10","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T10:46:45.919Z","type":"note","item":"P2-10","by":"agent:claude","note":"Three gates, one decision module (lib/guard.js): pre-edit (provider PreToolUse), commit-msg hook, and gw guard --range in CI. Found by running guard against this repo's own board: items in a role:'done' stage were still vouching for later commits; fixed via isTerminalStage."}
+{"ts":"2026-09-17T10:46:45.972Z","type":"move","item":"P2-10","from":"building","to":"built","by":"agent:claude","evidence":["test/guard.test.js","test/hook.test.js","491 tests green"]}
+{"ts":"2026-09-17T11:01:10.406Z","type":"move","item":"P2-10","from":"built","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:01:10.468Z","type":"add","item":"P2-11","by":"agent:claude","parent":null}
+{"ts":"2026-09-17T11:01:28.707Z","type":"move","item":"P2-10","from":"building","to":"built","by":"agent:claude","evidence":["33ec977","test/guard.test.js","test/hook.test.js"]}
+{"ts":"2026-09-17T11:03:16.525Z","type":"add","item":"P2-10.1","by":"agent:claude","parent":"P2-10"}
+{"ts":"2026-09-17T11:03:16.577Z","type":"claim","item":"P2-10.1","by":"agent:claude"}
+{"ts":"2026-09-17T11:03:16.626Z","type":"move","item":"P2-10.1","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:03:16.681Z","type":"move","item":"P2-10.1","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:03:31.421Z","type":"move","item":"P2-10.1","from":"building","to":"built","by":"agent:claude","evidence":["de88d02","test/guard.test.js","493 tests green"]}
+{"ts":"2026-09-17T11:16:54.123Z","type":"flag","item":"P2-11","flag":null,"by":"human:rahil","reason":"triage approved"}
+{"ts":"2026-09-17T11:19:25.617Z","type":"edit","item":"P2-11","by":"agent:claude","fields":["title","scope"]}
+{"ts":"2026-09-17T11:19:25.672Z","type":"claim","item":"P2-11","by":"agent:claude"}
+{"ts":"2026-09-17T11:19:25.728Z","type":"move","item":"P2-11","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:19:25.787Z","type":"move","item":"P2-11","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:22:06.600Z","type":"move","item":"P2-11","from":"building","to":"built","by":"agent:claude","evidence":["e83f685","test/rules.test.js","495 tests green"]}
+{"ts":"2026-09-17T11:33:11.206Z","type":"add","item":"P2-10.2","by":"agent:claude","parent":"P2-10"}
+{"ts":"2026-09-17T11:33:11.261Z","type":"claim","item":"P2-10.2","by":"agent:claude"}
+{"ts":"2026-09-17T11:33:11.327Z","type":"move","item":"P2-10.2","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:33:11.382Z","type":"move","item":"P2-10.2","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:33:28.679Z","type":"move","item":"P2-10.2","from":"building","to":"built","by":"agent:claude","evidence":["b55c5c0","test/paths.test.js","497 tests green"]}
+{"ts":"2026-09-17T11:34:24.932Z","type":"sync","pulled":1,"pushed":0,"conflicts":0}
+{"ts":"2026-09-17T11:34:39.318Z","type":"add","item":"P0-09","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T11:35:46.265Z","type":"add","item":"P2-10.3","by":"agent:claude","parent":"P2-10"}
+{"ts":"2026-09-17T11:35:46.318Z","type":"claim","item":"P2-10.3","by":"agent:claude"}
+{"ts":"2026-09-17T11:35:46.381Z","type":"move","item":"P2-10.3","from":"backlog","to":"specified","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:35:46.441Z","type":"move","item":"P2-10.3","from":"specified","to":"building","by":"agent:claude","evidence":[]}
+{"ts":"2026-09-17T11:35:52.361Z","type":"move","item":"P2-10.3","from":"building","to":"built","by":"agent:claude","evidence":["cd6b1be","test/paths.test.js","499 tests green"]}
+{"ts":"2026-09-17T11:40:44.882Z","type":"claim","item":"P0-09","by":"human:rahil"}
+{"ts":"2026-09-17T11:40:44.939Z","type":"move","item":"P0-09","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T11:40:45.044Z","type":"move","item":"P0-09","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T11:40:45.097Z","type":"move","item":"P0-09","from":"building","to":"built","by":"human:rahil","evidence":["templates/config.json","lib/commands/init.js","test/serve.test.js","verified: board reports enabled/idle/5min after gw config"]}
+{"ts":"2026-09-17T11:41:19.626Z","type":"move","item":"P0-09","from":"built","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T11:41:28.659Z","type":"move","item":"P0-09","from":"building","to":"built","by":"human:rahil","evidence":["d86816f","test/serve.test.js","verified: board reports enabled/idle/5min"]}
+{"ts":"2026-09-17T14:25:19.201Z","type":"add","item":"P0-10","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T14:25:19.310Z","type":"claim","item":"P0-10","by":"human:rahil"}
+{"ts":"2026-09-17T14:25:19.366Z","type":"move","item":"P0-10","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T14:25:19.425Z","type":"move","item":"P0-10","from":"specified","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T15:59:05.823Z","type":"move","item":"P0-10","from":"building","to":"built","by":"human:rahil","evidence":["5e16dad",".gitignore"]}

@@ -51,7 +51,34 @@ $ gw move P1-01 built --evidence abc1234 --evidence test/scheduler.test.js
 P1-01  building → built  ·  evidence: abc1234, test/scheduler.test.js
 ```
 
-`--force` exists to skip stages, not to skip rules. Use it when the pipeline order is wrong, not when the rule is.
+`--force` exists to skip stages, not to skip rules. Use it when the pipeline order is wrong, not when the rule is — reopening finished work and re-entering from a side stage are order, and the refusal prints the forced command for you. No refusal ever asks you to force your way past a gate.
+
+## Opting in is the part instructions cannot enforce
+
+Everything above governs work that is already on the board. Nothing in it stops a person or an agent from editing code and committing without ever touching `gw` — and instructions in `AGENTS.md` are advice, not a gate. `gw hook install` turns that advice into three gates, all of them asking one question: *which item accounts for this change?*
+
+```
+$ gw hook install --ci --agent
+gw: installed the commit-msg hook at .git/hooks/commit-msg
+gw: wrote .github/workflows/gatewright.yml
+gw: edits are now gated before they happen — wrote the PreToolUse guard to .claude/settings.json
+
+$ git commit -m "quick fix"
+gw: this change is not on the board.
+  no item is claimed by human:you, and neither the commit message nor the branch names one.
+  Fix one of:
+    gw brief — see what is already on the board
+    gw claim <id> — take the item this change belongs to
+    gw add "<what this change is>" — if it is not on the board yet
+    name the item in the commit message, e.g. "P1-07: <subject>"
+  Deliberate exception: git commit --no-verify
+```
+
+- **Before the edit** (`--agent`): an agent's first `Edit` or `Write` is refused until the work is on the board, so the plan gets written down while it still exists. This is the one that matters most: told at commit time, an agent has already lost the plan it should have recorded.
+- **At the commit** (`commit-msg`): a claimed item, an id in the commit message, or an id in the branch name all count. Commits that only touch `.gatewright/` are exempt.
+- **In CI** (`--ci`): `gw check` audits the board, and `gw guard --range` audits every commit in the pull request. A claim is local state that does not travel with a commit, so CI judges what the commit itself says.
+
+`--no-verify` still works, on purpose — a tracker that cannot be bypassed is a tracker that gets uninstalled, and a bypass leaves a record. Set `guard.mode` to `"warn"` to report without blocking, or `guard.enabled` to `false` to switch it off.
 
 ## How it works
 
@@ -201,6 +228,8 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw show <id> [--json]` | Print one item and its events |
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
 | `gw check [--json]` | Report rule violations, vocabulary drift, and out-of-band writes; exit 1 on any report |
+| `gw guard [--message-file F] [--range A..B] [--pretool] [--warn] [--json]` | Refuse a change no board item accounts for: a commit (via the hook), every commit in a range (via CI), or an agent's edit before it happens |
+| `gw hook install [--ci] [--agent] [--force]` | Install the enforcement points: a `commit-msg` hook, a pull-request workflow, and the agent pre-edit guard. Also `gw hook status` and `gw hook uninstall` |
 | `gw help <command>`, `gw <command> --help` | Print that command's own usage and flags |
 | `gw config [<key> [<value>]] [--list]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script |
 | `gw import <file> [--format md\|csv\|json] [--dry-run]` | Ingest a task list. The format is inferred from the extension. CSV needs `id` and `title` columns and understands common aliases; JSON takes a bare array or an `items` wrapper. A source stage is honoured only if the item's evidence actually earns it, and every downgrade is reported |
@@ -224,15 +253,17 @@ The full contract, including field ownership, the move algorithm, and the brief 
 ## Work tracking
 This repo uses gatewright. At the start of every session run `gw brief` and act on it.
 - Record progress only through the `gw` CLI. Never edit files in `.gatewright/` directly.
+- Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`. Your own plan steps: `gw note <id>`.
-- If `gw move` refuses, fix the reason; do not use --force.
+- If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
+- If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.
 <!-- gatewright:end -->
 ```
 
 The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item.
 
-Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief`; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
+Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
 
 ## Choosing a workflow shape
 

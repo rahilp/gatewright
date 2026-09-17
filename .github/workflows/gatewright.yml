@@ -1,0 +1,26 @@
+# Installed by `gw hook install --ci`, then pointed at this checkout. The
+# shipped template runs `npx gatewright@<version>`; gatewright's own repository
+# has to gate itself on the CLI in the pull request, not on the last published
+# one -- which by definition does not yet contain what the pull request adds.
+name: gatewright
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # guard walks the commits of the pull request, so the merge-base has
+          # to be in the clone.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: The board obeys its own rules
+        run: node bin/gw.js check
+      - name: Every commit is on the board
+        run: node bin/gw.js guard --range "${{ github.event.pull_request.base.sha }}..HEAD" --branch "${{ github.head_ref }}"

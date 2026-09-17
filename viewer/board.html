@@ -1126,7 +1126,8 @@
 
   function renderHeader() {
     const sync = State.sync || { status: 'off' };
-    const syncText = sync.status === 'off' ? ''
+    const syncText = sync.status === 'unscheduled' ? 'github · enabled but not scheduled'
+      : sync.status === 'off' ? ''
       : sync.status === 'success' ? 'github · synced ' + syncAge(sync.lastSuccessAt) + ' ago'
         : sync.status === 'stale' ? 'github · sync stale'
           : sync.status === 'failure' ? 'github · sync failing' : 'github · syncing';
@@ -1950,6 +1951,8 @@
     { key: 'policy.max_depth', type: 'integer', min: 1, max: 10, summary: 'How deep agent-created work may nest.' },
     { key: 'id_scheme', type: 'string', choices: ['phase-seq', 'seq'], summary: 'phase-seq gives P1-01; seq gives T-0001.' },
     { key: 'memory.enabled', type: 'boolean', summary: 'Recall prior context into prompts and remember completed work.' },
+    { key: 'github.enabled', type: 'boolean', summary: 'Pull linked GitHub issues and push comments.' },
+    { key: 'github.sync_interval_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes between automatic syncs while `gw serve` runs.' },
     { key: 'vocab.phase', type: 'list', summary: 'Allowed --phase values, in order. Comma-separated.' },
     { key: 'vocab.priority', type: 'list', summary: 'Allowed --priority values, most urgent first.' },
     { key: 'vocab.gate', type: 'list', summary: 'Allowed --gate values.' },
