@@ -146,6 +146,33 @@ test('a passing guard is silent, because a hook that chatters gets uninstalled',
   assert.equal(result.out() + result.err(), '');
 });
 
+// A pull request is reviewed after its work is done. Refusing it because the
+// item it names reached the finish line would fail every completed branch.
+test('--range accepts a commit naming an item that has since been finished', () => {
+  const b = board([item({ id: 'P1-01', stage: 'verified' })]);
+  const git = fakeGit({
+    'rev-list': 'aaaaaaaaaaaa\n',
+    'log -1 --format=%B aaaaaaaaaaaa': 'P1-01: the work\n',
+    'show --name-only --format= aaaaaaaaaaaa': 'lib/a.js\n',
+  });
+  const result = ctx(b, { range: 'main..HEAD', branch: 'feature' });
+  assert.equal(run(result.ctx, { git }), 0);
+
+  // The same commit, made now rather than reviewed later, is still refused.
+  assert.equal(guardCommit({ message: 'P1-01: the work', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages }).ok, false);
+});
+
+test('--range still refuses a commit naming an item that does not exist', () => {
+  const b = board([item()]);
+  const git = fakeGit({
+    'rev-list': 'aaaaaaaaaaaa\n',
+    'log -1 --format=%B aaaaaaaaaaaa': 'P9-99: invented\n',
+    'show --name-only --format= aaaaaaaaaaaa': 'lib/a.js\n',
+  });
+  const result = ctx(b, { range: 'main..HEAD', branch: 'feature' });
+  assert.equal(run(result.ctx, { git }), 1);
+});
+
 test('--range judges every commit in the range on its own message, not on who claimed what', () => {
   const b = board([item({ owner: 'human:test' })]);
   const git = fakeGit({

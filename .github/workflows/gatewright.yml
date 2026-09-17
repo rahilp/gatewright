@@ -1,6 +1,7 @@
-# Installed by `gw hook install --ci`. Two questions, both answered from the
-# committed board: is the board internally sound, and is every commit in this
-# pull request accounted for by an item on it?
+# Installed by `gw hook install --ci`, then pointed at this checkout. The
+# shipped template runs `npx gatewright@<version>`; gatewright's own repository
+# has to gate itself on the CLI in the pull request, not on the last published
+# one -- which by definition does not yet contain what the pull request adds.
 name: gatewright
 
 on:
@@ -20,6 +21,6 @@ jobs:
         with:
           node-version: '22'
       - name: The board obeys its own rules
-        run: npx -y gatewright@0.10.0 check
+        run: node bin/gw.js check
       - name: Every commit is on the board
-        run: npx -y gatewright@0.10.0 guard --range "${{ github.event.pull_request.base.sha }}..HEAD" --branch "${{ github.head_ref }}"
+        run: node bin/gw.js guard --range "${{ github.event.pull_request.base.sha }}..HEAD" --branch "${{ github.head_ref }}"
