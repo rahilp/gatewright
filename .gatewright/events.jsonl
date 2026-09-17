@@ -791,3 +791,4 @@
 {"ts":"2026-09-17T16:22:16.003Z","type":"move","item":"P0-11","from":"building","to":"built","by":"human:rahil","evidence":["141383c","lib/commands/add.js"]}
 {"ts":"2026-09-17T20:09:27.198Z","type":"claim","item":"P0-15","by":"human:rahil"}
 {"ts":"2026-09-17T20:32:01.437Z","type":"move","item":"P0-15","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T20:32:02.189Z","type":"move","item":"P0-15","from":"building","to":"built","by":"human:rahil","evidence":["3467495","verified: mechanism refuses and describes; --gate rejected; legacy key invisible"]}
