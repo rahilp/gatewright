@@ -538,9 +538,13 @@ test('the poll cannot wipe a half-typed item panel', () => {
     /if \(State\.activePanelId && !panelIsDirty\(\)\) openPanel\(State\.activePanelId\);/,
     'the poll redraws the open panel only while nothing in it is half-typed',
   );
-  const refreshTransitions = SHELL.match(/async function refreshTransitions\([\s\S]*?\n  \}/);
+  // T-0079: refreshTransitions returns its in-flight promise, so a caller
+  // arriving mid-fetch (a drop beating dragstart's request) waits on the SAME
+  // verdict instead of being told the answer is still loading.
+  const refreshTransitions = SHELL.match(/function refreshTransitions\([\s\S]*?\n  \}/);
   assert.ok(refreshTransitions);
   assert.match(refreshTransitions[0], /!panelIsDirty\(\)/, 'a transition verdict landing must not wipe typing either');
+  assert.match(refreshTransitions[0], /return State\.transitionLoading\[id\];/, 'an in-flight fetch is awaited, never silently dropped');
   const refreshRunLog = SHELL.match(/async function refreshRunLog\([\s\S]*?\n  \}/);
   assert.ok(refreshRunLog);
   assert.match(refreshRunLog[0], /!panelIsDirty\(\)/, 'a run log landing must not wipe typing either');
@@ -1045,8 +1049,13 @@ test('long unbroken titles wrap inside their column instead of stretching the pa
   );
   assert.match(
     SHELL,
-    /table\.gw-table td \{ overflow-wrap: anywhere; \}/,
-    'a table title cell breaks an unbroken word instead of forcing the table wider than the viewport',
+    /table\.gw-table td\.cell-title \{ overflow-wrap: anywhere; \}/,
+    'a table title cell breaks an unbroken word instead of forcing the table wider than the viewport -- T-0027 (reopened) scoped the rule to the title column, where the T-0021 comment always said it belonged; on every td it is what let short columns break words mid-word and crush',
+  );
+  assert.match(
+    SHELL,
+    /table\.gw-table th\.cell-title, table\.gw-table td\.cell-title \{ min-width: 13rem; \}/,
+    'and the same cell keeps a word-wide floor so breaking never becomes crushing',
   );
   assert.match(
     SHELL,
@@ -1239,6 +1248,9 @@ test('every reader of an evidence entry goes through evidenceText', () => {
 // T-0063: a drop on a column with an unmet gate snapped back in silence.
 // The reason already existed one hover away (the column tooltip, and the
 // panel move strip); the refused drop must say the same sentence.
+// T-0079: deciding now happens in decideDrop(), after the transitions fetch
+// is awaited -- so the refusal a drop shows is always a real verdict, never
+// the "Checking this gate…" placeholder a fast drag used to be punished with.
 test('a refused drag names the gate in the same words the column tooltip uses', () => {
   const showDragRefusal = SHELL.match(/function showDragRefusal\(drag, stageId\) \{[\s\S]*?\n  \}/);
   assert.ok(showDragRefusal, 'the refused-drag explainer exists');
@@ -1251,10 +1263,46 @@ test('a refused drag names the gate in the same words the column tooltip uses', 
   assert.ok(dragover);
   assert.match(dragover[0], /showDragRefusal\(drag, column\.dataset\.stage\)/, 'hovering an invalid column raises the reason');
 
+  const decideDrop = SHELL.match(/async function decideDrop\(drag, column\) \{[\s\S]*?\n  \}/);
+  assert.ok(decideDrop);
+  assert.match(decideDrop[0], /showDragRefusal\(drag, to\)/, 'a drop that still arrives refused says why too');
+  assert.match(decideDrop[0], /hideBoardRefusal\(\)/, 'an ACCEPTED drop clears any stale refusal notice');
+});
+
+// T-0079: a drop that beats the lazy transitions fetch used to be refused
+// with "Checking this gate…" -- a placeholder standing in for a verdict that
+// had not landed yet, on a move the CLI calls ready. The verdict is now
+// awaited before deciding, and while it is unknown the dragover neither
+// refuses nor promises: refusing the dragover would also stop the browser
+// from ever firing the drop a fast flick needs.
+test('a drop that beats the transitions fetch awaits the verdict instead of refusing on unknown', () => {
+  const decideDrop = SHELL.match(/async function decideDrop\(drag, column\) \{[\s\S]*?\n  \}/);
+  assert.ok(decideDrop, 'the drop decision is its own awaited step');
+  const awaiting = decideDrop[0].indexOf('await refreshTransitions');
+  const deciding = decideDrop[0].indexOf('if (!dropAllowed(');
+  assert.ok(awaiting !== -1, 'the pending fetch is awaited');
+  assert.ok(deciding !== -1, 'the verdict is consulted');
+  assert.ok(awaiting < deciding, 'the await happens BEFORE the refusal decision, so the refusal always quotes a landed verdict');
+  assert.match(decideDrop[0], /!State\.transitions\[drag\.id\] && !State\.transitionErrors\[drag\.id\]/, 'only an actually-unknown verdict is waited for; a landed one is never re-fetched');
+
+  const dragover = SHELL.match(/view\.addEventListener\('dragover', \(e\) => \{[\s\S]*?\n    \}\);/);
+  assert.ok(dragover);
+  const unknown = dragover[0].indexOf('!State.transitions[drag.id]');
+  const refusal = dragover[0].indexOf('showDragRefusal(drag');
+  assert.ok(unknown !== -1 && refusal !== -1 && unknown < refusal, 'the unknown branch returns before any refusal while the verdict is in flight');
+
+  // The "Checking this gate…" text may survive only as a status the panel
+  // buttons already show -- it must never be what a refusal says.
+  const dropRefusal = SHELL.match(/function dropRefusal\(id, stageId\) \{[\s\S]*?\n  \}/);
+  assert.ok(dropRefusal);
+  assert.ok(dropRefusal[0].includes('Checking this gate'), 'the placeholder remains only as the unknown-verdict status');
+});
+
+test('the drop listener hands every outcome to decideDrop and never lets the browser drop', () => {
   const drop = SHELL.match(/view\.addEventListener\('drop', \(e\) => \{[\s\S]*?\n    \}\);/);
   assert.ok(drop);
-  assert.match(drop[0], /showDragRefusal\(drag, to\)/, 'a drop that still arrives refused says why too');
-  assert.match(drop[0], /hideBoardRefusal\(\)/, 'an ACCEPTED drop clears any stale refusal notice');
+  assert.match(drop[0], /e\.preventDefault\(\)/, 'the listener owns the drop for accepted and refused outcomes alike');
+  assert.match(drop[0], /decideDrop\(drag, column\)/, 'the decision is awaited, so it cannot stay inline in a sync listener');
 });
 
 // T-0054: the Overview's "+N more" was a bare <p> under rows that are all
@@ -1392,4 +1440,53 @@ test('the tab bar shows that it scrolls', () => {
   assert.match(SHELL, /nav#gw-tabs \{ scrollbar-width: thin; scrollbar-color: var\(--text-faint\) transparent; \}/);
   assert.match(SHELL, /nav#gw-tabs::-webkit-scrollbar \{ height: 6px; \}/, 'the affordance is a scrollbar that is actually drawn');
   assert.match(SHELL, /@media \(max-width: 480px\) \{\n\s*nav#gw-tabs \{ padding: 0\.4rem 0\.5rem 0; \}/, 'and a phone loses the padding that pushed the last tab off the edge');
+});
+
+// T-0027 (reopened): the scroll container alone was never the fix. The table
+// itself kept its width:100% and overflow-wrap:anywhere, so at 390px it
+// compressed instead of scrolling -- the document scrollWidth stayed 390 and
+// the Title column crushed to one character per line. Two floors hold now:
+// the table cannot shrink below a readable width (the container scrolls past
+// it), and the Title column cannot shrink below word width.
+test('the table keeps readable floors: it scrolls as a whole and the Title column stays wide enough for words', () => {
+  assert.match(SHELL, /table\.gw-table \{ min-width: 640px; \}/, 'the table has a width floor of its own -- compression is not an option');
+  assert.match(SHELL, /table\.gw-table th\.cell-title, table\.gw-table td\.cell-title \{ min-width: 13rem; \}/, 'the Title column keeps word width, not letter width');
+  const renderTable = SHELL.match(/function renderTable\(container\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderTable);
+  assert.match(renderTable[0], /'<th data-key="' \+ k \+ '" class="' \+ \(k === 'title' \? 'cell-title' : ''\)/, 'the header carries the title class');
+  assert.match(renderTable[0], /'<td class="cell-title">' \+ escapeHtml\(it\.title\)/, 'the body cell carries the title class');
+});
+
+// T-0078: a disabled button's reason must never be readable as the
+// neighbouring button's refusal. In the bare wrap the reason could sit under
+// another button's slot and the faint disabled button read as nothing, so
+// the eye attached the reason to the last prominent button above it. Each
+// button + its reasons are now one bounded unit.
+test('a stage button and its reasons are one bounded unit, so a reason cannot attach to a neighbouring button', () => {
+  const wrap = SHELL.match(/#gw-panel \.stage-button-wrap \{[\s\S]*?\n  \}/);
+  assert.ok(wrap, 'the stage-button-wrap rule exists');
+  assert.match(wrap[0], /border: 1px solid/, 'the pair has a visible boundary');
+  assert.match(wrap[0], /padding:/, 'the boundary is not cosmetic-tight');
+  assert.match(wrap[0], /flex-direction: column/, 'button then reasons, always vertical within the unit');
+});
+
+// T-0081: creating an unclassified item from the board silently held it for
+// triage -- the dialog never said so, and self-approval is refused. The
+// holding is deliberate; the silence was the bug.
+test('the create dialog says what an unclassified creation costs before the submit', () => {
+  const openCreatePanel = SHELL.match(/function openCreatePanel\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(openCreatePanel);
+  assert.match(openCreatePanel[0], /create-hold-note/, 'the notice is part of the form itself');
+  const notice = openCreatePanel[0].match(/class="create-hold-note">([^<]+)</);
+  assert.ok(notice, 'the notice renders text');
+  assert.match(notice[1], /held for triage/, 'it names the hold');
+  assert.match(notice[1], /someone other than you approves/, 'and the fact that its creator cannot lift it');
+});
+
+// T-0082: the favicon was the only console error in an otherwise clean
+// session -- a 404 on every view. A data URI works everywhere, including the
+// file:// snapshot, which can never fetch a sibling favicon.
+test('the board carries an inline favicon so no view 404s and the snapshot still works', () => {
+  assert.match(SHELL, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,/, 'an inline SVG icon, no request');
+  assert.doesNotMatch(SHELL, /<link rel="icon"[^>]*href="(?!data:)/, 'no icon href that a file:// page would have to fetch');
 });

@@ -5,6 +5,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gatewright</title>
+<!-- T-0082: a data URI, not a file request -- the only favicon the file://
+     snapshot can ever load without a 404 in the console. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='3.5' fill='%23297ab6'/%3E%3Crect x='4' y='4' width='3.4' height='8' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3Crect x='8.6' y='4' width='3.4' height='5' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light dark;
@@ -350,8 +353,13 @@
   table.gw-table th, table.gw-table td { text-align: left; padding: 0.45rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
   /* T-0021: the title cell is the one column whose content has no natural
      width limit; without break opportunities it forces the table wider than
-     the viewport. `anywhere` lets that one column shrink and the title wrap. */
-  table.gw-table td { overflow-wrap: anywhere; }
+     the viewport. `anywhere` lets that one column shrink and the title wrap.
+     T-0027 (reopened): the rule used to sit on EVERY td, which is how every
+     column got permission to break words mid-word and crush to one
+     character -- "featur/e", "B/l/o/c/k/e/d". The short vocab columns have
+     natural min-content widths (their longest word); only the title needs
+     the emergency break, inside its own 13rem floor. */
+  table.gw-table td.cell-title { overflow-wrap: anywhere; }
   table.gw-table th { cursor: pointer; user-select: none; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
   table.gw-table th.sorted { color: var(--text); }
   table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
@@ -370,6 +378,16 @@
     cursor: pointer;
   }
   select.row-move { max-width: 10rem; }
+  /* T-0027 (reopened): overflow on the container was never the whole bug --
+     the table itself had to be willing to shrink, and it was: width:100%
+     plus overflow-wrap:anywhere let every column crush to a single
+     character and still call the result "no overflow". A table cannot be
+     allowed to negotiate its own readability away, so two floors hold:
+     the table keeps a minimum width of its own (the container scrolls
+     beyond it), and the Title column keeps a minimum wide enough to show
+     words -- the earlier failure was "B/l/o/c/k/e/d" at 30px. */
+  table.gw-table { min-width: 640px; }
+  table.gw-table th.cell-title, table.gw-table td.cell-title { min-width: 13rem; }
   /* T-0027: the table scrolls in its own lane so the page never does. On a
      phone the action controls also give up their nowrap and wrap onto two
      lines instead of holding the column -- and the whole table -- wide. */
@@ -457,7 +475,23 @@
   #gw-panel dt { color: var(--text-dim); }
   #gw-panel dd { margin: 0; }
   #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; align-items: flex-start; }
-  #gw-panel .stage-button-wrap { display: flex; flex-direction: column; gap: 0.2rem; max-width: 13rem; }
+  /* T-0078: the button and its reasons have to survive as one visual unit
+     wherever the flex-wrap flow puts them. In the bare wrap, a disabled
+     button's reason could sit directly under a NEIGHBOURING button's slot --
+     a faint button reads as nothing, so the eye attached the reason to the
+     last prominent (enabled) button above it, and "Merged" appeared to be
+     the move being refused. A boundary around each pair makes the
+     association geometric, not a reading habit. */
+  #gw-panel .stage-button-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-width: 13rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+  }
   #gw-panel .stage-buttons button {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -553,6 +587,16 @@
   #gw-panel .panel-actions.triage button { border-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
   #gw-panel #panel-error:empty { display: none; }
   .create-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.8rem; }
+  /* T-0081: the hold that an unclassified creation earns, stated in the
+     form itself. Warn colours: it is a cost the creator can avoid. */
+  .create-hold-note {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    border-radius: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.78rem;
+  }
   .create-form label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--text-dim); }
   .create-form input, .create-form select, .create-form textarea {
     background: var(--bg-sunken);
@@ -718,6 +762,113 @@
     cursor: pointer;
   }
   table.gw-table td.id button.id-open:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+  /* ============================================================
+     T-0060 — glass treatment (Rahil's reference dashboard)
+     One material, laid over the existing rules so the tags, stage
+     colours and every queried class are untouched. The glass is a
+     background treatment: translucent panel fills over a warm
+     dark-to-darker gradient, a hairline top edge highlight, layered
+     shadows for depth, 14-18px corners.
+     Fallback contract: every glass surface first gets a solid-ish
+     --glass-base fill, and the translucency + backdrop-filter only
+     switch on inside @supports -- where the filter is not supported
+     (or the reader asks for reduced transparency) the panels stay
+     legible opaque surfaces, never a washed blur.
+     ============================================================ */
+  :root {
+    --glass-radius-panel: 16px;
+    --glass-radius-card: 14px;
+    --glass-edge: rgba(255, 255, 255, 0.17);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.22);
+    /* Solid-ish base: high enough alpha to carry text on its own. */
+    --glass-base: rgba(34, 36, 40, 0.93);
+    --glass-base-head: rgba(28, 30, 33, 0.97);
+    --glass-fill: rgba(40, 42, 47, 0.46);
+    --glass-fill-head: rgba(26, 28, 31, 0.72);
+    --glass-sunken: rgba(18, 19, 21, 0.55);
+    --glass-backdrop: blur(18px) saturate(150%);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --glass-edge: rgba(255, 255, 255, 0.85);
+      --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      --glass-shadow: 0 8px 24px rgba(64, 54, 36, 0.14), 0 2px 6px rgba(64, 54, 36, 0.08);
+      --glass-base: rgba(252, 251, 248, 0.94);
+      --glass-base-head: rgba(250, 248, 244, 0.97);
+      --glass-fill: rgba(252, 251, 248, 0.62);
+      --glass-fill-head: rgba(250, 248, 244, 0.78);
+      --glass-sunken: rgba(238, 235, 228, 0.6);
+    }
+  }
+  body {
+    /* Warm-to-dark gradient backdrop, not flat black; fixed so the panels
+       blur one steady scene instead of resampling on every scroll. */
+    background:
+      radial-gradient(120% 90% at 18% 0%, rgba(128, 94, 52, 0.26) 0%, rgba(128, 94, 52, 0) 58%),
+      radial-gradient(90% 70% at 85% 100%, rgba(96, 74, 52, 0.16) 0%, rgba(96, 74, 52, 0) 60%),
+      linear-gradient(168deg, #2c2925 0%, #1e1f21 48%, #141517 100%);
+    background-attachment: fixed;
+  }
+  @media (prefers-color-scheme: light) {
+    body {
+      background:
+        radial-gradient(120% 90% at 18% 0%, rgba(196, 156, 96, 0.18) 0%, rgba(196, 156, 96, 0) 55%),
+        linear-gradient(168deg, #f7f4ee 0%, #f0ede6 55%, #e7e3da 100%);
+      background-attachment: fixed;
+    }
+  }
+  header#gw-header,
+  .column,
+  #gw-panel,
+  .overview-card,
+  table.gw-table,
+  .stage-rule,
+  .export-panel {
+    background: var(--glass-base);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+  }
+  header#gw-header { border-radius: 0; border-width: 0 0 1px; }
+  #gw-panel { border-width: 1px 0 0; }
+  .column { border-radius: var(--glass-radius-panel); }
+  .overview-card { border-radius: var(--glass-radius-card); }
+  .stage-rule { border-radius: var(--glass-radius-card); }
+  table.gw-table { border-radius: var(--glass-radius-card); }
+  .export-panel { border-radius: var(--glass-radius-card); }
+  .column-head {
+    /* Sticky head over a translucent lane: it needs near-solid fill of its
+       own or scrolled cards would ghost through it. */
+    background: var(--glass-base-head);
+    border-radius: calc(var(--glass-radius-panel) - 1px) calc(var(--glass-radius-panel) - 1px) 0 0;
+  }
+  .card { background: var(--glass-sunken); border-radius: 10px; }
+  table.gw-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+  @media (prefers-color-scheme: light) {
+    table.gw-table tbody tr:hover { background: rgba(38, 36, 30, 0.05); }
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    header#gw-header,
+    .column,
+    #gw-panel,
+    .overview-card,
+    table.gw-table,
+    .stage-rule,
+    .export-panel {
+      background: var(--glass-fill);
+      -webkit-backdrop-filter: var(--glass-backdrop);
+      backdrop-filter: var(--glass-backdrop);
+    }
+    .column-head { background: var(--glass-fill-head); -webkit-backdrop-filter: var(--glass-backdrop); backdrop-filter: var(--glass-backdrop); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    header#gw-header, .column, #gw-panel, .overview-card, table.gw-table, .stage-rule, .export-panel, .column-head {
+      background: var(--glass-base-head);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1803,6 +1954,19 @@
       if (!drag || !e.target.closest) return;
       const column = e.target.closest('.column');
       if (!column) return;
+      // T-0079: while the verdict is still in flight the board does not know
+      // whether this column would take the card -- and refusing the dragover
+      // here is doubly wrong: it paints "Checking this gate…" on a move that
+      // may be perfectly legal, and a refused dragover means the browser
+      // fires no drop event at all, so a fast flick could never drop even
+      // where the move is legal. Unknown is not a refusal: the column
+      // neither dims nor highlights, the drop stays possible, and the real
+      // verdict decides at the drop.
+      if (!State.transitions[drag.id] && !State.transitionErrors[drag.id]) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        return;
+      }
       if (!dropAllowed(drag.id, column.dataset.stage)) {
         // No preventDefault: the browser itself refuses the drop, so an
         // invalid column cannot even accept the card optimistically. The
@@ -1827,7 +1991,23 @@
       if (!drag || !e.target.closest) return;
       const column = e.target.closest('.column');
       if (!column) return;
+      // Taken synchronously and for every outcome, accepted or refused: this
+      // listener owns the drop, so the browser must never run its own.
+      e.preventDefault();
+      decideDrop(drag, column);
+    });
+
+    // T-0079: a drop can beat the lazy transitions fetch (dragstart fires the
+    // request; a touch flick completes the drop before the answer lands).
+    // The verdict is awaited before deciding, so what the board says at the
+    // end of a drag is always a real answer -- a legal move completes, an
+    // illegal one gets its actual reason. "Checking this gate…" is a status,
+    // and a status was standing in for a refusal only when nobody had looked.
+    async function decideDrop(drag, column) {
       const to = column.dataset.stage;
+      if (!State.transitions[drag.id] && !State.transitionErrors[drag.id]) {
+        await refreshTransitions(drag.id);
+      }
       if (!dropAllowed(drag.id, to)) {
         // Some delivery paths can still produce a drop here (a programmatic
         // drag, a browser that fires drop anyway): refuse it with the same
@@ -1835,15 +2015,13 @@
         showDragRefusal(drag, to);
         return;
       }
-      e.preventDefault();
       // A move the gates allowed should not leave a stale "cannot move"
       // notice on screen; if the server refuses it anyway, showMoveRefusal
       // raises its own notice with the fresher reason.
       hideBoardRefusal();
-      const id = drag.id;
       clearDropTargets();
-      onCardDrop(id, to, column);
-    });
+      onCardDrop(drag.id, to, column);
+    }
 
     view.addEventListener('dragend', clearDropTargets);
   }
@@ -1923,7 +2101,7 @@
     // belongs to the table, where it is scrollable and visible, not to the
     // document, where it is neither.
     container.innerHTML = '<div class="table-scroll"><table class="gw-table"><thead><tr>' +
-      cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+      cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === 'title' ? 'cell-title' : '') + (k === key ? ' sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
       (State.live ? '<th>Actions</th>' : '') +
       '</tr></thead><tbody>' +
       sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
@@ -1933,7 +2111,7 @@
         // to the row and opens the drawer exactly as a mouse click on the row
         // already did -- there is no second open path.
         '<td class="id"><button class="id-open" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '">' + escapeHtml(it.id) + '</button></td>' +
-        '<td>' + escapeHtml(it.title) + '</td>' +
+        '<td class="cell-title">' + escapeHtml(it.title) + '</td>' +
         '<td' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</td>' +
         '<td' + termTitle('phase', it.phase) + '>' + escapeHtml(it.phase) + '</td>' +
         '<td' + termTitle('priority', it.priority) + '>' + escapeHtml(it.priority) + '</td>' +
@@ -2421,32 +2599,39 @@
     if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '</div>';
   }
 
-  async function refreshTransitions(id) {
-    if (State.transitionLoading[id]) return;
-    State.transitionLoading[id] = true;
+  function refreshTransitions(id) {
+    // T-0079: a caller that arrives mid-flight (a drop beating the fetch that
+    // dragstart started) has to wait on the SAME verdict, not be told "still
+    // loading" -- the old early return left the awaiting drop with no way to
+    // ever see the answer land.
+    if (State.transitionLoading[id]) return State.transitionLoading[id];
     delete State.transitionErrors[id];
-    try {
-      const res = await fetch('/api/items/' + encodeURIComponent(id) + '/transitions');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      State.transitions[id] = await res.json();
-    } catch (error) {
-      State.transitionErrors[id] = error.message || 'request failed';
-    } finally {
-      State.transitionLoading[id] = false;
-      if (State.activePanelId === id) {
-        const current = State.items.find((item) => item.id === id);
-        // A half-typed panel is not redrawn from under its typist, even for
-        // good news like a verdict landing -- same contract as the editors.
-        if (current && !panelIsDirty()) renderPanel(current);
+    const run = (async () => {
+      try {
+        const res = await fetch('/api/items/' + encodeURIComponent(id) + '/transitions');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        State.transitions[id] = await res.json();
+      } catch (error) {
+        State.transitionErrors[id] = error.message || 'request failed';
+      } finally {
+        delete State.transitionLoading[id];
+        if (State.activePanelId === id) {
+          const current = State.items.find((item) => item.id === id);
+          // A half-typed panel is not redrawn from under its typist, even for
+          // good news like a verdict landing -- same contract as the editors.
+          if (current && !panelIsDirty()) renderPanel(current);
+        }
+        // A drag that started before the verdicts landed gets its columns marked
+        // the moment they do, rather than staying uniformly invalid.
+        if (State.drag && State.drag.id === id) markDropTargets();
+        // Same idea for the table's move picker (P8-14): its options are
+        // disabled until a verdict exists, so the moment one lands they are
+        // refreshed in place rather than waiting for the next 2-second poll.
+        if (State.view === 'table') updateTableRowMove(id);
       }
-      // A drag that started before the verdicts landed gets its columns marked
-      // the moment they do, rather than staying uniformly invalid.
-      if (State.drag && State.drag.id === id) markDropTargets();
-      // Same idea for the table's move picker (P8-14): its options are
-      // disabled until a verdict exists, so the moment one lands they are
-      // refreshed in place rather than waiting for the next 2-second poll.
-      if (State.view === 'table') updateTableRowMove(id);
-    }
+    })();
+    State.transitionLoading[id] = run;
+    return run;
   }
 
   async function refreshRunLog(id, run) {
@@ -3026,6 +3211,12 @@
       '<div id="panel-error"></div>' +
       '<form id="create-form" class="create-form">' +
       '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
+      // T-0081: leaving all three vocab fields at "(none)" is a real choice
+      // with a real cost -- the server holds the item for triage and nobody
+      // (including its creator) can approve the hold away. The dialog used
+      // to let that happen silently; now it says so before the submit, not
+      // after the surprise. The holding itself is deliberate and stays.
+      '<div class="create-hold-note">An item created with no phase, type or priority is held for triage: it stays off the scheduler until someone other than you approves it. Classify it here to skip the hold.</div>' +
       '<label>Phase<select name="phase">' + options(vocab.phase) + '</select></label>' +
       '<label>Type<select name="type">' + options(vocab.type) + '</select></label>' +
       '<label>Priority<select name="priority">' + options(vocab.priority) + '</select></label>' +

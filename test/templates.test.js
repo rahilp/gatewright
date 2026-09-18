@@ -72,6 +72,20 @@ test('the agent block says how a board comes to exist', () => {
   assert.match(readTemplate('agents-block.md'), /No board yet\? `gw init` creates one\./);
 });
 
+// T-0065 — five agents in one night wrote plan items into the live board of
+// the project they were fixing, because "put the plan on the board" gave them
+// no way out. The block must name the exception and the concrete remedy
+// without hedging the default.
+test('the agent block carves out boards you must not write to, with a concrete scratch-board recipe', () => {
+  const block = readTemplate('agents-block.md');
+  assert.match(block, /working on gatewright itself/);
+  assert.match(block, /been told not to write to a particular board/);
+  assert.match(block, /do not write to it/);
+  assert.match(block, /mktemp -d/);
+  assert.match(block, /`cd` does not persist between your tool calls/);
+  assert.match(block, /keep the plan in your reply/);
+});
+
 // T-0066 — the brief drops finished work from its open counts, so the block
 // must say where it went.
 test('the agent block names the command that lists finished work', () => {
