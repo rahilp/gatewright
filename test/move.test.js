@@ -122,3 +122,19 @@ test('gw move works through the real binary with the expected exit code', () => 
   assert.equal(b.store.readItems()[0].stage, 'built');
   assert.throws(() => execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'verified'], { cwd: b.root, encoding: 'utf8' }), (error) => error.status === 1);
 });
+
+// T-0010 — refusing a terminal-stage move is the board refusing based on
+// item state, the same class as skipping a stage or failing an evidence
+// rule, so it exits 1 (RuleError) like its siblings instead of 2.
+test('a terminal-stage move refusal is a RuleError with the same message, at exit 1', () => {
+  const b = board([item({ stage: 'verified', evidence: ['a', 'b'] })]);
+  assert.throws(
+    () => run(ctx(b, ['P1-01', 'merged'])),
+    (error) => error instanceof RuleError
+      && error.message === 'item P1-01 is finished in terminal stage verified; if this is a mistake, run `gw move P1-01 <side-stage> --force`',
+  );
+  assert.throws(
+    () => execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'merged'], { cwd: b.root, encoding: 'utf8' }),
+    (error) => error.status === 1,
+  );
+});

@@ -175,7 +175,11 @@
   .overview-distribution .overview-grid { margin-top: 0.7rem; }
   .brief-row { cursor: pointer; gap: 0.6rem; }
   .brief-row:hover { color: var(--accent); }
-  .brief-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* T-0021: without min-width: 0 a flex item's automatic minimum is its
+     content, so one unbroken 118-character title resists the ellipsis below
+     and pushes the card past the viewport. The span may now actually shrink;
+     the full title stays in the aria-label and the detail panel. */
+  .brief-row span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .brief-row span:last-child { color: var(--text-faint); white-space: nowrap; }
   .brief-card .meta { color: var(--text-dim); font-size: 0.82rem; }
 
@@ -269,7 +273,12 @@
   @keyframes card-moved { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } to { border-color: var(--border); box-shadow: none; } }
   @media (prefers-reduced-motion: reduce) { .card.card-moved { animation: none; border-color: var(--accent); } }
   .card .card-id { font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim); }
-  .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; }
+  /* T-0021: a title that is one very long word has no break points, so it
+     paints past the 260px column and becomes horizontal scroll on a phone.
+     `anywhere` (not break-word) also shrinks min-content, which is what lets
+     the auto-layout table give its title column room back. Titles wrap, so
+     nothing is truncated and no title attribute is needed. */
+  .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; overflow-wrap: anywhere; }
   .card .card-meta { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.7rem; color: var(--text-dim); }
   .tag {
     display: inline-block;
@@ -284,6 +293,10 @@
   /* Table */
   table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
   table.gw-table th, table.gw-table td { text-align: left; padding: 0.45rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+  /* T-0021: the title cell is the one column whose content has no natural
+     width limit; without break opportunities it forces the table wider than
+     the viewport. `anywhere` lets that one column shrink and the title wrap. */
+  table.gw-table td { overflow-wrap: anywhere; }
   table.gw-table th { cursor: pointer; user-select: none; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
   table.gw-table th.sorted { color: var(--text); }
   table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
@@ -358,6 +371,9 @@
     transition: transform 0.15s ease;
     z-index: 101;
     padding: 1rem 1.25rem 2.5rem;
+    /* T-0021: inherited, so the item title, field values and evidence chips
+       all break instead of pushing the drawer's fixed width sideways. */
+    overflow-wrap: anywhere;
   }
   #gw-overlay.open #gw-panel { transform: translateX(0); }
   #gw-panel .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
@@ -610,6 +626,32 @@
   .glossary-legend dd { margin: 0; }
 
   .hidden { display: none !important; }
+  /* T-0017: a visible label for controls whose label would only duplicate
+     what is already on screen (the Evidence heading, the filter bar), and a
+     focus ring for the two role="button" mentions whose keyboard focus the
+     default outline would otherwise draw at odd offsets. */
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .card:focus-visible, .brief-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  table.gw-table td.id button.id-open {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-family: var(--mono);
+    color: var(--accent);
+    cursor: pointer;
+  }
+  table.gw-table td.id button.id-open:hover { text-decoration: underline; text-underline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -631,10 +673,15 @@
   </nav>
 
   <div id="gw-filters">
+    <label class="sr-only" for="f-phase">Filter by phase</label>
     <select id="f-phase"><option value="">phase: all</option></select>
+    <label class="sr-only" for="f-type">Filter by type</label>
     <select id="f-type"><option value="">type: all</option></select>
+    <label class="sr-only" for="f-stage">Filter by stage</label>
     <select id="f-stage"><option value="">stage: all</option></select>
+    <label class="sr-only" for="f-flag">Filter by flag</label>
     <select id="f-flag"><option value="">flag: all</option></select>
+    <label class="sr-only" for="f-search">Search items</label>
     <input type="search" id="f-search" placeholder="search id / title / scope">
     <button class="clear-filters" id="f-clear">clear</button>
     <button class="clear-filters hidden" id="f-new">+ new item</button>
@@ -881,6 +928,14 @@
     // Set while someone is typing in the stages or settings editors, so the
     // two-second poll cannot wipe a half-filled form out from under them.
     formDirty: false,
+    // The item panel's equivalent of formDirty, decided live rather than by a
+    // flag: the values its editable controls held at the last render. The
+    // poll compares against this before redrawing the panel -- see
+    // panelIsDirty().
+    panelBaseline: null,
+    // Where focus was when the drawer was opened, so closing it can hand it
+    // back to the control that opened it -- see openPanel()/closePanel().
+    panelReturnFocus: null,
     // Which terminal columns a human has clicked open. Absent means
     // collapsed -- see terminalStageIds() and renderBoard() -- and a Set
     // living on State survives every 2-second poll untouched, so reading
@@ -1018,6 +1073,9 @@
             runs: data.runs || [], scheduler: data.scheduler || { status: 'disabled' },
             admin: data.admin || { allowed: false },
             generatedAt: data.generatedAt || new Date().toISOString(), live: true,
+            // True only when a server actually answered /api/state. boot() will
+            // not enter live mode without it -- see the comment there.
+            fromServer: true,
           };
         }
       } catch { /* no server yet; fall through to whatever was injected */ }
@@ -1029,6 +1087,7 @@
       sync: { status: 'off' },
       admin: { allowed: false },
       generatedAt: (config && config.generatedAt) || null, live: false,
+      fromServer: false,
     };
   }
 
@@ -1289,8 +1348,10 @@
       return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + '</h2><p class="meta">' + escapeHtml(emptyText) + '</p></div>';
     }
     const shown = items.slice(0, BRIEF_SECTION_LIMIT);
+    // T-0017: the row opens the item's drawer on click, so it is a button in
+    // the accessibility tree -- see the delegated keydown handler on #gw-view.
     const rows = shown.map((it) =>
-      '<div class="count-row brief-row" data-id="' + escapeHtml(it.id) + '">' +
+      '<div class="count-row brief-row" data-id="' + escapeHtml(it.id) + '" role="button" tabindex="0" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '">' +
       '<span>' + escapeHtml(it.id) + ' · ' + escapeHtml(it.title) + '</span>' +
       '<span>' + escapeHtml(note(it)) + '</span></div>'
     ).join('');
@@ -1420,7 +1481,14 @@
     // Draggable only when a server is there to accept the move. A snapshot has
     // nothing to POST to, and a card that drags but can never land is a lie.
     const drag = State.live ? ' draggable="true" title="Drag to another column, or open this card to use the stage buttons."' : '';
-    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + drag + '>' +
+    // T-0017: the card is what a mouse click opens the drawer with, so it is
+    // a button in the accessibility tree too -- focusable, named after the
+    // item it opens, activated by Enter and Space (wired once in the
+    // delegated keydown handler on #gw-view). The name is explicit rather
+    // than derived from the card's text because a live card also contains
+    // Play/Stop buttons, and their labels must not be glued into its name.
+    const openLabel = ' role="button" tabindex="0" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '"';
+    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + openLabel + drag + '>' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
@@ -1518,8 +1586,12 @@
       return State.transitionErrors[id] ? 'Unable to check this gate.' : 'Checking this gate…';
     }
     const transition = transitions[stageId];
-    if (!transition) return 'Not reachable from here — `gw move --force` skips stages.';
-    if (transition.ok && transition.force) return 'A jump like this needs `gw move --force`.';
+    // T-0018: these refusals go to a mouse or touch user in a browser, so they
+    // name a decision -- never a command the reader cannot run. The board
+    // deliberately does not offer forward skips (P8-18): saying so plainly is
+    // the fix, not a friendlier way to say "go use the CLI".
+    if (!transition) return 'Not reachable from here — the board does not skip stages.';
+    if (transition.ok && transition.force) return 'The board does not offer this jump — forcing past gates stays a CLI decision.';
     const reasons = (transition.reasons && transition.reasons.length) ? transition.reasons : (transition.failures || []);
     return reasons.join(' · ');
   }
@@ -1676,7 +1748,7 @@
 
   function moveSelectHtml(it) {
     if (!State.live || isTerminalItem(it)) return '';
-    return '<select class="row-move" data-move-row="' + escapeHtml(it.id) + '" title="Move to another stage.">' + moveSelectOptionsHtml(it) + '</select>';
+    return '<select class="row-move" data-move-row="' + escapeHtml(it.id) + '" aria-label="Move ' + escapeHtml(it.id) + ' to another stage." title="Move to another stage.">' + moveSelectOptionsHtml(it) + '</select>';
   }
 
   // Called once a verdict lands (refreshTransitions), so a row does not have
@@ -1707,7 +1779,12 @@
       (State.live ? '<th>Actions</th>' : '') +
       '</tr></thead><tbody>' +
       sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
-        '<td class="id">' + escapeHtml(it.id) + '</td>' +
+        // T-0017: a real button on the id gives the row a keyboard-activatable
+        // control without turning the <tr> itself into one (that would erase
+        // the table semantics screen readers navigate by). The click bubbles
+        // to the row and opens the drawer exactly as a mouse click on the row
+        // already did -- there is no second open path.
+        '<td class="id"><button class="id-open" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '">' + escapeHtml(it.id) + '</button></td>' +
         '<td>' + escapeHtml(it.title) + '</td>' +
         '<td' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</td>' +
         '<td' + termTitle('phase', it.phase) + '>' + escapeHtml(it.phase) + '</td>' +
@@ -1868,6 +1945,18 @@
     container.querySelectorAll('[data-stage-remove]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.stageRemove;
+        // Removing a stage reshapes the pipeline and cannot be undone from the
+        // board, so a misclick must never be enough. The confirmation names
+        // the stage -- id and label, plus whatever is lost with it -- so the
+        // human can tell WHICH stage they are deleting before it is gone.
+        // confirm() is native, so it works on touch where there is no hover.
+        const stage = stageList(State.stages).find((s) => s.id === id);
+        const lost = [];
+        if (stage && stage.requires) lost.push('its gate rules');
+        if (terminalStageIds().has(id)) lost.push('its terminal role');
+        const detail = lost.length ? ' Deleting it loses ' + lost.join(' and ') + '.' : '';
+        const label = stage && stage.label ? stage.label : id;
+        if (!window.confirm('Remove stage "' + label + '" (' + id + ') from the board?' + detail + ' This cannot be undone.')) return;
         const doc = stagesDoc();
         doc.stages = doc.stages.filter((stage) => stage.id !== id);
         doc.extra = doc.extra.filter((stage) => stage.id !== id);
@@ -1941,13 +2030,38 @@
     { key: 'runner.run_timeout_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes before a run is stopped as overrunning.' },
     { key: 'runner.stop_timeout_s', type: 'integer', min: 0, max: 600, summary: 'Grace period between a stop request and force.' },
     { key: 'runner.paused', type: 'boolean', summary: 'Global pause. Keeps config intact while stopping new runs.' },
+    { key: 'runner.prompt_template', type: 'string', summary: 'Prompt file used to start each run, resolved from the board root.' },
+    { key: 'runner.worktree_root', type: 'string', summary: 'Where per-item worktrees are created, resolved from the board root.' },
     { key: 'policy.auto_dispatch_children', type: 'boolean', summary: 'Whether agent-created children dispatch without a human.', danger: 'Leaving this off is what stops a run filing work that starts more runs.' },
     { key: 'policy.max_children_per_item', type: 'integer', min: 0, max: 100, summary: 'Cap on children one item may create.' },
     { key: 'policy.max_depth', type: 'integer', min: 1, max: 10, summary: 'How deep agent-created work may nest.' },
+    { key: 'policy.triage_required_for', type: 'list', summary: 'Actor kinds whose created items are held for triage.' },
+    { key: 'guard.enabled', type: 'boolean', summary: 'Gate commits on the board. Off means every commit is allowed through.', danger: 'This is the only check that a commit is accounted for on the board.' },
+    { key: 'guard.mode', type: 'string', choices: ['block', 'warn'], summary: 'block refuses an unaccounted commit; warn reports it and lets it through.', danger: 'warn reports and allows the commit.' },
+    { key: 'guard.accept', type: 'list', summary: 'Evidence the guard accepts, in order: message, branch, owner.' },
+    { key: 'guard.exempt_paths', type: 'list', summary: 'Paths the guard ignores when accounting a commit.', danger: 'Every path listed here is invisible to the guard.' },
     { key: 'id_scheme', type: 'string', choices: ['phase-seq', 'seq'], summary: 'phase-seq gives P1-01; seq gives T-0001.' },
+    { key: 'brief.max_lines', type: 'integer', min: 4, max: 200, summary: 'Line budget for `gw brief`.' },
+    { key: 'check.stale_days', type: 'integer', min: 1, max: 365, summary: 'Days without movement before `gw check` reports an item stale.' },
+    { key: 'check.stale_exempt_stages', type: 'list', summary: 'Stages `gw check` never reports stale.' },
     { key: 'memory.enabled', type: 'boolean', summary: 'Recall prior context into prompts and remember completed work.' },
+    { key: 'memory.provider', type: 'string', summary: 'Which entry in memory.providers to invoke.', choicesFrom: 'memory.providers' },
+    { key: 'memory.project_id', type: 'string', summary: 'Prompt-capsule id passed to the memory provider on dispatch.' },
+    { key: 'memory.recall.on_dispatch', type: 'boolean', summary: 'Recall prior context into the prompt when a run starts.' },
+    { key: 'memory.recall.top_k', type: 'integer', min: 1, max: 50, summary: 'How many recalled memories to include.' },
+    { key: 'memory.recall.max_chars', type: 'integer', min: 1, max: 100000, summary: 'Character cap on recalled context in a prompt.' },
+    { key: 'memory.remember.on_run_ok', type: 'boolean', summary: 'Remember completed work when a run ends ok.' },
+    { key: 'memory.remember.on_close', type: 'boolean', summary: 'Remember completed work when an item reaches the closing stage.' },
+    { key: 'memory.remember.max_chars', type: 'integer', min: 1, max: 100000, summary: 'Character cap on a stored memory.' },
+    { key: 'memory.remember.extra_tags', type: 'list', summary: 'Extra tags added to every stored memory.' },
     { key: 'github.enabled', type: 'boolean', summary: 'Pull linked GitHub issues and push comments.' },
+    { key: 'github.repo', type: 'string', summary: 'owner/name of the linked GitHub repository.' },
     { key: 'github.sync_interval_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes between automatic syncs while `gw serve` runs.' },
+    { key: 'github.dispatch_label', type: 'string', summary: 'Issue label that queues the linked item for dispatch.' },
+    { key: 'github.mirror_children', type: 'boolean', summary: 'Comment agent-created children on the parent issue.' },
+    { key: 'github.comment_on_move', type: 'boolean', summary: 'Comment on the linked issue when the item moves stage.' },
+    { key: 'github.close_on', type: 'string', summary: 'Stage that closes the linked issue on the next sync.' },
+    { key: 'github.milestone_to', type: 'string', summary: 'Vocab field GitHub milestones map onto, such as phase.' },
     { key: 'vocab.phase', type: 'list', summary: 'Allowed --phase values, in order. Comma-separated.' },
     { key: 'vocab.priority', type: 'list', summary: 'Allowed --priority values, most urgent first.' },
     { key: 'vocab.type', type: 'list', summary: 'Allowed --type values.' },
@@ -2112,11 +2226,23 @@
   function openPanel(id) {
     const it = State.items.find((i) => i.id === id);
     if (!it) return;
+    const overlay = document.getElementById('gw-overlay');
+    // T-0017: a dialog that opens without moving focus leaves a keyboard user
+    // on the very control they just activated, still inside a now-obscured
+    // page. Focus moves into the drawer when it opens -- and only then: the
+    // poll's re-render of an already-open panel must never steal focus back
+    // from whoever is typing in it.
+    const opening = !overlay.classList.contains('open');
+    if (opening) State.panelReturnFocus = document.activeElement;
     State.activePanelId = id;
     State.creatingItem = false;
     if (!State.pendingEvidence[id]) State.pendingEvidence[id] = [];
     renderPanel(it);
-    document.getElementById('gw-overlay').classList.add('open');
+    overlay.classList.add('open');
+    if (opening) {
+      const closeBtn = panelCloseButton();
+      if (closeBtn) closeBtn.focus();
+    }
     if (State.live) {
       refreshTransitions(id);
       const run = activeRunFor(id);
@@ -2124,10 +2250,22 @@
     }
   }
 
+  // The drawer's close button is the focus target on open; it exists in both
+  // the item panel and the create panel.
+  function panelCloseButton() {
+    return document.querySelector('#gw-panel #panel-close');
+  }
+
   function closePanel() {
     State.activePanelId = null;
     State.creatingItem = false;
+    State.panelBaseline = null;
     document.getElementById('gw-overlay').classList.remove('open');
+    const returnFocus = State.panelReturnFocus;
+    State.panelReturnFocus = null;
+    // The control that opened the drawer may have been re-rendered away by
+    // the poll in the meantime; only restore focus if it still exists.
+    if (returnFocus && typeof returnFocus.focus === 'function' && document.contains(returnFocus)) returnFocus.focus();
   }
 
   function showPanelError(msg) {
@@ -2149,7 +2287,9 @@
       State.transitionLoading[id] = false;
       if (State.activePanelId === id) {
         const current = State.items.find((item) => item.id === id);
-        if (current) renderPanel(current);
+        // A half-typed panel is not redrawn from under its typist, even for
+        // good news like a verdict landing -- same contract as the editors.
+        if (current && !panelIsDirty()) renderPanel(current);
       }
       // A drag that started before the verdicts landed gets its columns marked
       // the moment they do, rather than staying uniformly invalid.
@@ -2177,13 +2317,58 @@
       State.runLogLoading[key] = false;
       if (State.activePanelId === id) {
         const current = State.items.find((item) => item.id === id);
-        if (current) renderPanel(current);
+        if (current && !panelIsDirty()) renderPanel(current);
       }
     }
   }
 
+  // The item panel's editable controls, read as { key: value }. A field input
+  // is keyed by its data-field, the note and evidence boxes by their id.
+  function capturePanelBaseline() {
+    const panel = document.getElementById('gw-panel');
+    const values = {};
+    panel.querySelectorAll('input[data-field], #note-input, #evidence-input').forEach((el) => {
+      values[el.dataset.field || el.id] = el.value;
+    });
+    return values;
+  }
+
+  // Whether two baseline snapshots disagree on any control. A missing key and
+  // an empty string count as the same value: a control that only exists in one
+  // snapshot (the evidence box is live-only) is not by itself a difference.
+  function valuesDiverge(base, now) {
+    const keys = new Set(Object.keys(now).concat(Object.keys(base)));
+    for (const key of keys) {
+      if ((now[key] || '') !== (base[key] || '')) return true;
+    }
+    return false;
+  }
+
+  // "Dirty" for the item panel means: some editable control in it now holds a
+  // different value than the render that created it put there. Typing makes
+  // the panel dirty; undoing the typing makes it clean again; every
+  // renderPanel re-baselines. The poll consults this for the same reason it
+  // consults State.formDirty for the editors -- redrawing over a half-typed
+  // note throws the words away -- but a comparison, unlike a sticky flag,
+  // also unlatches itself the moment the typing is undone or saved.
+  function panelIsDirty() {
+    if (State.panelBaseline == null) return false;
+    return valuesDiverge(State.panelBaseline, capturePanelBaseline());
+  }
+
   function renderPanel(it) {
     const panel = document.getElementById('gw-panel');
+    // A re-render replaces every element in the drawer, which would drop the
+    // keyboard focus on the floor: someone parked on the close button lands
+    // on <body> the moment the poll (or a transition verdict) redraws the
+    // panel under them. Remember WHICH control had focus -- by id, or by
+    // data-field for the editable item fields -- and hand focus to its
+    // replacement. Elements with neither lose focus, as before.
+    const active = panel.contains(document.activeElement) ? document.activeElement : null;
+    const focusSel = active
+      ? (active.id ? '#' + CSS.escape(active.id)
+        : (active.dataset && active.dataset.field ? 'input[data-field="' + CSS.escape(active.dataset.field) + '"]' : null))
+      : null;
     const itemEvents = State.events.filter((e) => e.item === it.id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
 
     const pendingEv = State.pendingEvidence[it.id] || [];
@@ -2259,14 +2444,19 @@
           ? 'unable to check transition rules'
           : 'checking transition rules…';
       } else if (!transition) {
-        note = 'use `gw move --force` to skip stages';
+        // T-0018: the button is off, and the reason is a fact about the board
+        // -- it never skips stages -- not an instruction to run a command the
+        // browser cannot run. The same holds for the forced-skip branches
+        // below: where the board does not offer an action, it says so instead
+        // of pointing at the CLI.
+        note = 'Not reachable from here — the board does not skip stages; forcing a jump is a CLI decision.';
       } else if (transition.force && transition.ok && backward) {
         disabled = false;
         note = 'Backward move — this skips the gates ahead of ' + s.label + '.';
       } else if (transition.force && transition.ok) {
-        note = 'use `gw move --force` to skip stages';
+        note = 'The board does not skip gates — a forced skip is a CLI decision.';
       } else if (!transition.ok) {
-        if (transition.force && !backward) note = 'and a jump like this also needs `gw move --force`';
+        if (transition.force && !backward) note = 'and a jump across stages is never offered here';
         else if (backward) note = 'Backward move — not met yet.';
         heading = 'Not met yet:';
         machine = transition.failures || [];
@@ -2291,11 +2481,11 @@
       ? allEvidence.map((e, idx) => '<li class="evidence-chip">' + escapeHtml(e) + (idx >= (it.evidence || []).length ? ' <span class="meta">(pending &middot; sent with the next stage move)</span>' : '') + '</li>').join('')
       : '<li class="meta">none</li>';
     const evidenceEditor = State.live
-      ? '<div class="evidence-add"><input type="text" id="evidence-input" placeholder="commit SHA, test path, PR/CI URL"><button id="evidence-add-btn">add evidence</button></div>'
+      ? '<div class="evidence-add"><label class="sr-only" for="evidence-input">Add evidence</label><input type="text" id="evidence-input" name="evidence" placeholder="commit SHA, test path, PR/CI URL"><button id="evidence-add-btn">add evidence</button></div>'
       : '';
 
     const notesEditor = State.live
-      ? '<div class="note-add"><textarea id="note-input" rows="2" placeholder="append a note"></textarea><button id="note-add-btn">add note</button></div>'
+      ? '<div class="note-add"><label class="sr-only" for="note-input">Add a note</label><textarea id="note-input" name="note" rows="2" placeholder="append a note"></textarea><button id="note-add-btn">add note</button></div>'
       : '';
 
     const editableFields = ['title', 'scope', 'priority', 'type', 'phase', 'deps', 'refs'];
@@ -2313,7 +2503,11 @@
       const lockedNote = linked && ghOwned.has(f)
         ? ' <span class="meta">(GitHub-owned on this linked item &mdash; edits are refused; edit the issue instead)</span>'
         : '';
-      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
+      // T-0017: the input carries an id and name, and the dt's text becomes a
+      // real <label for> -- before this the field had neither a programmatic
+      // name nor an associated label, so a screen reader announced it as
+      // "edit text" with nothing attached.
+      return '<dt><label for="panel-field-' + f + '">' + f + '</label></dt><dd><input type="text" id="panel-field-' + f + '" name="' + f + '" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
         '<div class="field-refusal" id="field-fail-' + f + '"></div></dd>';
     }).join('');
     const saveBtn = State.live ? '<button id="save-fields-btn">save fields</button>' : '';
@@ -2330,7 +2524,7 @@
       ? itemEvents.map((e) => '<div class="event-line"><time>' + escapeHtml(fmtDate(e.ts)) + '</time><span>' + escapeHtml(e.type) + (e.from ? ' ' + escapeHtml(e.from) + '→' + escapeHtml(e.to) : '') + ' by ' + escapeHtml(e.by) + '</span></div>').join('')
       : '<p class="meta">no events recorded</p>';
 
-    panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
+    panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
       '<p>' + escapeHtml(it.title) + '</p>' +
       '<div id="panel-error"></div>' +
       banner + triageHtml + resumeHtml + playStop + logHtml +
@@ -2343,6 +2537,13 @@
 
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
     wirePanelActions(it);
+    if (focusSel) {
+      const again = panel.querySelector(focusSel);
+      if (again) again.focus();
+    }
+    // What the panel shows right now is the baseline the poll compares
+    // against; anything the human types from here on makes it dirty.
+    State.panelBaseline = capturePanelBaseline();
   }
 
   function wirePanelActions(it) {
@@ -2598,6 +2799,12 @@
     Inflight.delete(key);
     btn.disabled = false;
     if (result.ok) {
+      // The values just saved are now the server's values, but the baseline
+      // still holds what the last render put in the inputs. Re-baseline here
+      // or panelIsDirty() would keep reporting a divergence that no longer
+      // exists -- and a guard that never clears would block the poll's
+      // re-render forever.
+      State.panelBaseline = capturePanelBaseline();
       await refreshNow();
     } else if (result.status === 409) {
       const failures = (result.data && result.data.failures && result.data.failures.length)
@@ -2618,12 +2825,32 @@
     const panel = document.getElementById('gw-panel');
     const overlay = document.getElementById('gw-overlay');
     State.activePanelId = null;
+    // T-0017: same focus contract as openPanel -- in on open, back on close.
+    const opening = !overlay.classList.contains('open');
+    if (opening) State.panelReturnFocus = document.activeElement;
+    // A snapshot has no server to POST /api/items to, and every other write
+    // control on the page degrades to a read-only notice naming the command
+    // to run instead -- the create form must never be the one control that
+    // still renders live and dies on submit with a raw "Failed to fetch".
+    // Reaching this branch needs a regression in the f-new hiding (or a
+    // caller that bypasses it); the guard is what keeps the form itself from
+    // ever lying about what it can do.
+    if (!State.live) {
+      State.creatingItem = false;
+      panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
+        '<div class="readonly-banner">read-only snapshot &middot; to add an item run: <code>gw add "&lt;title&gt;"</code>, then <code>gw open</code> again to refresh this snapshot.</div>';
+      panel.querySelector('#panel-close').addEventListener('click', closePanel);
+      overlay.classList.add('open');
+      const closeBtn = panelCloseButton();
+      if (closeBtn) closeBtn.focus();
+      return;
+    }
     State.creatingItem = true;
     const vocab = (State.config && State.config.vocab) || {};
     function options(list) {
       return '<option value="">(none)</option>' + (list || []).map((v) => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
     }
-    panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
+    panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
       '<div id="panel-error"></div>' +
       '<form id="create-form" class="create-form">' +
       '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
@@ -2637,6 +2864,8 @@
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
     panel.querySelector('#create-form').addEventListener('submit', onCreateSubmit);
     overlay.classList.add('open');
+    const titleInput = panel.querySelector('#create-form input[name="title"]');
+    if (titleInput) titleInput.focus();
   }
 
   async function onCreateSubmit(e) {
@@ -2732,7 +2961,13 @@
         const changed = beforeEditable !== JSON.stringify([State.stages, State.config, State.admin]);
         if (changed && !State.formDirty) renderView();
       } else renderView();
-      if (State.activePanelId) openPanel(State.activePanelId);
+      // The item panel refreshes with every poll only while nothing in it is
+      // half-typed -- the same contract the editors above get from
+      // State.formDirty. A dirty panel keeps its typed text through the poll;
+      // saving, reverting the typing or closing the panel makes it clean, and
+      // the next poll takes over again. openPanel always renders, so opening
+      // or switching to another item is never blocked by this.
+      if (State.activePanelId && !panelIsDirty()) openPanel(State.activePanelId);
     } catch (error) {
       State.liveError = error.message || 'server unavailable'; State.pollingDelay = Math.min(State.pollingDelay * 2, 30000); renderHeader();
     }
@@ -2793,6 +3028,19 @@
       if (e.target.closest('select.row-move')) return;
       const card = e.target.closest('[data-id]');
       if (card) openPanel(card.dataset.id);
+    });
+    // T-0017: cards and brief rows are buttons in the accessibility tree, so
+    // Enter and Space must activate them the way a native button does. The
+    // check that the focused element IS the control (not a descendant) keeps
+    // a Space on the card's own Play/Stop button from ALSO opening the
+    // drawer -- those are real buttons with their own native click.
+    document.getElementById('gw-view').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (!e.target.closest) return;
+      const control = e.target.closest('[data-id][role="button"]');
+      if (!control || control !== e.target) return;
+      e.preventDefault();
+      openPanel(control.dataset.id);
     });
     document.getElementById('gw-view').addEventListener('click', (e) => {
       const th = e.target.closest('th[data-key]');
@@ -2866,7 +3114,14 @@
     renderHeader();
     wireStatic();
     renderView();
-    if (location.protocol.indexOf('http') === 0) {
+    // Live mode is earned by a server answering /api/state, not by the page
+    // being served over http. `gw serve` serves this shell with no injected
+    // blocks, so its pages get here through fromServer; a snapshot written by
+    // `gw open` carries its own data, and serving that file through any other
+    // static server must leave it exactly what it is -- a snapshot. Forcing
+    // it live was what showed a "live" pill, a clickable "+ new item" and a
+    // create form whose submit died with a raw "Failed to fetch".
+    if (loaded.fromServer) {
       State.live = true; State.lastLiveUpdate = Date.now(); renderHeader();
       schedulePoll(2000);
       window.setInterval(() => { if (State.live) { renderHeader(); tickRunAges(); } }, 1000);

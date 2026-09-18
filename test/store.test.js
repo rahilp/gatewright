@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -126,6 +127,57 @@ test('a missing digest is unknown, not an accusation', () => {
   assert.deepEqual(store.verifyDigest(), { status: 'unknown' });
 });
 
+// stages.json and config.json define the gates, so a hand edit to either is
+// exactly the tampering the digest exists to catch (T-0002).
+test('a hand edit to stages.json is detected and named, not just items.jsonl', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }], terminal: [], extra: [] }));
+  const result = store.verifyDigest();
+  assert.equal(result.status, 'modified');
+  assert.deepEqual(result.files, ['stages.json']);
+});
+
+test('a hand edit to config.json is detected and named', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  writeFileSync(store.paths.config, JSON.stringify({ version: 1 }));
+  const result = store.verifyDigest();
+  assert.equal(result.status, 'modified');
+  assert.deepEqual(result.files, ['config.json']);
+});
+
+test('a hand edit to both files is reported one line per file', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }], terminal: [], extra: [] }));
+  writeFileSync(store.paths.config, JSON.stringify({ version: 1 }));
+  const result = store.verifyDigest();
+  assert.deepEqual(result.files, ['stages.json', 'config.json']);
+});
+
+// events.jsonl is append-only: adding a line is normal operation, never
+// tampering, so it is deliberately not digested.
+test('appending to events.jsonl is not reported', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  store.appendEvent({ type: 'note', item: 'P1-01', by: 'human:rahil' });
+  assert.deepEqual(store.verifyDigest(), { status: 'clean' });
+});
+
+// A .digest written before stages.json and config.json were protected has only
+// the `items` key. Missing hashes mean unknown, baseline silently — otherwise
+// every upgraded board screams on its first check.
+test('an old-format digest (items key only) is unknown and baselines silently', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  const itemsHash = createHash('sha256').update(readFileSync(store.paths.items)).digest('hex');
+  writeFileSync(store.paths.digest, JSON.stringify({ items: itemsHash, ts: '2026-09-01T00:00:00.000Z' }) + '\n');
+  assert.deepEqual(store.verifyDigest(), { status: 'unknown' });
+  store.rebaselineDigest();
+  assert.deepEqual(store.verifyDigest(), { status: 'clean' });
+});
+
 // --- locking: two agent runs and a human at a terminal can all write at once
 
 test('withLock returns the body result and releases the lock', () => {
@@ -181,9 +233,11 @@ test('writeConfig atomically round-trips valid JSON without leaving a temp file'
   const store = freshStore();
   const config = { version: 1, github: { last_sync: '2026-09-14T12:00:00Z' } };
   store.writeItems([item()]);
-  const digestBefore = readFileSync(store.paths.digest, 'utf8');
   store.writeConfig(config);
   assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')), config);
-  assert.equal(readFileSync(store.paths.digest, 'utf8'), digestBefore, 'config writes must not rebaseline the items digest');
+  // config.json is digested too, so a legitimate write must re-baseline it:
+  // a `gw config` that made the next check cry tampering would make the
+  // report useless.
+  assert.equal(store.verifyDigest().status, 'clean');
   assert.deepEqual(readdirSync(store.dir).filter((file) => file.includes('.tmp')), []);
 });

@@ -177,6 +177,133 @@ test('import through the real binary in a temp repo', () => {
   assert.ok(items.some((i) => i.id === 'P1-05' && i.scope.includes('foo · bar')));
 });
 
+// T-0008 — a JSON array whose rows all lack an id used to exit 0 with
+// "imported 0, skipped 1" while the identical CSV failure exited 2. A CI
+// script checking the exit code read success from an import that imported
+// nothing. The rule now, for every format: rows present and none importable
+// is a usage error naming what was wrong; a file with no rows at all is not
+// an error.
+test('json and csv agree: every row skipped is an exit-2 failure naming the reason', async () => {
+  const cases = [
+    // JSON numbers records; csv numbers physical file lines, so the header row
+    // shifts them by one. The verdict, the reason and the message shape agree.
+    { file: 'rows.json', text: '[{"title":"No id"},{"title":"Still no id"}]', lines: 'lines 1, 2' },
+    { file: 'rows.csv', text: 'id,title\n,No id\n,Still no id\n', lines: 'lines 2, 3' },
+  ];
+  for (const { file, text, lines } of cases) {
+    const { root, store } = repo();
+    const path = join(root, file);
+    writeFileSync(path, text);
+    const streams = capture();
+    await assert.rejects(
+      () => run({ store, root, actor: 'human:tester', flags: {}, positionals: [path], ...streams }),
+      (error) => error instanceof UsageError
+        && error.message === `nothing imported from ${path}: all 2 row(s) were skipped (missing id or title: ${lines})`,
+      `${file} must fail with the same message shape as every other format`,
+    );
+    assert.equal(streams.lines.join(''), '');
+    assert.equal(store.readItems().length, 0);
+  }
+});
+
+test('a json or csv file with no rows at all is not an error', async () => {
+  const cases = [
+    { file: 'empty.json', text: '[]', out: 'no importable rows found in' },
+    { file: 'empty.csv', text: 'id,title\n', out: 'no importable rows found in' },
+  ];
+  for (const { file, text, out } of cases) {
+    const { root, store } = repo();
+    const path = join(root, file);
+    writeFileSync(path, text);
+    const streams = capture();
+    const code = await run({ store, root, actor: 'human:tester', flags: {}, positionals: [path], ...streams });
+    assert.equal(code, 0, `${file} with zero rows is not a failure`);
+    assert.match(streams.lines.join(''), new RegExp(`^${out}`));
+    assert.equal(store.readItems().length, 0);
+  }
+});
+
+test('a partially skipped import still succeeds and still names the skipped rows', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'mixed.json');
+  writeFileSync(path, '[{"id":"J-1","title":"Good"},{"title":"No id"}]');
+  const streams = capture();
+  const code = await run({ store, root, actor: 'human:tester', flags: {}, positionals: [path], ...streams });
+  assert.equal(code, 0);
+  assert.equal(store.readItems().length, 1);
+  assert.match(streams.lines.join(''), /^imported 1, skipped 1\n  skipped line 2: missing id or title\n$/);
+});
+
+test('the all-rows-skipped failure also applies to --dry-run', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'rows.json');
+  writeFileSync(path, '[{"title":"No id"}]');
+  await assert.rejects(
+    () => run({ store, root, actor: 'human:tester', flags: { 'dry-run': true }, positionals: [path], stdout: capture().stdout }),
+    (error) => error instanceof UsageError && /all 1 row\(s\) were skipped/.test(error.message),
+  );
+  assert.equal(store.readItems().length, 0);
+});
+
+// T-0007 — `gw add --phase ZZZ` is refused at exit 2, so the same value
+// through an import must not land on the board silently and surface only
+// later in `gw check`. A bad row is skipped with its line and reason, like
+// any other malformed row; a file whose every row is bad fails like any
+// other all-skipped file.
+test('import applies the same vocabulary as add: bad values are skipped with line and reason', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'vocab.csv');
+  writeFileSync(path, 'id,title,phase,type\nP1-01,Good,P1,feature\nP1-02,Bad phase,P9,feature\nP1-03,Bad type,P1,chore\n');
+  const streams = capture();
+  const code = await run({ store, root: store.root, actor: 'human:tester', flags: {}, positionals: [path], ...streams });
+  assert.equal(code, 0);
+  const stored = store.readItems();
+  assert.deepEqual(stored.map((item) => item.id), ['P1-01']);
+  assert.equal(streams.lines.join(''), 'imported 1, skipped 2\n'
+    + '  skipped line 3: invalid phase \'P9\' (allowed values: P0, P1, P2, P3)\n'
+    + '  skipped line 4: invalid type \'chore\' (allowed values: decision, defect, feature, test, doc)\n');
+});
+
+test('an import whose every row is out of vocabulary imports nothing and fails like any all-skipped file', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'all-bad.json');
+  writeFileSync(path, '[{"id":"J-1","title":"T","priority":"P9"}]');
+  const streams = capture();
+  await assert.rejects(
+    () => run({ store, root: store.root, actor: 'human:tester', flags: {}, positionals: [path], ...streams }),
+    (error) => error instanceof UsageError
+      && error.message === `nothing imported from ${path}: all 1 row(s) were skipped (invalid priority 'P9' (allowed values: P0, P1, P2, P3): line 1)`,
+  );
+  assert.equal(streams.lines.join(''), '');
+  assert.equal(store.readItems().length, 0);
+});
+
+test('an out-of-vocabulary row is skipped on --dry-run too, with the same reason', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'dry-bad.csv');
+  writeFileSync(path, 'id,title,priority\nP1-01,Good,P1\nP1-02,Bad,P9\n');
+  const streams = capture();
+  const code = await run({ store, root: store.root, actor: 'human:tester', flags: { 'dry-run': true }, positionals: [path], ...streams });
+  assert.equal(code, 0);
+  assert.equal(store.readItems().length, 0);
+  assert.equal(streams.lines.join(''), 'would import P1-01: Good\n'
+    + 'would import 1 item(s), skipped 1\n'
+    + '  skipped line 3: invalid priority \'P9\' (allowed values: P0, P1, P2, P3)\n');
+});
+
+// T-0009 (import side) — a title holding a newline is skipped with a reason,
+// the same way a row missing its title is.
+test('a title containing a newline is skipped with a reason, not imported', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'newline.csv');
+  writeFileSync(path, 'id,title\nP1-01,Good\nP1-02,"multi\nline"\n');
+  const streams = capture();
+  const code = await run({ store, root: store.root, actor: 'human:tester', flags: {}, positionals: [path], ...streams });
+  assert.equal(code, 0);
+  assert.deepEqual(store.readItems().map((item) => item.id), ['P1-01']);
+  assert.match(streams.lines.join(''), /^imported 1, skipped 1\n  skipped line 3: title must not contain newlines\n$/);
+});
+
 test('importing the real tasks.md never produces a board that fails stage rules', async () => {
   const { store } = repo();
   const streams = capture();

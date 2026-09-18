@@ -203,6 +203,24 @@ test('init --gh can enable GitHub on an existing tracker', () => {
   assert.equal(JSON.parse(readFileSync(join(root, '.gatewright', 'config.json'))).github.enabled, true);
 });
 
+// Every write init performs must re-baseline the digest, or gw's own command
+// is reported as tampering on the next check.
+test('a freshly initialized board checks clean, with no out-of-band report', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  run(['init'], root);
+  assert.equal(run(['check'], root), 'Board is clean.\n');
+});
+
+test('init --gh on an existing tracker re-baselines the digest, so gw check stays clean', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-'));
+  initWithGh(root, {}, () => { throw new Error('not called'); });
+  run(['check'], root);
+  const before = readFileSync(join(root, '.gatewright', '.digest'), 'utf8');
+  initWithGh(root, { gh: true, repo: 'owner/repo' }, () => ({ stdout: '', status: 0 }));
+  assert.notEqual(readFileSync(join(root, '.gatewright', '.digest'), 'utf8'), before, 'the config write must have re-baselined the digest');
+  assert.equal(run(['check'], root), 'Board is clean.\n');
+});
+
 test('the usage text advertises --gh now that P3-08 has landed', () => {
   const help = run(['--help'], mkdtempSync(join(tmpdir(), 'gw-init-')));
   assert.ok(help.includes('--gh'));

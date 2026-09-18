@@ -99,6 +99,20 @@ test('an unchanged second sync performs zero data writes and appends zero events
   assert.equal(store.readEvents().length, events);
 });
 
+// A sync advances the watermark and writes config.json through
+// store.writeConfig. That is gw's own write, so it must re-baseline the
+// digest instead of being reported as tampering by the next check.
+test('a sync that advances the watermark keeps gw check clean', async () => {
+  const store = board();
+  const result = pull({ store, gh: gh([issue()]) });
+  assert.equal(result.watermarkChanged, true);
+  assert.equal(store.verifyDigest().status, 'clean');
+  let stdout = '';
+  const code = await runRouter(['check'], { cwd: store.root, env: {}, stdout: { write: (text) => { stdout += text; } }, stderr: { write() {} } });
+  assert.equal(code, 0);
+  assert.equal(stdout, 'Board is clean.\n');
+});
+
 test('--dry-run prints item changes while leaving the board untouched', () => {
   const store = board(); let stdout = '';
   const before = hash(store);

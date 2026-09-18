@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +13,8 @@ const stages = { stages: [{ id: 'backlog' }, { id: 'specified' }, { id: 'buildin
 const item = (over = {}) => ({ id: 'P1-01', title: 'test', stage: 'backlog', owner: null, deps: [], evidence: [], updated: new Date().toISOString(), gh: null, flag: null, ...over });
 // `config` is merged into the check block; `vocab` is top level, because that
 // is where readConfig looks for it.
-function board(items = [item()], { stages: boardStages = stages, config = {}, vocab } = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(boardStages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'], ...config }, ...(vocab ? { vocab } : {}) })); return { root, store }; }
+function board(items = [item()], { stages: boardStages = stages, config = {}, vocab } = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(boardStages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'], ...config }, ...(vocab ? { vocab } : {}) })); // The fixture writes stages.json and config.json by hand to stand up the board; a real board reaches this state through gw, which re-baselines the digest. Baseline here too, so only deliberate tampering in a test is ever reported.
+ store.rebaselineDigest(); return { root, store }; }
 function ctx(b, flags = {}) { let output = ''; return { output: () => output, ctx: { flags, positionals: [], store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write(s) { output += s; } }, stderr: { write(s) { output += s; } } } }; }
 
 test('check reports an out-of-band edit once then rebaselines it', () => {
@@ -25,6 +26,39 @@ test('check reports an out-of-band edit once then rebaselines it', () => {
 test('check silently baselines an unknown digest', () => {
   const b = board(); rmSync(b.store.paths.digest);
   const result = ctx(b); assert.equal(run(result.ctx), 0); assert.doesNotMatch(result.output(), /digest|modified/i); assert.equal(b.store.verifyDigest().status, 'clean');
+});
+
+// T-0002: stages.json DEFINES the gates, so deleting a `requires` block by hand
+// must be reported, not greeted with "Board is clean."
+test('check reports a hand edit to stages.json, then re-baselines it', () => {
+  const b = board();
+  const tampered = JSON.parse(JSON.stringify(stages));
+  delete tampered.stages.find((stage) => stage.id === 'built').requires;
+  writeFileSync(b.store.paths.stages, JSON.stringify(tampered));
+  const first = ctx(b); assert.equal(run(first.ctx), 1);
+  assert.match(first.output(), /OUT-OF-BAND WRITE\n  stages\.json modified outside gw since /);
+  const second = ctx(b); assert.equal(run(second.ctx), 0);
+  assert.match(second.output(), /^Board is clean\.$/m);
+});
+
+test('check reports a hand edit to config.json in the same style', () => {
+  const b = board();
+  const tampered = JSON.parse(readFileSync(b.store.paths.config, 'utf8'));
+  tampered.check.stale_days = 9999;
+  writeFileSync(b.store.paths.config, JSON.stringify(tampered));
+  const first = ctx(b); assert.equal(run(first.ctx), 1);
+  assert.match(first.output(), /OUT-OF-BAND WRITE\n  config\.json modified outside gw since /);
+  const second = ctx(b); assert.equal(run(second.ctx), 0);
+  assert.match(second.output(), /^Board is clean\.$/m);
+});
+
+// The event log is append-only; appending is normal operation, so it must
+// never be reported as tampering.
+test('check does not report an appended events.jsonl line', () => {
+  const b = board();
+  b.store.appendEvent({ type: 'note', item: 'P1-01', by: 'human:test' });
+  const result = ctx(b); assert.equal(run(result.ctx), 0);
+  assert.equal(result.output(), 'Board is clean.\n');
 });
 
 test('check validates stages before examining items and keeps validation JSON machine-readable', () => {
@@ -231,4 +265,68 @@ test('json output carries notes separately from problems', () => {
   const parsed = JSON.parse(result.output());
   assert.equal(parsed.problems.length, 0, 'an inbox entry is not a problem');
   assert.equal(parsed.notes.length, 1, 'but it is still reported to anything reading json');
+});
+
+// T-0019 — a dispatch queued while runner.enabled is false can never run:
+// nothing will ever record the run_ended that would clear it, so the item
+// sits in "queued · no agent run yet" forever. A queued dispatch is a
+// legitimate choice, but only as a visible one, so it is reported as a note
+// beside the inbox rather than failing the board.
+test('a queued dispatch with the runner disabled is reported as a note, not a violation', () => {
+  const b = board([item()]);
+  b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'a stranded dispatch is a report, not a failure');
+  assert.equal(
+    result.output(),
+    'QUEUED DISPATCH — 1 dispatch no agent will ever run while the runner is disabled.\n'
+    + '  P1-01: queued while runner.enabled is false, so no agent will ever pick it up: enable it with `gw config runner.enabled true` and start the scheduler with `gw serve`, or cancel the dispatch from the board\n',
+  );
+});
+
+test('an ended or cancelled dispatch is not reported, and an enabled runner is not reported', () => {
+  const ended = board([item()]);
+  ended.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  ended.store.appendEvent({ type: 'run_ended', item: 'P1-01', by: 'scheduler' });
+  const endedResult = ctx(ended);
+  assert.equal(run(endedResult.ctx), 0);
+  assert.equal(endedResult.output(), 'Board is clean.\n');
+
+  const cancelled = board([item()]);
+  cancelled.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  cancelled.store.appendEvent({ type: 'cancel', item: 'P1-01', by: 'human:test' });
+  const cancelledResult = ctx(cancelled);
+  assert.equal(run(cancelledResult.ctx), 0);
+  assert.equal(cancelledResult.output(), 'Board is clean.\n');
+
+  const enabled = board([item()]);
+  // The board() helper merges its config option into the check block, so the
+  // runner settings are written here, where readConfig actually looks.
+  writeFileSync(enabled.store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'] }, runner: { enabled: true, provider: 'stub', providers: { stub: { cmd: ['stub'] } } } }));
+  enabled.store.rebaselineDigest();
+  enabled.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const enabledResult = ctx(enabled);
+  assert.equal(run(enabledResult.ctx), 0);
+  assert.equal(enabledResult.output(), 'Board is clean.\n', 'a runner that can run will pick the dispatch up');
+});
+
+test('a queued dispatch note travels in --json alongside the inbox notes', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const result = ctx(b, { json: true });
+  assert.equal(run(result.ctx), 0);
+  const parsed = JSON.parse(result.output());
+  assert.deepEqual(parsed.notes.map((entry) => entry.type), ['inbox', 'queued dispatch']);
+  assert.equal(parsed.notes[1].id, 'P1-01');
+});
+
+test('an inbox and a queued dispatch get their own headings in one report', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0);
+  const out = result.output();
+  assert.match(out, /^INBOX — 1 item not classified yet\. Not a violation; nothing to do unless you want to\.$/m);
+  assert.match(out, /^QUEUED DISPATCH — 1 dispatch no agent will ever run while the runner is disabled\.$/m);
+  assert.ok(out.indexOf('INBOX') < out.indexOf('QUEUED DISPATCH'));
 });

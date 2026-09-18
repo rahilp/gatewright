@@ -5,12 +5,6 @@
       "label": "Backlog"
     },
     {
-      "id": "specified",
-      "label": "Specified",
-      "exit": "Someone picks it up and starts changing code or the owning document.",
-      "auto": true
-    },
-    {
       "id": "building",
       "label": "Building",
       "exit": "Change is complete locally with tests passing.",

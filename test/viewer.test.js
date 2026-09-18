@@ -225,7 +225,13 @@ test('a viewer choicesFrom path resolves to the same choices the CLI computes', 
       checked += 1;
     }
   }
-  assert.equal(checked, configs.length, 'expected exactly one derived-choice setting to exercise');
+  // Exact and derived from the table itself: every settings entry that
+  // derives choices must have been checked against every config shape, so a
+  // second choicesFrom setting added later is exercised here automatically
+  // rather than silently dropping out of coverage.
+  const derived = SETTINGS.filter((setting) => setting.choicesFrom);
+  assert.ok(derived.length >= 1, 'expected at least one derived-choice setting to exercise');
+  assert.equal(checked, derived.length * configs.length, 'every derived-choice setting was checked against every config shape');
 });
 
 test('the gate builder edits exactly the rule keys lib/rules.js reads', async () => {
@@ -485,6 +491,70 @@ test('the poll loop cannot wipe a half-filled stages or settings form', () => {
   assert.match(SHELL, /State\.admin = data\.admin \|\| \{ allowed: false \};/, 'every poll re-reads whether this browser may still change the rules');
 });
 
+// T-0014: the remove button in Stages & rules deleted a stage on one
+// unconfirmed click. The viewer had zero confirm() calls anywhere, so the
+// misclick case -- an EMPTY stage, which the server happily deletes -- had no
+// guard at all, while the case that was guarded (a stage still holding items)
+// is the one the server refuses anyway.
+test('removing a stage asks for confirmation and names what is lost', () => {
+  const handler = SHELL.match(/\[data-stage-remove\][\s\S]*?saveStages\(doc, 'stage-row-error-' \+ id\);/);
+  assert.ok(handler, 'the stage remove handler exists');
+  const confirmAt = handler[0].indexOf('window.confirm');
+  const docAt = handler[0].indexOf('const doc = stagesDoc()');
+  assert.notEqual(confirmAt, -1, 'removal must pass through window.confirm() -- native, so it works on touch');
+  assert.notEqual(docAt, -1);
+  assert.ok(confirmAt < docAt, 'the confirmation must be answered before the stages document is built or saved');
+  assert.match(handler[0], /stage\.label/, 'the confirmation names the stage label');
+  assert.match(handler[0], /' \+ id \+ '\)/, 'the confirmation names the stage id');
+  assert.match(handler[0], /its gate rules/, 'a stage carrying a gate says the gate is lost');
+  assert.match(handler[0], /its terminal role/, 'a terminal stage says the role is lost');
+  assert.match(handler[0], /cannot be undone/, 'the confirmation says there is no undo');
+});
+
+// T-0015: the poll re-rendered the open item panel every two seconds, wiping
+// whatever a human was typing into the note box or a field. The editors had a
+// dirty guard (State.formDirty); the panel -- where typing actually happens
+// -- did not. "Dirty" for the panel is decided live: a control differs from
+// what the render that created it put there. Unlike a sticky flag it
+// unlatches itself when the typing is undone, and every render re-baselines
+// it, so a saved panel is clean again and the poll takes over.
+test('panel dirty means a control differs from what its render put there', () => {
+  const valuesDiverge = new Function('base', 'now', `${liftHelper('valuesDiverge')}\nreturn valuesDiverge(base, now);`);
+
+  assert.equal(valuesDiverge({ title: 'a', 'note-input': '' }, { title: 'a', 'note-input': '' }), false, 'identical snapshots are not dirty');
+  assert.equal(valuesDiverge({ title: 'a' }, { title: 'b' }), true, 'typed text diverges');
+  assert.equal(valuesDiverge({ title: 'a' }, { title: 'a', 'note-input': 'x' }), true, 'typing into a control that was empty at baseline diverges');
+  assert.equal(valuesDiverge({ title: 'a', 'note-input': 'x' }, { title: 'a', 'note-input': 'x' }), false);
+  assert.equal(valuesDiverge({ title: 'a' }, { title: '' }), true, 'clearing a value is a divergence, not a match');
+  assert.equal(valuesDiverge({ 'evidence-input': '' }, {}), false, 'a control absent from both sides in practice (missing vs empty) is not a difference');
+});
+
+test('the poll cannot wipe a half-typed item panel', () => {
+  assert.match(
+    SHELL,
+    /if \(State\.activePanelId && !panelIsDirty\(\)\) openPanel\(State\.activePanelId\);/,
+    'the poll redraws the open panel only while nothing in it is half-typed',
+  );
+  const refreshTransitions = SHELL.match(/async function refreshTransitions\([\s\S]*?\n  \}/);
+  assert.ok(refreshTransitions);
+  assert.match(refreshTransitions[0], /!panelIsDirty\(\)/, 'a transition verdict landing must not wipe typing either');
+  const refreshRunLog = SHELL.match(/async function refreshRunLog\([\s\S]*?\n  \}/);
+  assert.ok(refreshRunLog);
+  assert.match(refreshRunLog[0], /!panelIsDirty\(\)/, 'a run log landing must not wipe typing either');
+  const openPanel = SHELL.match(/function openPanel\(id\) \{[\s\S]*?\n  \}/);
+  assert.ok(openPanel);
+  assert.match(openPanel[0], /renderPanel\(it\);/, 'opening or switching items always renders -- the dirty guard only ever defers the poll, never a deliberate switch');
+  const renderPanel = SHELL.match(/function renderPanel\(it\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderPanel);
+  assert.match(renderPanel[0], /State\.panelBaseline = capturePanelBaseline\(\);/, 'every render re-baselines, so saving or reverting unlatches the guard and no panel can go stale forever');
+  const closePanel = SHELL.match(/function closePanel\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(closePanel);
+  assert.match(closePanel[0], /State\.panelBaseline = null;/, 'closing the panel retires its baseline');
+  const saveFields = SHELL.match(/async function onSaveFields\([\s\S]*?\n  \}/);
+  assert.ok(saveFields);
+  assert.match(saveFields[0], /State\.panelBaseline = capturePanelBaseline\(\);/, 'a successful save re-baselines -- otherwise the guard would report a divergence that no longer exists and the poll could never re-render the panel again');
+});
+
 // --------------------------------------------------------------------------
 // P8-12: a terminal column (Built holding 103 of 113 cards on a real board)
 // squeezed the columns that matter off to the left and pushed Dropped off the
@@ -645,6 +715,41 @@ test('a backward move looks different everywhere it is offered, and carries forc
 });
 
 // --------------------------------------------------------------------------
+// T-0018: the disabled forward-skip stage buttons said "use `gw move --force`
+// to skip stages" -- a command a browser-only reader cannot run. The board's
+// position (P8-18, and the dropAllowed test above) is that a forward skip
+// stays a CLI decision; the fix is to say that plainly instead of naming a
+// command, not to open the door to forward skips from the board.
+
+test('a refused forward skip is explained as a board decision, never as a CLI command', () => {
+  const dropRefusal = new Function('State', 'id', 'stageId',
+    `${liftHelper('dropRefusal')}\nreturn dropRefusal(id, stageId);`);
+  const State = (transitions, extra) => ({ transitions: { 'P1-01': transitions }, ...extra });
+
+  const skip = dropRefusal(State({ built: { ok: true, force: true } }), 'P1-01', 'built');
+  assert.match(skip, /board does not offer this jump/, 'a reachable-but-force-only target says the board does not offer it');
+  assert.doesNotMatch(skip, /gw move --force/, 'and it does not name a command a browser user cannot run');
+  assert.doesNotMatch(skip, /--force/, 'no flag a mouse has no way to pass');
+
+  const unreachable = dropRefusal(State({}), 'P1-01', 'merged');
+  assert.match(unreachable, /board does not skip stages/, 'a target with no transition verdict says the board does not skip stages');
+  assert.doesNotMatch(unreachable, /gw move --force/, 'and equally does not name the CLI command');
+
+  assert.doesNotMatch(SHELL, /use `gw move --force` to skip stages/, 'the old instruction is gone from the panel stage buttons');
+  assert.doesNotMatch(SHELL, /A jump like this needs `gw move --force`/, 'and from the drag tooltips');
+  assert.doesNotMatch(SHELL, /and a jump like this also needs `gw move --force`/, 'and from the unmet-gate-with-jump note');
+});
+
+test('the forward-skip stage buttons stay disabled while they say why', () => {
+  // The refusal text must be attached to a button that is still off: the note
+  // explains a disabled button, it must not appear on one that could fire.
+  const branch = SHELL.match(/else if \(transition\.force && transition\.ok\) \{[\s\S]*?\n      \} else if/);
+  assert.ok(branch, 'the forced-ok forward-skip branch is still there');
+  assert.match(branch[0], /note = 'The board does not skip gates/, 'it explains itself as a board decision');
+  assert.doesNotMatch(branch[0], /disabled = false/, 'a forced forward skip never becomes a live button');
+});
+
+// --------------------------------------------------------------------------
 // P8-13: Overview used to be four census charts and nothing else. It is now
 // "what should I do next", built on the same "in flight" lib/brief.js just
 // had two bugs from a second definition of ("terminal" -- inflightTitles'
@@ -750,4 +855,251 @@ test('the item panel wires the Claim button to a claim action, not a dead end', 
     /async function onClaimClick\(id, btn\) \{[\s\S]*?apiWrite\('\/api\/items\/' \+ encodeURIComponent\(id\) \+ '\/claim', \{\}\)/,
     'onClaimClick posts to this item\'s claim action, mirroring the existing dispatch/cancel/resume/triage actions',
   );
+});
+
+// --------------------------------------------------------------------------
+// T-0016: the create flow was the one write control that still rendered
+// live-looking on a static snapshot and died on submit with a raw
+// "Failed to fetch" (a CORS error from file://, with no console on a phone
+// to discover what actually happened). Two things hold it shut:
+// the "+ new item" button is hidden whenever the page is not live, and
+// openCreatePanel itself refuses to render the form on a snapshot, degrading
+// to the read-only banner wording every other write control already uses.
+// A page also only goes live when a server actually answered /api/state --
+// http alone is not permission, or a snapshot served through any static file
+// server claimed to be "live" and offered that same lying form.
+
+test('the "+ new item" control is hidden on a snapshot, and the create panel cannot render live there', () => {
+  assert.match(
+    SHELL,
+    /<button class="clear-filters hidden" id="f-new">\+ new item<\/button>/,
+    'the control ships hidden, so a snapshot shows it never',
+  );
+  assert.match(
+    SHELL,
+    /document\.getElementById\('f-new'\)\.classList\.toggle\('hidden', !State\.live\);/,
+    'renderHeader keeps the hiding tied to State.live, so the two cannot drift',
+  );
+
+  // Run openCreatePanel against stub elements: once on a snapshot, once live.
+  const panel = {
+    innerHTML: '',
+    classList: { add() {}, remove() {}, contains() { return false; } },
+    addEventListener() {},
+    querySelector() { return { addEventListener() {}, focus() {} }; },
+  };
+  const overlay = { classList: { add() {}, remove() {}, contains() { return false; } } };
+  const doc = { getElementById: (id) => (id === 'gw-panel' ? panel : overlay), querySelector: () => null };
+  const run = (state) => {
+    panel.innerHTML = '';
+    new Function('State', 'document', 'panelEl', `
+      function closePanel() {}
+      function onCreateSubmit() {}
+      ${liftHelper('escapeHtml')}
+      ${liftHelper('panelCloseButton')}
+      ${liftFunction('openCreatePanel')}
+      openCreatePanel();
+      return panelEl.innerHTML;
+    `)(state, doc, panel);
+    return { html: panel.innerHTML, state };
+  };
+
+  const snapshot = run({ live: false, activePanelId: null, creatingItem: null, config: {} });
+  assert.match(snapshot.html, /class="readonly-banner"/, 'the degraded panel uses the read-only snapshot wording the item panel already uses');
+  assert.match(snapshot.html, /gw add "&lt;title&gt;"/, 'and names the exact command to run instead');
+  assert.match(snapshot.html, /gw open/, 'and says how to refresh the snapshot afterwards');
+  assert.doesNotMatch(snapshot.html, /<form/, 'no form is rendered where nothing can be submitted');
+  assert.equal(snapshot.state.creatingItem, false, 'a snapshot never enters the creating state');
+
+  const live = run({ live: true, activePanelId: null, creatingItem: null, config: {} });
+  assert.match(live.html, /<form id="create-form" class="create-form">/, 'the live branch still renders the real form');
+  // The guard must sit before the form markup, so the form is unreachable on
+  // a snapshot rather than merely hidden after the fact.
+  const fn = liftFunction('openCreatePanel');
+  assert.ok(
+    fn.indexOf('if (!State.live) {') > -1 && fn.indexOf('if (!State.live) {') < fn.indexOf('<form id="create-form"'),
+    'the snapshot guard is the first thing openCreatePanel does',
+  );
+});
+
+test('a page only goes live when a server actually answered /api/state', () => {
+  assert.match(SHELL, /fromServer: true,/, 'loadState must report when the state came from the server');
+  assert.match(
+    SHELL,
+    /generatedAt: \(config && config\.generatedAt\) \|\| null, live: false,\n\s*fromServer: false,/,
+    'an injected snapshot is reported as never having talked to a server',
+  );
+  assert.match(
+    SHELL,
+    /if \(loaded\.fromServer\) \{\n\s*State\.live = true;/,
+    'boot goes live only for a real server',
+  );
+  assert.doesNotMatch(
+    SHELL,
+    /location\.protocol\.indexOf\('http'\) === 0\) \{\n\s*State\.live = true;/,
+    'the old "any http page is live" shortcut is gone -- that is what made a static-served snapshot claim to be live',
+  );
+});
+
+// --------------------------------------------------------------------------
+// T-0017: item mentions on the Overview and Board views were plain spans
+// with no role and no keyboard reach, despite opening the full edit drawer
+// on click. They are now buttons in the accessibility tree: focusable,
+// named after the item they open, activated by Enter and Space. Table rows
+// keep their native row semantics and gain a real button on the id cell.
+
+const CARD_HELPERS = [
+  'escapeHtml', 'stageList', 'nextStageId', 'glossaryFor', 'describeTerm', 'termTitle',
+  'ageLabel', 'runLabel', 'evidenceGateUnmet', 'runFor', 'isDispatched', 'isTerminalItem', 'actionFor',
+].map(liftHelper).join('\n');
+const CARD_ZERO_ARG = ['terminalStageIds', 'schedulerIsOff', 'playLabel', 'playTitle', 'defaultOwner']
+  .map(liftFunction).join('\n');
+
+function renderCardWith(State, it) {
+  return new Function('State', 'it', `
+    ${CARD_ZERO_ARG}
+    ${CARD_HELPERS}
+    ${liftHelper('cardMarkup')}
+    return cardMarkup(it, false);
+  `)(State, it);
+}
+
+const CARD_STATE = () => ({
+  items: [{ id: 'T-0001', title: 'Build the thing', stage: 'backlog', updated: '2024-01-01' }],
+  events: [], runs: [], scheduler: { status: 'disabled' }, config: {},
+  stages: { stages: [{ id: 'backlog' }, { id: 'built', role: 'done' }], extra: [] },
+  transitions: {},
+});
+
+test('a board card is a focusable button named after the item it opens', () => {
+  const snapshot = renderCardWith({ ...CARD_STATE(), live: false }, CARD_STATE().items[0]);
+  assert.match(snapshot, /role="button" tabindex="0"/, 'the card is a button in the accessibility tree, focusable by Tab');
+  assert.match(snapshot, /aria-label="Open item T-0001: Build the thing"/, 'its name says which item it opens');
+  assert.doesNotMatch(snapshot, /class="card-actions"/, 'a snapshot card has no nested action buttons');
+
+  const live = renderCardWith({ ...CARD_STATE(), live: true }, CARD_STATE().items[0]);
+  assert.match(live, /role="button" tabindex="0"/, 'live cards are buttons too');
+  assert.match(live, /data-play="T-0001"/, 'the live card still carries its Play action');
+  assert.match(live, /draggable="true"/, 'drag and drop is not regressed');
+});
+
+test('an Overview "what next" row is a focusable button named after the item it opens', () => {
+  const briefSectionHtml = new Function('title', 'items', 'note', 'emptyText', `
+    ${liftConstLine('BRIEF_SECTION_LIMIT')}
+    ${liftHelper('escapeHtml')}
+    ${liftHelper('briefSectionHtml')}
+    return briefSectionHtml(title, items, note, emptyText);
+  `);
+  const html = briefSectionHtml('In flight', [{ id: 'T-0001', title: 'Build the thing', stage: 'building', owner: 'human:x' }], () => 'building · human:x', 'Nothing is in flight.');
+  assert.match(html, /role="button" tabindex="0"/);
+  assert.match(html, /aria-label="Open item T-0001: Build the thing"/);
+});
+
+test('a table row keeps its row semantics and gains a real open button on its id', () => {
+  const container = { innerHTML: '' };
+  new Function('State', 'container', `
+    ${liftConstLine('STAGE_LABEL_FALLBACK')}
+    ${CARD_ZERO_ARG}
+    ${CARD_HELPERS}
+    ${liftHelper('fmtDate')}
+    ${liftHelper('dropAllowed')}
+    ${liftHelper('pipelineIndex')}
+    ${liftHelper('isBackwardTarget')}
+    ${liftHelper('moveSelectOptionsHtml')}
+    ${liftHelper('moveSelectHtml')}
+    ${liftHelper('rowActionsHtml')}
+    ${liftHelper('filteredItems')}
+    ${liftHelper('stageLabel')}
+    ${liftHelper('renderTable')}
+    renderTable(container);
+    return container.innerHTML;
+  `)({ ...CARD_STATE(), live: true, filters: { phase: '', type: '', stage: '', flag: '', search: '' }, sort: { key: 'updated', dir: 'desc' } }, container);
+
+  assert.match(container.innerHTML, /<tr data-id="T-0001">/, 'the row keeps its data-id and native row semantics');
+  assert.match(
+    container.innerHTML,
+    /<button class="id-open" aria-label="Open item T-0001: Build the thing">T-0001<\/button>/,
+    'the id cell is a real button whose name says which item it opens',
+  );
+  assert.match(container.innerHTML, /aria-label="Move T-0001 to another stage\."/);
+});
+
+// --------------------------------------------------------------------------
+// T-0021: a title that is one very long word (newlines are sanitised away
+// now, but a single unbroken 118-character word is not) has no break points,
+// so it stretched its column and pushed the Board and Table views into
+// horizontal overflow -- a real cost on the phone the owner reads this on.
+// Titles wrap now, everywhere they render, so nothing is truncated and the
+// full title needs no title attribute.
+
+test('long unbroken titles wrap inside their column instead of stretching the page', () => {
+  // CSS cannot be executed from Node, so these are presence pins on the rules;
+  // the wrapping itself was verified by hand in a browser at three widths.
+  assert.match(
+    SHELL,
+    /\.card \.card-title \{[^}]*overflow-wrap: anywhere;/,
+    'a board card title breaks an unbroken word instead of painting past the 260px column',
+  );
+  assert.match(
+    SHELL,
+    /table\.gw-table td \{ overflow-wrap: anywhere; \}/,
+    'a table title cell breaks an unbroken word instead of forcing the table wider than the viewport',
+  );
+  assert.match(
+    SHELL,
+    /\.brief-row span:first-child \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/,
+    'an overview brief row keeps its ellipsis, and min-width: 0 is what lets the flex item actually shrink to apply it',
+  );
+  assert.match(
+    SHELL,
+    /#gw-panel \{[^}]*overflow-wrap: anywhere;/,
+    'the panel (fixed width) breaks long words in the title, field values and evidence chips too',
+  );
+});
+
+test('keyboard activation and the missing labels and names are wired', () => {
+  // Enter and Space activate the role="button" mentions, through the same
+  // delegated handler the clicks already use -- and only when the FOCUSED
+  // element is the control itself, so Space on a card's own Play button
+  // cannot also open the drawer.
+  assert.match(
+    SHELL,
+    /addEventListener\('keydown', \(e\) => \{\n\s*if \(e\.key !== 'Enter' && e\.key !== ' '\) return;\n\s*if \(!e\.target\.closest\) return;\n\s*const control = e\.target\.closest\('\[data-id\]\[role="button"\]'\);\n\s*if \(!control \|\| control !== e\.target\) return;\n\s*e\.preventDefault\(\);\n\s*openPanel\(control\.dataset\.id\);\n\s*\}\);/,
+  );
+  // Panel fields: id + name, and the dt's text is a real associated label.
+  assert.match(SHELL, /<dt><label for="panel-field-' \+ f \+ '">' \+ f \+ '<\/label><\/dt>/);
+  assert.match(SHELL, /id="panel-field-' \+ f \+ '" name="' \+ f \+ '" data-field="' \+ f \+ '"/);
+  // Evidence and note inputs, and the filter bar, are labelled.
+  assert.match(SHELL, /<label class="sr-only" for="evidence-input">Add evidence<\/label>/);
+  assert.match(SHELL, /<label class="sr-only" for="note-input">Add a note<\/label>/);
+  for (const [id, label] of [
+    ['f-phase', 'Filter by phase'], ['f-type', 'Filter by type'],
+    ['f-stage', 'Filter by stage'], ['f-flag', 'Filter by flag'], ['f-search', 'Search items'],
+  ]) {
+    assert.match(SHELL, new RegExp('<label class="sr-only" for="' + id + '">' + label + '</label>'));
+  }
+  // Every close control is an × glyph; all of them must name themselves.
+  assert.equal((SHELL.match(/aria-label="Close"/g) || []).length, 3, 'the item panel and both create-panel branches close via a named button');
+  // Focus moves into the drawer on open, and only then -- a poll re-render
+  // of an open panel must never steal focus from whoever is typing in it.
+  const openPanel = SHELL.match(/function openPanel\(id\) \{[\s\S]*?\n  \}/);
+  assert.ok(openPanel);
+  assert.ok(
+    openPanel[0].indexOf("overlay.classList.contains('open')") > -1 &&
+    openPanel[0].indexOf("overlay.classList.contains('open')") < openPanel[0].indexOf('renderPanel(it);'),
+    'openPanel decides whether it is opening fresh before it renders',
+  );
+  assert.match(openPanel[0], /if \(opening\) \{\n\s*const closeBtn = panelCloseButton\(\);\n\s*if \(closeBtn\) closeBtn\.focus\(\);\n\s*\}/);
+  const closePanel = SHELL.match(/function closePanel\(\) \{[\s\S]*?\n  \}/);
+  assert.match(closePanel[0], /if \(returnFocus && typeof returnFocus\.focus === 'function' && document\.contains\(returnFocus\)\) returnFocus\.focus\(\);/, 'closing hands focus back to the control that opened the drawer');
+  assert.match(SHELL, /\.sr-only \{/, 'the visually-hidden label class exists');
+  assert.match(SHELL, /\.card:focus-visible, \.brief-row:focus-visible \{/, 'keyboard focus is visible on the two role="button" mentions');
+  // A re-render of the drawer (poll, transition verdict) must not drop the
+  // keyboard focus on the floor: the focused control is found again by id or
+  // data-field and focus is handed to its replacement.
+  const renderPanel = SHELL.match(/function renderPanel\(it\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderPanel);
+  assert.match(renderPanel[0], /panel\.contains\(document\.activeElement\) \? document\.activeElement : null/, 'renderPanel notices when focus is inside the drawer');
+  assert.match(renderPanel[0], /input\[data-field="' \+ CSS\.escape\(active\.dataset\.field\) \+ '"\]/, 'an editable field is found again by its data-field');
+  assert.match(renderPanel[0], /if \(focusSel\) \{\n\s*const again = panel\.querySelector\(focusSel\);\n\s*if \(again\) again\.focus\(\);\n\s*\}/, 'focus is restored after the re-render');
 });

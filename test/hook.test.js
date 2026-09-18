@@ -178,6 +178,24 @@ test('malformed project settings are a fixable error, not a clobbered file', () 
   assert.equal(readFileSync(join(r.root, '.claude', 'settings.json'), 'utf8'), '{ not json');
 });
 
+// T-0011 — same voice as gc: a board outside a git repository gets the
+// problem and the fix at exit 3, not git's raw stderr.
+test('gw hook outside a git repository reports the problem in gw\'s voice at exit 3', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-hook-nogit-'));
+  const store = createStore(root); store.ensure();
+  const { out, ctx: context } = ctx({ root, store }, {}, ['status']);
+  let thrown = null;
+  try { run(context); } catch (error) { thrown = error; }
+  assert.ok(thrown, 'hook must fail outside a git repository, not limp through');
+  assert.equal(thrown.exitCode, 3);
+  assert.equal(
+    thrown.message,
+    `gw hook needs a git repository: ${root} is not inside one. Run \`git init\` in this directory, or run gw hook from a git checkout.`,
+  );
+  assert.doesNotMatch(thrown.message, /fatal/);
+  assert.equal(out(), '');
+});
+
 // The hook has to survive the CLI it calls being absent or out of date: an
 // installed gatewright is not a promise about what is on PATH a year later.
 test('the hook steps aside rather than blocking commits when gw cannot answer', (t) => {

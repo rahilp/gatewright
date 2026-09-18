@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js';
 import { run as runBrief } from '../lib/commands/brief.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
-import { renderBrief, inFlightTitles } from '../lib/brief.js';
+import { renderBrief, inFlightTitles, sanitizeTitle, isFlagged, flaggedItems, outstandingDispatches } from '../lib/brief.js';
 import { makeItems, makeEvents } from './fixtures/make-items.js';
 
 const stages = { stages: [
@@ -87,6 +87,29 @@ test('empty board produces a helpful brief', () => {
   assert.match(out, /No open work/);
   assert.match(out, /Rules:/);
   assert.ok(out.split('\n').length < 10);
+});
+
+// T-0012 — a board whose every item reached a terminal stage used to print
+// exactly what an untouched board prints, telling a team that just shipped
+// everything that nothing was ever here.
+test('a finished board is acknowledged, not confused with an empty one', () => {
+  const finished = renderBrief({
+    items: [
+      { ...makeItems(1)[0], id: 'P1-01', title: 'Shipped one', stage: 'verified', flag: null, deps: [] },
+      { ...makeItems(1)[0], id: 'P1-02', title: 'Dropped one', stage: 'dropped', flag: null, deps: [] },
+    ],
+    events: [], stages, config: { brief: { max_lines: 25 } }, git: null,
+  });
+  assert.equal(
+    finished.includes('All 2 item(s) are finished. Start new work with `gw add "title"`.'),
+    true,
+    `expected the finished-board line, got:\n${finished}`,
+  );
+  assert.equal(finished.includes('No open work'), false, 'a finished board must not read as an untouched one');
+  // The empty board keeps its own line; the two are not the same sentence.
+  const empty = renderBrief({ items: [], events: [], stages, config: { brief: { max_lines: 25 } }, git: null });
+  const emptyLine = 'No open work. Add one with `gw add "title"`.';
+  assert.equal(empty.includes(emptyLine), true);
 });
 
 test('brief does not treat a stage as dropped when the pipeline has no dropped role', () => {
@@ -343,12 +366,11 @@ test('P8-27: wrapped legend rows are counted against the budget and dropped if t
 });
 
 test('P8-27: continuation lines are indented with 7 spaces to align with legend text', () => {
-  const items = makeItems(2).map((item, index) => ({
+  const items = makeItems(2).map((item) => ({
     ...item,
     stage: 'backlog',
     owner: null,
     flag: null,
-    deps: [],
     phase: 'P1',
   }));
   const config = {
@@ -373,4 +395,128 @@ test('P8-27: continuation lines are indented with 7 spaces to align with legend 
       break; // Legend section ended
     }
   }
+});
+
+// T-0006 — `gw brief --json` used to dump the raw board plus the rendered
+// human text, so a script asking "what is blocked right now" had to re-derive
+// the buckets or regex the text. The JSON now carries the same buckets the
+// text computes, from the same code: lib/brief.js's computeBuckets, which
+// renderBrief itself draws from.
+// Stage ids match the shipped default pipeline (templates/stages.json), which
+// is what a scratch board actually loads.
+const bucketItems = () => [
+  { id: 'D-1', title: 'Live dispatch', stage: 'building', owner: null, flag: null, deps: [] },
+  { id: 'F-1', title: 'Moved past first stage', stage: 'building', owner: 'human:rahil', flag: null, deps: [] },
+  { id: 'B-1', title: 'Waiting on a dependency', stage: 'reviewed', owner: null, flag: null, deps: ['F-1'] },
+  { id: 'B-2', title: 'Flagged blocked', stage: 'backlog', owner: null, flag: 'blocked', deps: [] },
+  { id: 'T-1', title: 'Held for triage', stage: 'backlog', owner: null, flag: 'needs-triage', deps: [] },
+  { id: 'N-1', title: 'Ready for pickup', stage: 'backlog', owner: null, flag: null, deps: [] },
+  // Claimed but never moved (P8-24) and terminal: in no bucket at all.
+  { id: 'C-1', title: 'Claimed only', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] },
+  { id: 'X-1', title: 'Already finished', stage: 'verified', owner: null, flag: null, deps: [] },
+];
+const bucketState = (events = [{ type: 'dispatch', item: 'D-1', by: 'scheduler' }]) => ({
+  items: bucketItems(), events, stages, config: { brief: { max_lines: 25 } }, git: { branch: 'main', sha: '895e249' },
+});
+
+// The command reads stages and config through the store, so these run against
+// a real scratch board -- the same harness as the read-only test above.
+function bucketBoard(events = [{ type: 'dispatch', item: 'D-1', by: 'scheduler' }]) {
+  const root = mkdtempSync(join(tmpdir(), 'gw-brief-json-'));
+  const store = createStore(root); store.ensure();
+  store.writeItems(bucketItems());
+  writeFileSync(store.paths.events, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
+  return { root, store };
+}
+
+async function bucketJson(flags) {
+  const { store } = bucketBoard();
+  let json = '';
+  await runBrief({ store, root: store.root, flags, stdout: { write: (value) => { json += value; } } });
+  return JSON.parse(json);
+}
+
+test('brief --json carries the same buckets the text view computes', async () => {
+  const parsed = await bucketJson({ json: true });
+  assert.deepEqual(parsed.brief, {
+    dispatched: ['D-1'],
+    in_flight: ['F-1'],
+    blocked: [{ id: 'B-1', waiting_on: 'F-1' }, { id: 'B-2', waiting_on: null }],
+    needs_triage: ['T-1'],
+    next_unblocked: ['N-1'],
+  });
+  const everyId = Object.values(parsed.brief).flat().map((entry) => entry.id ?? entry);
+  assert.ok(!everyId.includes('C-1'), 'a claimed-but-unmoved item belongs in no bucket');
+  assert.ok(!everyId.includes('X-1'), 'a terminal item belongs in no bucket');
+  // Existing keys survive: the shape gains `brief`, it does not reshape.
+  assert.equal(parsed.items.length, bucketItems().length);
+  assert.match(parsed.output, /^gw · 7 open · 2 in flight · 2 blocked/);
+});
+
+test('brief --json buckets agree with the rendered text, bucket for bucket', async () => {
+  const parsed = await bucketJson({ json: true });
+  const { brief, output } = parsed;
+  assert.match(output, /DISPATCHED TO YOU[\s\S]*?D-1/);
+  assert.match(output, /IN FLIGHT[\s\S]*?F-1/);
+  assert.match(output, /BLOCKED[\s\S]*?B-1.*waiting on F-1 \(Building\)/);
+  assert.match(output, /NEEDS TRIAGE \(1\)[\s\S]*?T-1/);
+  assert.match(output, /NEXT UNBLOCKED[\s\S]*?N-1/);
+  assert.deepEqual(brief.blocked[1], { id: 'B-2', waiting_on: null }, 'a flagged-blocked item with no deps is waiting on nothing');
+});
+
+test('brief --json applies --me exactly as the text does', async () => {
+  const parsed = await bucketJson({ json: true, me: 'human:rahil' });
+  assert.deepEqual(parsed.brief.dispatched, [], 'a dispatch by someone else is not dispatched to me');
+  assert.deepEqual(parsed.brief.in_flight, ['F-1'], 'in flight keeps only items owned by me');
+});
+
+// T-0009 — rendering's half of the guard: whatever a stored title holds, one
+// item renders as one row. `gw add` refuses newline titles now; this defends
+// the data written before it did.
+test('a stored newline title renders as one brief row with the newline collapsed', () => {
+  const item = { ...makeItems(1)[0], id: 'P1-01', title: 'a\nb', stage: 'specified', owner: null, flag: null, deps: [] };
+  const out = renderBrief({ items: [item], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.equal(out.includes('a\nb'), false, 'the raw newline must never reach the output');
+  assert.match(out, /P1-01\s+a b/);
+  assert.equal(sanitizeTitle('a\r\nb\tc'), 'a b c');
+});
+
+// T-0020 — the one definition of "flagged", computed here and exported so
+// the viewer and any CLI surface count the same set. A literal flag counts,
+// and so does work parked in the paused-role stage without one (`gw move
+// <id> paused` never writes a flag).
+test('isFlagged counts a literal flag, a paused-stage item, and nothing else', () => {
+  const flaggedStages = { stages: [{ id: 'backlog' }, { id: 'building' }], terminal: [], extra: [{ id: 'paused' }] };
+  assert.equal(isFlagged({ id: 'A', flag: 'blocked', stage: 'backlog' }, flaggedStages), true);
+  assert.equal(isFlagged({ id: 'B', flag: null, stage: 'paused' }, flaggedStages), true, 'parked in the paused stage without a flag is still flagged');
+  assert.equal(isFlagged({ id: 'C', flag: null, stage: 'backlog' }, flaggedStages), false);
+  assert.equal(isFlagged({ id: 'D', flag: 'needs-triage', stage: 'backlog' }, flaggedStages), true);
+  assert.equal(isFlagged({ id: 'E', flag: 'conflict', stage: 'backlog' }, flaggedStages), true);
+  // Without a paused-role stage in the pipeline, only a literal flag counts.
+  const noPausedStages = { stages: [{ id: 'backlog' }, { id: 'building' }], terminal: [], extra: [] };
+  assert.equal(isFlagged({ id: 'F', flag: null, stage: 'backlog' }, noPausedStages), false);
+  assert.equal(isFlagged({ id: 'G', flag: 'blocked', stage: 'backlog' }, noPausedStages), true);
+});
+
+test('flaggedItems filters with the same definition, and terminal work is not flagged by its stage', () => {
+  const flaggedStages = { stages: [{ id: 'backlog' }, { id: 'verified' }], terminal: ['verified'], extra: [{ id: 'paused' }] };
+  const items = [
+    { id: 'A', flag: null, stage: 'backlog' },
+    { id: 'B', flag: 'blocked', stage: 'backlog' },
+    { id: 'C', flag: null, stage: 'paused' },
+    { id: 'D', flag: null, stage: 'verified' },
+  ];
+  assert.deepEqual(flaggedItems(items, flaggedStages).map((item) => item.id), ['B', 'C']);
+});
+
+test('outstandingDispatches names the items a run has not ended or cancelled for', () => {
+  const events = [
+    { type: 'dispatch', item: 'A', by: 'scheduler' },
+    { type: 'dispatch', item: 'B', by: 'scheduler' },
+    { type: 'run_ended', item: 'A', by: 'scheduler' },
+    { type: 'dispatch', item: 'C', by: 'scheduler' },
+    { type: 'cancel', item: 'C', by: 'human:test' },
+  ];
+  assert.deepEqual(outstandingDispatches(events), ['B']);
+  assert.deepEqual(outstandingDispatches([]), []);
 });

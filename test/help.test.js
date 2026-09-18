@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { runRouter } from '../lib/cli/router.js';
+
+const COMMANDS_DIR = fileURLToPath(new URL('../lib/commands/', import.meta.url));
 
 function capture() {
   let text = '';
@@ -59,6 +63,37 @@ test('help for a command that does not exist is a usage error', async () => {
   const { code, err } = await invoke(['help', 'nonsense']);
   assert.equal(code, 2);
   assert.match(err, /unknown command 'nonsense'/);
+});
+
+// T-0004: show and list shipped without a `summary`, so their help opened with
+// "gw show — undefined". One missing spec field is invisible until a human
+// reads that command's help, so the property is enforced for every command at
+// once: a module added tomorrow with the same omission fails here, not in
+// front of a user.
+test('every command module declares a non-empty summary', async () => {
+  const files = readdirSync(COMMANDS_DIR).filter((name) => name.endsWith('.js'));
+  assert.ok(files.length >= 20, `expected the full command set, found ${files.length}`);
+  for (const file of files) {
+    const name = file.replace(/\.js$/, '');
+    const { spec } = await import(new URL(`../lib/commands/${file}`, import.meta.url));
+    assert.ok(spec, `gw ${name} exports no spec`);
+    assert.equal(
+      typeof spec.summary, 'string',
+      `gw ${name} has no summary; its help would print "gw ${name} — undefined"`,
+    );
+    assert.ok(spec.summary.trim().length > 0, `gw ${name} has a blank summary`);
+    assert.doesNotMatch(spec.summary, /undefined/);
+  }
+});
+
+test('every command help opens with its summary, never the word undefined', async () => {
+  for (const file of readdirSync(COMMANDS_DIR).filter((name) => name.endsWith('.js'))) {
+    const name = file.replace(/\.js$/, '');
+    const { out } = await invoke(['help', name]);
+    const { spec } = await import(new URL(`../lib/commands/${file}`, import.meta.url));
+    assert.ok(out.startsWith(`gw ${name} — ${spec.summary}\n`), `gw help ${name} does not open with its declared summary`);
+    assert.doesNotMatch(out, /— undefined/, `gw help ${name} renders the word undefined`);
+  }
 });
 
 test('a command that runs without a board says so', async () => {

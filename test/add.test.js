@@ -195,3 +195,32 @@ test('parent with no phase leaves the child phase null; no vocab fallback', () =
   const child = store.readItems().find((item) => item.parent === 'T-0001');
   assert.equal(child.phase, null);
 });
+
+// T-0009 — a newline title rendered as two list rows, the second with no id
+// or stage; an empty title rendered blank everywhere. Both are refused at
+// the door, so the board never stores a title its text views cannot render.
+test('add refuses a title containing a newline, an empty title, and a whitespace-only title', () => {
+  const { store } = repo();
+  assert.throws(
+    () => run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: ['a\nb'], stdout: { write() {} } }),
+    (error) => error.message === 'title must not contain newlines',
+  );
+  assert.throws(
+    () => run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: [''], stdout: { write() {} } }),
+    (error) => error.message === 'title must not be empty',
+  );
+  assert.throws(
+    () => run({ store, root: store.root, actor: 'human:me', flags: {}, positionals: ['   '], stdout: { write() {} } }),
+    (error) => error.message === 'title must not be empty',
+  );
+  assert.equal(store.readItems().length, 0);
+});
+
+test('a newline title exits 2 through the real binary and never reaches the board', () => {
+  const { root, store } = repo();
+  assert.throws(
+    () => execFileSync(process.execPath, [BIN, 'add', 'a\nb'], { cwd: root, encoding: 'utf8' }),
+    (error) => error.status === 2,
+  );
+  assert.equal(store.readItems().length, 0);
+});

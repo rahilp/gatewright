@@ -802,3 +802,140 @@
 {"ts":"2026-09-17T23:40:17.933Z","type":"move","item":"P0-17","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:40:17.990Z","type":"move","item":"P0-17","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:40:25.769Z","type":"move","item":"P0-17","from":"building","to":"built","by":"human:rahil","evidence":["7c8d513","verified: net zero growth across runs; /tmp inodes 97% -> 1%"]}
+{"ts":"2026-09-17T23:58:19.178Z","type":"add","item":"T-0001","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T23:58:23.888Z","type":"move","item":"T-0001","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T23:59:48.169Z","type":"add","item":"T-0002","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T23:59:48.225Z","type":"edit","item":"T-0002","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.378Z","type":"add","item":"T-0003","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.435Z","type":"edit","item":"T-0003","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.494Z","type":"add","item":"T-0004","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.547Z","type":"edit","item":"T-0004","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.596Z","type":"add","item":"T-0005","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.650Z","type":"edit","item":"T-0005","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.701Z","type":"add","item":"T-0006","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.760Z","type":"edit","item":"T-0006","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.811Z","type":"add","item":"T-0007","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.864Z","type":"edit","item":"T-0007","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.918Z","type":"add","item":"T-0008","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.973Z","type":"edit","item":"T-0008","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.025Z","type":"add","item":"T-0009","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.079Z","type":"edit","item":"T-0009","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.135Z","type":"add","item":"T-0010","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.188Z","type":"edit","item":"T-0010","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.244Z","type":"add","item":"T-0011","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.300Z","type":"edit","item":"T-0011","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.356Z","type":"add","item":"T-0012","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.411Z","type":"edit","item":"T-0012","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.467Z","type":"add","item":"T-0013","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.524Z","type":"edit","item":"T-0013","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.372Z","type":"add","item":"T-0014","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.425Z","type":"edit","item":"T-0014","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.484Z","type":"add","item":"T-0015","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.541Z","type":"edit","item":"T-0015","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.594Z","type":"add","item":"T-0016","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.648Z","type":"edit","item":"T-0016","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.707Z","type":"add","item":"T-0017","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.758Z","type":"edit","item":"T-0017","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.810Z","type":"add","item":"T-0018","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.862Z","type":"edit","item":"T-0018","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.921Z","type":"add","item":"T-0019","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.980Z","type":"edit","item":"T-0019","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:31.037Z","type":"add","item":"T-0020","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:31.094Z","type":"edit","item":"T-0020","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:31.147Z","type":"add","item":"T-0021","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:31.204Z","type":"edit","item":"T-0021","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:33:32.822Z","type":"claim","item":"T-0002","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:32.880Z","type":"move","item":"T-0002","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:33:32.931Z","type":"claim","item":"T-0003","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:32.987Z","type":"move","item":"T-0003","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:33:33.039Z","type":"claim","item":"T-0014","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:33.093Z","type":"move","item":"T-0014","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:33:33.143Z","type":"claim","item":"T-0015","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:33.199Z","type":"move","item":"T-0015","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:34:52.008Z","type":"add","item":"T-0022","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:52.073Z","type":"add","item":"T-0023","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:52.138Z","type":"add","item":"T-0024","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:52.201Z","type":"add","item":"T-0025","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:54.311Z","type":"claim","item":"T-0022","by":"human:rahil"}
+{"ts":"2026-09-18T00:34:54.372Z","type":"claim","item":"T-0023","by":"human:rahil"}
+{"ts":"2026-09-18T00:34:54.431Z","type":"claim","item":"T-0024","by":"human:rahil"}
+{"ts":"2026-09-18T00:34:54.493Z","type":"claim","item":"T-0025","by":"human:rahil"}
+{"ts":"2026-09-18T00:37:12.257Z","type":"note","item":"T-0002","by":"human:rahil","note":"Plan: digest items+stages+config in store.js (events.jsonl stays undigested, append-only); verifyDigest reports per-file out-of-band writes; old digests without per-file keys baseline silently; writeConfig and serve's replaceStages rebaseline; tests in store/check tests."}
+{"ts":"2026-09-18T00:37:12.311Z","type":"note","item":"T-0003","by":"human:rahil","note":"Plan: resume() requires exactly what stop produces (flag 'paused' + prev_stage), refuses otherwise in house style via UsageError, never touches owner; tests in run-lifecycle tests."}
+{"ts":"2026-09-18T00:41:11.870Z","type":"note","item":"T-0022","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:11.927Z","type":"move","item":"T-0022","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:41:11.976Z","type":"note","item":"T-0023","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:12.035Z","type":"move","item":"T-0023","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:41:12.103Z","type":"note","item":"T-0024","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:12.161Z","type":"move","item":"T-0024","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:41:12.217Z","type":"note","item":"T-0025","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:12.277Z","type":"move","item":"T-0025","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:42:10.966Z","type":"move","item":"T-0002","from":"building","to":"built","by":"human:rahil","evidence":["test/store.test.js","test/check.test.js"]}
+{"ts":"2026-09-18T00:42:11.028Z","type":"move","item":"T-0003","from":"building","to":"built","by":"human:rahil","evidence":["test/run-lifecycle.test.js"]}
+{"ts":"2026-09-18T00:42:56.741Z","type":"move","item":"T-0015","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: typed text survived two poll cycles intact"]}
+{"ts":"2026-09-18T00:42:56.794Z","type":"move","item":"T-0014","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: confirm asked \"Remove stage Merged (merged)... Deleting it loses its gate rules\", declining left the stage in place"]}
+{"ts":"2026-09-18T00:45:10.355Z","type":"move","item":"T-0002","from":"built","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:45:10.409Z","type":"note","item":"T-0002","by":"human:rahil","note":"Agent marked this built prematurely. Verification found a regression: gw config now trips its own tamper alarm because it persists outside store.writeConfig. Returned to the agent with a per-write-path audit required."}
+{"ts":"2026-09-18T00:52:27.070Z","type":"move","item":"T-0002","from":"building","to":"built","by":"human:rahil","evidence":["lib/store.js","test/store.test.js","verified: 6 gw write paths + 2 serve endpoints leave check clean; stages tamper exits 1; events append ignored; 537 tests x3"]}
+{"ts":"2026-09-18T00:52:27.129Z","type":"claim","item":"T-0004","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.185Z","type":"move","item":"T-0004","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.244Z","type":"claim","item":"T-0005","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.298Z","type":"move","item":"T-0005","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.354Z","type":"claim","item":"T-0006","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.413Z","type":"move","item":"T-0006","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.463Z","type":"claim","item":"T-0008","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.521Z","type":"move","item":"T-0008","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.576Z","type":"claim","item":"T-0016","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.632Z","type":"move","item":"T-0016","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.694Z","type":"claim","item":"T-0017","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.762Z","type":"move","item":"T-0017","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:05:48.109Z","type":"move","item":"T-0004","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/show.js","verified: 'gw show — show one item and its events'"]}
+{"ts":"2026-09-18T01:05:48.167Z","type":"move","item":"T-0005","from":"building","to":"built","by":"human:rahil","evidence":["lib/settings.js","verified: guard.mode, check.stale_days, brief.max_lines, github.dispatch_label, memory.provider all reachable; mirror deep-equal intact"]}
+{"ts":"2026-09-18T01:05:48.226Z","type":"move","item":"T-0006","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: brief.{dispatched,in_flight,blocked,needs_triage,next_unblocked}"]}
+{"ts":"2026-09-18T01:05:48.285Z","type":"move","item":"T-0008","from":"building","to":"built","by":"human:rahil","evidence":["lib/import/json.js","verified: csv and json both exit 2 when every row lacks an id"]}
+{"ts":"2026-09-18T01:10:23.155Z","type":"claim","item":"T-0007","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.211Z","type":"move","item":"T-0007","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.266Z","type":"claim","item":"T-0009","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.321Z","type":"move","item":"T-0009","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.376Z","type":"claim","item":"T-0010","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.432Z","type":"move","item":"T-0010","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.491Z","type":"claim","item":"T-0011","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.551Z","type":"move","item":"T-0011","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.607Z","type":"claim","item":"T-0012","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.667Z","type":"move","item":"T-0012","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.723Z","type":"claim","item":"T-0013","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.781Z","type":"move","item":"T-0013","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.833Z","type":"claim","item":"T-0018","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.896Z","type":"move","item":"T-0018","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.954Z","type":"claim","item":"T-0019","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:24.008Z","type":"move","item":"T-0019","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:24.064Z","type":"claim","item":"T-0020","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:24.124Z","type":"move","item":"T-0020","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:24.177Z","type":"claim","item":"T-0021","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:24.236Z","type":"move","item":"T-0021","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:24:49.507Z","type":"move","item":"T-0007","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/import.js","verified: skips a bad-vocab row with line and reason, all-bad exits 2"]}
+{"ts":"2026-09-18T01:24:49.567Z","type":"move","item":"T-0009","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/add.js","verified: newline and empty titles refused at exit 2, list sanitises legacy rows"]}
+{"ts":"2026-09-18T01:24:49.632Z","type":"move","item":"T-0010","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/move.js","verified: terminal-stage refusal now exits 1 like its siblings"]}
+{"ts":"2026-09-18T01:24:49.688Z","type":"move","item":"T-0011","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/gc.js","verified: names the problem and the fix instead of dumping git stderr"]}
+{"ts":"2026-09-18T01:24:49.741Z","type":"move","item":"T-0012","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: All 1 item(s) are finished"]}
+{"ts":"2026-09-18T01:24:49.794Z","type":"move","item":"T-0013","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/note.js","verified: note text must not be empty"]}
+{"ts":"2026-09-18T01:24:49.851Z","type":"move","item":"T-0019","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/check.js","verified: QUEUED DISPATCH reported when the runner is disabled"]}
+{"ts":"2026-09-18T01:24:49.910Z","type":"move","item":"T-0020","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: isFlagged/flaggedItems exported so viewer and CLI share one definition"]}
+{"ts":"2026-09-18T01:29:14.032Z","type":"move","item":"T-0016","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: snapshot hides + new item; root cause was boot() forcing live on any http origin"]}
+{"ts":"2026-09-18T01:29:14.090Z","type":"move","item":"T-0017","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: role=button tabindex=0 aria-label 'Open item T-0002', Enter and Space both open, Esc returns focus"]}
+{"ts":"2026-09-18T01:45:40.028Z","type":"add","item":"T-0026","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:45:40.082Z","type":"edit","item":"T-0026","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T01:45:40.140Z","type":"move","item":"T-0018","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: 'The board does not skip gates — a forced skip is a CLI decision.'; no gw move --force string left in the viewer"]}
+{"ts":"2026-09-18T01:46:31.901Z","type":"move","item":"T-0021","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: 118-char title wraps to 4 lines in a 221px card, no board or overview overflow"]}
+{"ts":"2026-09-18T01:46:31.958Z","type":"add","item":"T-0027","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:46:32.014Z","type":"edit","item":"T-0027","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T01:55:06.738Z","type":"add","item":"T-0028","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.770Z","type":"add","item":"T-0029","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.824Z","type":"add","item":"T-0030","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.883Z","type":"add","item":"T-0031","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.940Z","type":"add","item":"T-0032","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.001Z","type":"add","item":"T-0033","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.060Z","type":"add","item":"T-0034","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.125Z","type":"add","item":"T-0035","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.189Z","type":"add","item":"T-0036","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.249Z","type":"add","item":"T-0037","by":"human:rahil","parent":null}

@@ -15,6 +15,8 @@ async function withServer(fn, options = {}) {
   const store = createStore(root); store.ensure(); store.writeItems([item]);
   writeFileSync(store.paths.config, JSON.stringify({ version: 1, vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'], gate: ['G0'] }, runner: { paused: false } }));
   writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }, { id: 'specified' }, { id: 'building' }, { id: 'built', requires: { evidence_min: 1 } }], terminal: [], extra: [] }));
+  // The fixture writes config.json and stages.json by hand to stand up the board; baseline the digest so only deliberate tampering in a test is ever reported.
+  store.rebaselineDigest();
   const server = createServeServer({ store, ...options }); const address = await listen(server, { port: 0 });
   try { await fn({ root, store, url: `http://127.0.0.1:${address.port}` }); } finally { await new Promise((resolve) => server.close(resolve)); }
 }
@@ -105,6 +107,26 @@ test('pause and resume persist runner.paused and log one event each', async () =
     assert.equal((await write(url, '/api/resume', {})).status, 200);
     assert.equal(JSON.parse(readFileSync(store.paths.config, 'utf8')).runner.paused, false);
     assert.deepEqual(store.readEvents().map((event) => event.type), ['pause_all', 'resume_all']);
+  });
+});
+
+// Every board write that rewrites the rules — pause, resume, settings, the
+// pipeline — is a write gw performed, so it must re-baseline the digest and
+// leave `gw check` clean. A tamper report on gw's own writes would bury the
+// real one.
+test('pause, resume, config and stages writes from the board all keep gw check clean', async () => {
+  await withServer(async ({ store, url }) => {
+    assert.equal((await write(url, '/api/pause', {})).status, 200);
+    assert.equal((await write(url, '/api/resume', {})).status, 200);
+    assert.equal((await write(url, '/api/config', { key: 'runner.max_concurrent', value: 3 })).status, 200);
+    assert.equal((await write(url, '/api/stages', NEXT_STAGES, {}, 'PUT')).status, 200);
+    // A note records activity, so the fixture item's old timestamp cannot
+    // surface as an unrelated stale-owner finding in the check below.
+    assert.equal((await write(url, '/api/items/P1-01/note', { text: 'activity' })).status, 200);
+    let stdout = ''; let stderr = '';
+    assert.equal(await runRouter(['check'], { cwd: store.root, env: {}, stdout: { write: (text) => { stdout += text; } }, stderr: { write: (text) => { stderr += text; } } }), 0);
+    assert.equal(stdout, 'Board is clean.\n');
+    assert.equal(store.verifyDigest().status, 'clean');
   });
 });
 
