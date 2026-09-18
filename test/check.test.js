@@ -84,19 +84,28 @@ test('check catches a hand-placed verified item with no evidence', () => {
   const result = ctx(b);
   assert.equal(run(result.ctx), 1);
   assert.match(result.output(), /items\.jsonl modified outside gw since/);
-  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*needs at least 2 evidence/i);
+  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*Needs at least two new pieces of evidence/i);
 });
 
-// The wording is the point: an untriaged item names BOTH ways out, because
-// classifying it and simply working it as-is are equally valid answers.
-// Superseded on the exit code only -- a fresh capture is reported without
-// failing; see the inbox tests below for why.
-test('check reports an untriaged item, naming both the classify and the claim-as-is fix', () => {
+// T-0039 — the wording is the point, and so is the follow-through: the
+// printed command has to actually clear the flag. `gw edit` and `gw claim`
+// never did -- needs-triage is a hold on unreviewed work, and only `gw
+// triage` lifts it, so the advice names triage and nothing else.
+test('check reports an untriaged item, naming the triage fix that actually works', () => {
   const b = board([item({ flag: 'needs-triage' })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'reported, but capturing an idea is not a violation');
   assert.match(result.output(), /INBOX/);
-  assert.match(result.output(), /P1-01: classify with `gw edit P1-01 --phase P --type T --priority P`, or claim and work it as-is with `gw claim P1-01`/);
+  assert.match(result.output(), /P1-01: run `gw triage P1-01 --approve` to clear the hold, or `gw triage P1-01 --drop` to discard it/);
+  assert.doesNotMatch(result.output(), /gw edit P1-01|gw claim P1-01/, 'the dead-end advice must be gone');
+});
+
+test('following the printed triage command ends the report', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  execFileSync(process.execPath, [BIN, 'triage', 'T-0001', '--approve'], { cwd: b.root });
+  const after = ctx(b);
+  assert.equal(run(after.ctx), 0);
+  assert.equal(after.output(), 'Board is clean.\n', 'the advice check prints must leave the board clean when followed');
 });
 
 test('check does not report a classified item as needing triage', () => {
@@ -150,7 +159,7 @@ test('check catches a hand-edited merged item that skipped the built evidence ga
   const b = board([item({ stage: 'merged' })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 1);
-  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*built: needs at least 1 evidence/i);
+  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*built: Needs at least one new piece of evidence/i);
 });
 
 test('check groups current-stage, missing-dependency, cycle, dropped-dependency, stale, and conflict findings', () => {

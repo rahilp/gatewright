@@ -63,7 +63,10 @@ test('existing items merge intake fields only and preserve tracker-owned fields 
   assert.equal(updated.title, 'From GitHub'); assert.equal(updated.scope, 'Done means it works.');
   assert.equal(updated.priority, 'P1'); assert.equal(updated.type, 'defect'); assert.equal(updated.phase, 'P9', 'the milestone, not a label, decides phase');
   for (const field of ['stage', 'flag', 'owner', 'deps', 'evidence', 'notes', 'refs', 'id', 'created_by', 'parent', 'created', 'updated']) {
-    assert.deepEqual(updated[field], original[field], `${field} is tracker-owned`);
+    // Evidence entries are `{ text, stage }` in the store (T-0029); the flat
+    // fixture string is the migrated shape and reads back tagged `null`.
+    const expected = field === 'evidence' ? original[field].map((text) => ({ text, stage: null })) : original[field];
+    assert.deepEqual(updated[field], expected, `${field} is tracker-owned`);
   }
 });
 

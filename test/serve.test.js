@@ -105,13 +105,18 @@ test('state transitions reject a skipped earlier gate even when the immediate ta
   const stages = {
     stages: [
       { id: 'backlog' }, { id: 'building', requires: { owner: true } },
-      { id: 'built', requires: { evidence_min: 1 } }, { id: 'in_review', requires: { evidence_match: '^https://github.com/.+/pull/\\d+' } },
+      { id: 'built', requires: { evidence_min: 1 } }, { id: 'in_review', requires: {} },
     ],
     terminal: [], extra: [],
   };
-  // The old browser mirror checked only in_review, which this PR evidence
-  // satisfies. The unearned building owner gate must still refuse the move.
-  const progressed = { ...item, stage: 'built', owner: null, evidence: ['https://github.com/a/b/pull/1'] };
+  // The target's own gate is empty, so it passes; the refusal must come from
+  // the skipped building owner gate alone. The recorded `commit` entry counts
+  // only for the built gate it was supplied for (T-0029) — a lifetime reading
+  // would not change this verdict, but it is what keeps the built gate green.
+  const progressed = {
+    ...item, stage: 'built', owner: null,
+    evidence: [{ text: 'commit', stage: 'built' }],
+  };
   await withServer(async ({ url }) => {
     const transition = (await (await transitions(url)).json()).in_review;
     const response = await write(url, '/api/items/P1-01/move', { to: 'in_review', evidence: [] });
@@ -141,7 +146,7 @@ test('state carries every stage gate in the English lib/gates/describe.js produc
     assert.deepEqual(Object.keys(state.stages.gates), ['backlog', 'building', 'built', 'paused']);
     assert.deepEqual(state.stages.gates.built, describeStage(stages.stages[2], stages));
     assert.deepEqual(state.stages.gates.built.sentences, [
-      'Needs at least one piece of evidence',
+      'Needs at least one new piece of evidence, distinct from anything already recorded',
       'Every dependency must have reached Building',
     ]);
     assert.deepEqual(state.stages.gates.backlog.sentences, ['Nothing is checked here: this stage is advanced by hand']);
@@ -166,7 +171,7 @@ test('a blocked transition names only the conditions it actually failed, in Engl
   await withServer(async ({ url }) => {
     const result = await (await transitions(url)).json();
     assert.equal(result.built.ok, false);
-    assert.deepEqual(result.built.reasons, ['Needs at least two pieces of evidence']);
+    assert.deepEqual(result.built.reasons, ['Needs at least two new pieces of evidence, distinct from anything already recorded']);
     // The CLI wording survives untouched beside it: it carries the command.
     assert.match(result.built.failures.join(' '), /gw move P1-01 built --evidence/);
     // A transition that passes says nothing, rather than listing rules it met.
@@ -189,7 +194,7 @@ test('a blocked transition explains an earlier gate it never reached', async () 
     const result = await (await transitions(url)).json();
     assert.deepEqual(result.built.reasons, [
       'Someone must have claimed it',
-      'Needs at least one piece of evidence',
+      'Needs at least one new piece of evidence, distinct from anything already recorded',
     ], 'the cumulative gate explains the skipped stage as well as the target');
   }, { items: [unowned], stages });
 });

@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, chmodSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
+import { IOError } from '../lib/cli/errors.js';
 
 function freshStore() {
   const root = mkdtempSync(join(tmpdir(), 'gw-'));
@@ -240,4 +241,65 @@ test('writeConfig atomically round-trips valid JSON without leaving a temp file'
   // report useless.
   assert.equal(store.verifyDigest().status, 'clean');
   assert.deepEqual(readdirSync(store.dir).filter((file) => file.includes('.tmp')), []);
+});
+
+// T-0029 — the on-disk evidence shape changed: each entry carries the stage
+// whose move supplied it. Existing boards carry flat strings. Reads normalise
+// in memory (an old board works at once); the next gw write persists the new
+// shape and re-baselines the digest with it, so an upgrade is never reported
+// as an out-of-band write by the tool that just performed it.
+test('legacy flat-string evidence reads as stage-null entries and migrates on the next write', () => {
+  const store = freshStore();
+  writeFileSync(store.paths.items, JSON.stringify(item({ stage: 'built', evidence: ['abc123', 'https://github.com/a/b/pull/1'] })) + '\n');
+  store.rebaselineDigest();
+  assert.equal(store.verifyDigest().status, 'clean', 'reading the old shape changes nothing on disk');
+
+  const read = store.readItems()[0];
+  assert.deepEqual(read.evidence, [
+    { text: 'abc123', stage: null },
+    { text: 'https://github.com/a/b/pull/1', stage: null },
+  ]);
+
+  store.writeItems([read]);
+  const persisted = JSON.parse(readFileSync(store.paths.items, 'utf8').trim());
+  assert.deepEqual(persisted.evidence, read.evidence, 'the first write persists the migrated shape');
+  assert.equal(store.verifyDigest().status, 'clean', 'the migrated write re-baselines its own digest');
+  // invalid entries (neither a string nor a {text, stage} object) are dropped
+  // rather than crashing a read
+  writeFileSync(store.paths.items, JSON.stringify(item({ evidence: ['ok', 42, { text: 'kept' }, { text: 7 }], stage: 'built' })) + '\n');
+  assert.deepEqual(store.readItems()[0].evidence, [{ text: 'ok', stage: null }, { text: 'kept', stage: null }]);
+});
+
+test('an upgraded board never reports its own migration as an out-of-band write', async () => {
+  const store = freshStore();
+  writeFileSync(store.paths.items, JSON.stringify(item({ stage: 'backlog', evidence: ['abc123'] })) + '\n');
+  store.rebaselineDigest();
+  const bin = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
+  const run = (args) => new Promise((resolve) => execFile(process.execPath, [bin, ...args], { cwd: store.root, encoding: 'utf8' }, (err, stdout) => resolve({ err, stdout })));
+  for (const args of [['check'], ['config', 'id_scheme']]) {
+    const { err, stdout } = await run(args);
+    assert.equal(err?.code ?? 0, 0, `${args.join(' ')} exits clean`);
+    assert.doesNotMatch(stdout, /modified outside gw/, `gw ${args[0]} must not accuse the migration of tampering`);
+  }
+});
+
+// T-0049 — a read-only board directory used to surface
+// "EACCES: permission denied, open '.../.lock.<pid>.tmp'": exit code 3 was
+// right, but the message named a temp file the user never created and never
+// said the directory was the problem.
+test('a read-only board directory explains itself instead of naming a temp file', { skip: process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0) ? 'chmod cannot block a root user and is a no-op on Windows' : false }, () => {
+  const store = freshStore();
+  chmodSync(store.dir, 0o555);
+  try {
+    assert.throws(
+      () => store.withLock(() => 'never runs'),
+      (error) => error instanceof IOError
+        && error.exitCode === 3
+        && /is not writable \(permission denied\)/.test(error.message)
+        && !/\.lock\.\d+\.tmp/.test(error.message),
+      'the message must say the directory is not writable, not name a temp file',
+    );
+  } finally {
+    chmodSync(store.dir, 0o755);
+  }
 });

@@ -34,6 +34,27 @@ test('templates/agents-block.md is a byte-exact copy of the AGENTS.md block in s
   assert.match(readTemplate('agents-block.md'), new RegExp(`${END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n$`));
 });
 
+// T-0031 — the block used to say plan steps go on the board as items AND
+// that "your own plan steps" are notes, so an agent following it literally
+// could not tell where its plan belongs. One statement, stated once.
+test('the agent block states the plan-steps rule once and never contradicts itself', () => {
+  const block = readTemplate('agents-block.md');
+  assert.ok(!block.includes('Your own plan steps'), 'the old contradiction must be gone');
+  assert.equal((block.match(/put the plan on the board/g) ?? []).length, 1, 'the plan-steps rule is stated exactly once');
+  assert.match(block, /Plan steps are items, never notes/);
+  const noteLine = block.split('\n').find((line) => line.includes('`gw note'));
+  assert.ok(noteLine, 'gw note is still documented');
+  assert.match(noteLine, /progress remarks/, 'gw note is described only as progress remarks, never as a home for plan steps');
+});
+
+// T-0030 — the block is the only instruction a real agent gets, so it must
+// say how to be recorded as itself.
+test('the agent block documents the agent actor convention', () => {
+  const block = readTemplate('agents-block.md');
+  assert.match(block, /GW_ACTOR=agent:<name>/);
+  assert.match(block, /--by agent:<name>/);
+});
+
 test('stages.json parses: pipeline order, auto gates, terminal and side states match the spec default', () => {
   const parsed = JSON.parse(readTemplate('stages.json'));
   assert.deepEqual(parsed.stages.map((s) => s.id), ['backlog', 'building', 'built', 'in_review', 'reviewed', 'merged', 'verified']);

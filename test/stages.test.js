@@ -75,19 +75,20 @@ test('the shipped pipeline is unchanged by the role rule', () => {
 test('the shipped built stage requires the scope it is named after, alongside evidence', async () => {
   const { evaluateRequires } = await import('../lib/rules.js');
   const stages = shipped;
-  const unscoped = evaluateRequires({ id: 'T-0001', scope: '', owner: null, deps: [], evidence: ['e1'] }, 'built', { items: [], stages });
+  const evidence = [{ text: 'e1', stage: 'built' }];
+  const unscoped = evaluateRequires({ id: 'T-0001', scope: '', owner: null, deps: [], evidence }, 'built', { items: [], stages });
   assert.equal(unscoped.ok, false);
   assert.match(unscoped.failures[0], /needs a scope: run `gw edit T-0001 --scope/);
 
-  const scoped = evaluateRequires({ id: 'T-0001', scope: 'what done looks like', owner: null, deps: [], evidence: ['e1'] }, 'built', { items: [], stages });
+  const scoped = evaluateRequires({ id: 'T-0001', scope: 'what done looks like', owner: null, deps: [], evidence }, 'built', { items: [], stages });
   assert.equal(scoped.ok, true);
 
   // Whitespace is not a scope.
-  const blank = evaluateRequires({ id: 'T-0001', scope: '   \n ', owner: null, deps: [], evidence: ['e1'] }, 'built', { items: [], stages });
+  const blank = evaluateRequires({ id: 'T-0001', scope: '   \n ', owner: null, deps: [], evidence }, 'built', { items: [], stages });
   assert.equal(blank.ok, false);
 
   // Scope alone is not enough either: built still needs evidence.
   const noEvidence = evaluateRequires({ id: 'T-0001', scope: 'what done looks like', owner: null, deps: [], evidence: [] }, 'built', { items: [], stages });
   assert.equal(noEvidence.ok, false);
-  assert.match(noEvidence.failures[0], /needs at least 1 evidence entry/);
+  assert.match(noEvidence.failures[0], /Needs at least one new piece of evidence/);
 });

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
 import { run } from '../lib/commands/add.js';
+import { guardCommit } from '../lib/guard.js';
 import { isSchedulable } from '../lib/policy.js';
 import { readStages } from '../lib/config.js';
 
@@ -16,7 +17,7 @@ function repo(config = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-add-'))
 test('add creates a fully defaulted item and exactly one add event', () => {
   const { store } = repo(); let out = ''; const id = run({ store, root: store.root, actor: 'human:me', flags: { phase: 'P1' }, positionals: ['hello'], stdout: { write: s => { out += s; } } });
   assert.equal(id, undefined); assert.equal(out, 'P1-01\n');
-  const item = store.readItems()[0]; assert.equal(item.id, 'P1-01'); assert.equal(item.stage, 'backlog'); assert.equal(item.created_by, 'human'); assert.equal(item.owner, null); assert.deepEqual(item.deps, []); assert.deepEqual(item.refs, []); assert.equal(store.readEvents().length, 1); assert.equal(store.readEvents()[0].type, 'add');
+  const item = store.readItems()[0]; assert.equal(item.id, 'P1-01'); assert.equal(item.stage, 'backlog'); assert.equal(item.created_by, 'human:me', 'created_by records the (qualified) actor, not the bare word "human" (T-0052)'); assert.equal(item.owner, null); assert.deepEqual(item.deps, []); assert.deepEqual(item.refs, []); assert.equal(store.readEvents().length, 1); assert.equal(store.readEvents()[0].type, 'add');
 });
 
 // P0-15 removed the item field `gate` entirely: it duplicated priority and no
@@ -221,6 +222,54 @@ test('a newline title exits 2 through the real binary and never reaches the boar
   assert.throws(
     () => execFileSync(process.execPath, [BIN, 'add', 'a\nb'], { cwd: root, encoding: 'utf8' }),
     (error) => error.status === 2,
+  );
+  assert.equal(store.readItems().length, 0);
+});
+
+// T-0052 — `--by rahil` (no prefix) is the most natural thing a person types,
+// and it used to be discarded: the item recorded the bare word "human". A
+// bare name is accepted as `human:<name>`; the outcome is asserted end to
+// end — `gw show` reports the named human truthfully, the claim stores the
+// qualified owner, and guard vouches the item for the actor it stored.
+test('a bare --by name is kept as human:<name>: show reports it and guard matches the item', () => {
+  const { root, store } = repo();
+  execFileSync(process.execPath, [BIN, 'add', 'named human', '--phase', 'P1', '--by', 'rahil'], { cwd: root, encoding: 'utf8' });
+  const shown = execFileSync(process.execPath, [BIN, 'show', 'P1-01', '--json'], { cwd: root, encoding: 'utf8' });
+  assert.equal(JSON.parse(shown).created_by, 'human:rahil', 'gw show must report the named human, not the bare word "human"');
+  execFileSync(process.execPath, [BIN, 'claim', 'P1-01', '--by', 'rahil'], { cwd: root, encoding: 'utf8' });
+  const claimed = store.readItems()[0];
+  assert.equal(claimed.owner, 'human:rahil', 'the claim records the qualified owner, which is what the rest of the system compares against');
+  const verdict = guardCommit({ message: 'unrelated', files: ['lib/a.js'], items: [claimed], actor: 'human:rahil', stages: readStages(store), config: {} });
+  assert.equal(verdict.ok, true, 'guard must match the item for the actor the bare name produced');
+  assert.equal(verdict.via, 'owner');
+});
+
+// T-0030 — the mechanism existed (`--by agent:<name>`, `GW_ACTOR=agent:<name>`)
+// but nothing documented it, so agents recorded their work as done by a human.
+// These pin the outcomes: a named agent actor lands in `created_by`, and a
+// bare `--by agent` is refused rather than silently becoming "human".
+test('an agent actor is recorded as itself, not as a human', () => {
+  const { root, store } = repo();
+  execFileSync(process.execPath, [BIN, 'add', 'agent-made', '--phase', 'P1', '--by', 'agent:opencode'], { cwd: root, encoding: 'utf8' });
+  execFileSync(process.execPath, [BIN, 'add', 'agent-made-env', '--phase', 'P1'], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, GW_ACTOR: 'agent:codex' },
+  });
+  const items = store.readItems();
+  assert.equal(items[0].created_by, 'agent:opencode');
+  assert.equal(items[1].created_by, 'agent:codex');
+  assert.equal(store.readEvents().every((event) => event.by === 'agent:opencode' || event.by === 'agent:codex'), true);
+});
+
+test('a bare --by agent is refused with the convention named, and stores nothing', () => {
+  const { root, store } = repo();
+  assert.throws(
+    () => execFileSync(process.execPath, [BIN, 'add', 'bare agent', '--phase', 'P1', '--by', 'agent'], { cwd: root, encoding: 'utf8' }),
+    (error) => error.status === 2 && /agent:<name>/.test(`${error.stderr}`),
+  );
+  assert.equal(store.readItems().length, 0);
+  assert.throws(
+    () => execFileSync(process.execPath, [BIN, 'add', 'empty name', '--phase', 'P1'], { cwd: root, encoding: 'utf8', env: { ...process.env, GW_ACTOR: 'agent:' } }),
+    (error) => error.status === 2 && /agent:<name>/.test(`${error.stderr}`),
   );
   assert.equal(store.readItems().length, 0);
 });

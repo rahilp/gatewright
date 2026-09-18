@@ -73,7 +73,7 @@ One run is one `git worktree` on its own branch, one agent process with `cwd` in
 - Resume is "spawn again in the same directory with the log tail in the prompt." The half-finished work is right there.
 - The evidence an agent records (a commit SHA) exists on the run's branch; opening a PR from it is one `gh` call.
 
-All runs write to the main repo's `.gatewright/` (via `GW_ROOT`), not the worktree's copy, so there is one board.
+All runs write to the main repo (via `GW_ROOT`, which names the project root), not the worktree's copy, so there is one board.
 
 Worktree cleanup is an open question. Leaning: delete on Merged, keep on anything else, `gw gc` for the rest.
 

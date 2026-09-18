@@ -16,17 +16,17 @@ const stages = {
 test('every documented rule key gets a sentence a human can act on', () => {
   assert.equal(describeRule('scope', true, stages), 'Scope must be filled in', 'scope names the field it demands');
   assert.equal(describeRule('owner', true, stages), 'Someone must have claimed it', 'owner explains itself as claiming, the verb the CLI uses');
-  assert.equal(describeRule('evidence_min', 1, stages), 'Needs at least one piece of evidence', 'a single evidence entry reads as singular prose, not "1 evidence"');
-  assert.equal(describeRule('evidence_min', 2, stages), 'Needs at least two pieces of evidence', 'small counts read as words and pluralise correctly');
-  assert.equal(describeRule('evidence_min', 12, stages), 'Needs at least 12 pieces of evidence', 'counts above ten stay as digits, which parse faster than the word');
+  assert.equal(describeRule('evidence_min', 1, stages), 'Needs at least one new piece of evidence, distinct from anything already recorded', 'a single evidence entry reads as singular prose, not "1 evidence"');
+  assert.equal(describeRule('evidence_min', 2, stages), 'Needs at least two new pieces of evidence, distinct from anything already recorded', 'small counts read as words and pluralise correctly');
+  assert.equal(describeRule('evidence_min', 12, stages), 'Needs at least 12 new pieces of evidence, distinct from anything already recorded', 'counts above ten stay as digits, which parse faster than the word');
   assert.equal(
     describeRule('evidence_match', '^https://github.com/.+/pull/\\d+', stages),
-    'Evidence must include a link to a pull request',
+    'Evidence supplied with the move must include a link to a pull request',
     'the shipped pull request pattern is explained by intent, never by pasting the regex',
   );
   assert.equal(
     describeRule('evidence_match', '^ADR-\\d+$', stages),
-    'Evidence must match the pattern `^ADR-\\d+$`',
+    'Evidence supplied with the move must match the pattern `^ADR-\\d+$`',
     'an unfamiliar pattern still gets shown rather than described wrongly',
   );
   assert.equal(describeRule('deps_at_least', 'built', stages), 'Every dependency must have reached Built', 'dependency gates name the stage by label');
@@ -72,7 +72,7 @@ test('an absent or empty requires says the stage is advanced by hand', () => {
 test('describeStage summarises its sentences on one line', () => {
   const stage = { id: 'built', label: 'Built', requires: { evidence_min: 1, deps_at_least: 'built' } };
   const { sentences, summary } = describeStage(stage, stages);
-  assert.deepEqual(sentences, ['Needs at least one piece of evidence', 'Every dependency must have reached Built'], 'every rule in the block is described, in declaration order');
+  assert.deepEqual(sentences, ['Needs at least one new piece of evidence, distinct from anything already recorded', 'Every dependency must have reached Built'], 'every rule in the block is described, in declaration order');
   assert.equal(summary, sentences.join('; '), 'the summary is exactly the sentences, so a column header cannot disagree with its detail');
   assert.equal(summary.includes('\n'), false, 'the summary stays on one line for a column header');
 });
@@ -99,10 +99,10 @@ test('shipped stages render the exact wording the board will show', () => {
   assert.deepEqual(describeStage(byId.building, shipped).sentences, ['Someone must have claimed it'], 'the Building gate explains the claim it requires');
   assert.deepEqual(
     describeStage(byId.built, shipped).sentences,
-    ['Scope must be filled in', 'Needs at least one piece of evidence', 'Every dependency must have reached Built'],
+    ['Scope must be filled in', 'Needs at least one new piece of evidence, distinct from anything already recorded', 'Every dependency must have reached Built'],
     'the Built gate explains the scope it is named after, its evidence minimum, and its dependency boundary',
   );
-  assert.deepEqual(describeStage(byId.in_review, shipped).sentences, ['Evidence must include a link to a pull request'], 'the In review gate explains its regex as a pull request link');
+  assert.deepEqual(describeStage(byId.in_review, shipped).sentences, ['Evidence supplied with the move must include a link to a pull request'], 'the In review gate explains its regex as a pull request link');
   assert.deepEqual(describeStage(byId.merged, shipped).sentences, ['Every dependency must have reached Merged'], 'the Merged gate names the dependency boundary by label');
-  assert.deepEqual(describeStage(byId.verified, shipped).sentences, ['Needs at least two pieces of evidence'], 'the Verified gate pluralises its evidence minimum');
+  assert.deepEqual(describeStage(byId.verified, shipped).sentences, ['Needs at least two new pieces of evidence, distinct from anything already recorded'], 'the Verified gate pluralises its evidence minimum');
 });

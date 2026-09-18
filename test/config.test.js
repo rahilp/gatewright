@@ -186,3 +186,39 @@ test('aborting the editor leaves the config byte-identical', async () => {
   assert.equal(readFileSync(store.paths.config, 'utf8'), before);
   assert.match(read(), /nothing was changed/);
 });
+
+// T-0043 — `gw config vocab.type` prints `["decision","defect",...]`, and
+// pasting that exact form back used to be comma-split without validation,
+// storing strings with embedded quotes; `gw add --type doc` then refused
+// `doc` while listing it as allowed. The bracketed form the command prints
+// must be accepted back, validated, and the vocabulary must actually work
+// afterwards — asserted through the real binary, end to end.
+test('T-0043: the bracketed form config prints is accepted back and the vocabulary works', () => {
+  const { root, store } = board({ vocab: { type: ['feature'] } });
+  const printed = JSON.stringify(['decision', 'defect', 'feature', 'test', 'doc', 'spike']);
+  const out = execFileSync(process.execPath, [BIN, 'config', 'vocab.type', '--yes', printed], { cwd: root, encoding: 'utf8' });
+  assert.match(out, /vocab\.type = /);
+  const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+  assert.deepEqual(saved.vocab.type, ['decision', 'defect', 'feature', 'test', 'doc', 'spike']);
+  const id = execFileSync(process.execPath, [BIN, 'add', 'typed work', '--phase', 'P1', '--type', 'doc'], { cwd: root, encoding: 'utf8' }).trim();
+  assert.match(id, /^[A-Z0-9.-]+$/, `gw add --type doc must succeed against the new vocabulary, got '${id}'`);
+});
+
+test('T-0043: the comma-separated form keeps working alongside the bracketed one', () => {
+  const { root, store } = board();
+  execFileSync(process.execPath, [BIN, 'config', 'vocab.priority', '--yes', 'P0,P1,P2'], { cwd: root, encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')).vocab.priority, ['P0', 'P1', 'P2']);
+});
+
+test('T-0043: a bracketed value that is not a JSON array of strings is refused with the syntax named', () => {
+  const { root, store } = board();
+  const before = readFileSync(store.paths.config, 'utf8');
+  for (const bad of ['["a", "b"', '[1,2]', '["a", 2]', '[', '{"a":1}', '["a","a"]', '[]', '["", "b"]']) {
+    assert.throws(
+      () => execFileSync(process.execPath, [BIN, 'config', 'vocab.type', '--yes', bad], { cwd: root, encoding: 'utf8' }),
+      (error) => error.status === 2 && /JSON array|twice/.test(`${error.stderr}`),
+      `the bracketed value ${bad} must be refused, not stored`,
+    );
+  }
+  assert.equal(readFileSync(store.paths.config, 'utf8'), before, 'a refused value writes nothing');
+});

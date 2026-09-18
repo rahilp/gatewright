@@ -37,7 +37,7 @@ test('the full binary workflow uses a foreign pipeline exclusively', () => {
   output.push(run(root, ['move', 'T-0001', 'coding']));
   assert.throws(
     () => run(root, ['move', 'T-0001', 'shipped']),
-    (error) => error.status === 1 && /needs at least 1 evidence/.test(error.stderr),
+    (error) => error.status === 1 && /Needs at least one new piece of evidence/.test(error.stderr),
   );
   output.push(run(root, ['move', 'T-0001', 'shipped', '--evidence', 'commit:abc123']));
 
@@ -63,8 +63,9 @@ test('the full binary workflow uses a foreign pipeline exclusively', () => {
   output.push(run(root, ['brief']));
 
   const emitted = output.join('');
-  assert.match(emitted, /source says done, imported to icebox \(shipped needs at least 1 evidence entry\)/);
-  assert.match(emitted, /`gw move` needs evidence past Coding\. Never edit/);
+  assert.match(emitted, /source says done, imported to icebox \(shipped Needs at least one new piece of evidence, distinct from anything already recorded\)/);
+  assert.match(emitted, /Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate\. Never edit/);
+  assert.doesNotMatch(emitted, /needs evidence past/, 'the footer must not name a stage on a custom pipeline either (T-0038)');
   assert.doesNotMatch(emitted, /backlog|verified|dropped/);
   assert.doesNotMatch(checkOutput, /backlog|verified/);
   assert.equal(readFileSync(store.paths.stages, 'utf8').includes('paused'), false);

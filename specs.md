@@ -64,7 +64,7 @@ Field rules:
 | `owner` | string \| null | tracker | `human:<name>` or `agent:<run-id>` |
 | `scope` | string | github (body) if linked | What "done" means. Shown in dispatch prompt. |
 | `deps` | string[] | human/agent | Item IDs. Cycles rejected on write. |
-| `evidence` | string[] | agent/human | Commit SHAs, test paths, CI URLs, PR URLs. Free-form strings, validated by exit rules only. |
+| `evidence` | `{ text, stage }[]` | agent/human | Each entry: `text` is the free-form string (commit SHAs, test paths, CI URLs, PR URLs), `stage` names the stage whose move supplied it — so a gate is judged on what its own move supplied, and the board can show what justified each gate after the fact. `stage` is `null` on entries migrated from the pre-0.12 flat-string shape; such entries count for gates at or before the stage the item already occupies, never for a gate the item is entering. Validated by exit rules only (§4). |
 | `notes` | string | agent/human | Running notes. Checklists live here as markdown. |
 | `refs` | string[] | human | Requirement IDs, ticket refs. Not interpreted. |
 | `parent` | string \| null | tracker | Set by `add --parent`. |
@@ -189,9 +189,21 @@ Semantics:
 - `exit` is the human-readable rule shown in the board and the brief. It has no machine meaning.
 - `requires` is the machine-checked rule for **entering** the next stage. `gw move X <stage>` evaluates the `requires` block of the *target* stage. Keys:
   - `owner: true` — item must have an owner
-  - `evidence_min: n` — at least n evidence entries
-  - `evidence_match: regex` — at least one evidence entry matches
+  - `evidence_min: n` — at least n DISTINCT evidence entries supplied with this move for this stage. Entries are trimmed and de-duplicated against each other and against every entry already recorded on the item, so pasting the same string twice counts once, and evidence recorded at an earlier stage never satisfies a later gate. Forcing an item backward and re-moving it forward therefore demands fresh evidence — intended.
+  - `evidence_match: regex` — at least one distinct entry supplied with this move matches
   - `deps_at_least: stage` — every dep must be at that stage or later (by list order)
+
+  **Migration.** Boards written before evidence carried its stage hold flat
+  strings; those read as `{ text, stage: null }`. Normalisation happens on
+  read, so an old board works at once and nothing on disk changes until the
+  next gw write — which persists the new shape and re-baselines `.digest` in
+  the same breath. A migration that rewrote `items.jsonl` at read time would
+  make the next `gw check` report an out-of-band write that the tool itself
+  just made; it must never do that. Migrated (`stage: null`) entries were
+  recorded under the old lifetime-array rule, so their justification is
+  unknown: they count for every gate at or before the stage the item already
+  stands in — keeping an upgraded board's `gw check` clean — and for no gate
+  the item is entering.
 - **Gates are cumulative.** To stand in stage N, an item must satisfy the `requires`
   of every pipeline stage up to and including N — not just N's own block. A single
   stage's `requires` is an entry gate for that stage; the pipeline as a whole is the
@@ -482,7 +494,7 @@ NEXT UNBLOCKED
   P0-05  Jog network transport and clock conversion policy    P0
 
 Rules: use `gw add` for work someone else could pick up; checklists go in notes.
-       `gw move` needs evidence past Building. Never edit .gatewright/ by hand.
+       Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate. Never edit .gatewright/ by hand.
 ```
 
 Hard cap from `config.brief.max_lines`. Sections are truncated with `(+n more)` rather than the whole thing growing.
@@ -492,7 +504,7 @@ Hard cap from `config.brief.max_lines`. Sections are truncated with `(+n more)` 
 1. Load item and target stage.
 2. If target is not the next stage in order and `--force` is absent → exit 1, naming the stage that must be passed through first and the command to get there: `building: move here first: run \`gw move P1-01 building\``. A backward target says so and names `--force`, which is the only lawful way to move backward. The refusal must never answer with a bare `--force`: it prints the whole command, and the shipped AGENTS.md block permits `--force` exactly when a refusal names it — for order, never for a gate — so that a compliant agent is never left without a next step.
 3. Evaluate target's `requires`. Any failure → exit 1 with each failed rule on its own line.
-4. Update `stage`, `updated`; append provided evidence; clear `flag` if it was `paused`.
+4. Update `stage`, `updated`; append provided evidence, each entry recorded as `{ text, stage: <target stage> }` (§2, §4); clear `flag` if it was `paused`.
 5. Append `move` event.
 6. If `github.enabled` and item is linked and `comment_on_move` → queue a comment (written on next `sync` or immediately if `serve` is running).
 
@@ -766,7 +778,7 @@ Scheduler loop in `serve`, every `tick_s` (default 5):
 2. Running count ≥ `max_concurrent` → skip.
 3. Candidates: items where the next stage has `auto: true`, `flag` is null, deps satisfy the next stage's `deps_at_least`, and either a `dispatch` event exists with no later `run_ended`/`cancel`, or the stage before is `auto` (continuation).
 4. Pick by index in `config.vocab.priority` (position 0 first), then oldest `updated`. An item whose `priority` is absent from that array, or null, sorts after every item whose priority is in it — an unclassified item never jumps the queue.
-5. Start: create worktree `git worktree add <root>/<id> -b gw/<id>` (reuse if exists). If `memory.enabled` and `recall.on_dispatch`: call `memory.recall("<title>. <scope>", top_k)`, trim to `max_chars`, fill `{{prior_context}}`; if `project_id` is set, fill `{{capsule}}`. A memory failure logs a warning and leaves both empty; it never blocks the run. Render prompt, spawn provider `cmd` with `cwd` = worktree and env `GW_ACTOR=agent:<run>`, `GW_ITEM=<id>`, `GW_ROOT=<repo>/.gatewright`. Pipe stdout+stderr to `runs/<id>-<run>.log`. Append `run_started`. Set `owner`.
+5. Start: create worktree `git worktree add <root>/<id> -b gw/<id>` (reuse if exists). If `memory.enabled` and `recall.on_dispatch`: call `memory.recall("<title>. <scope>", top_k)`, trim to `max_chars`, fill `{{prior_context}}`; if `project_id` is set, fill `{{capsule}}`. A memory failure logs a warning and leaves both empty; it never blocks the run. Render prompt, spawn provider `cmd` with `cwd` = worktree and env `GW_ACTOR=agent:<run>`, `GW_ITEM=<id>`, `GW_ROOT=<repo>`. Pipe stdout+stderr to `runs/<id>-<run>.log`. Append `run_started`. Set `owner`.
 6. On exit — **normal exit included, which is the common case** — append `run_ended`
    with the outcome (`ok` when the process exits 0, otherwise `error`) and
    `git -C <worktree> rev-parse HEAD`, clear the registry record, and release
@@ -784,7 +796,7 @@ Scheduler loop in `serve`, every `tick_s` (default 5):
 8. On `resume`: clear flag, restore stage, append `dispatch`; next tick starts with `{{log_tail}}` filled from the last log.
 9. `run_timeout_min` exceeded → same as cancel with outcome `timeout`.
 
-The agent inside a run uses the normal CLI. `GW_ROOT` points it at the main repo's `.gatewright/`, not the worktree's copy, so all runs write to one board.
+The agent inside a run uses the normal CLI. `GW_ROOT` points it at the main repo (the directory holding `.gatewright/`), not the worktree's copy, so all runs write to one board.
 
 ### 10.2 Windows
 
@@ -943,9 +955,11 @@ skipped, naming the flag, so the choice is visible rather than silent.
 ## Work tracking
 This repo uses gatewright. At the start of every session run `gw brief` and act on it.
 - Record progress only through the `gw` CLI. Never edit files in `.gatewright/` directly.
-- Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked.
+- Identify yourself: export `GW_ACTOR=agent:<name>` (e.g. `agent:codex`) once per session, or pass `--by agent:<name>` on any write — without it your work is recorded as done by a human.
+- Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked. Plan steps are items, never notes — `gw note <id>` is only for progress remarks on an existing item.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage.
-- Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`. Your own plan steps: `gw note <id>`.
+- Items created by an agent may be held with a `needs-triage` flag until reviewed. The creator cannot lift it: someone else runs `gw triage <id> --approve` (you may `--drop` your own item). NEEDS TRIAGE rows in `gw brief` name the command.
+- Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
 - If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.
 <!-- gatewright:end -->

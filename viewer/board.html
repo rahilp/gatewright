@@ -82,6 +82,14 @@
   header#gw-header .meta { color: var(--text-dim); font-size: 0.82rem; }
   header#gw-header .totals { display: flex; gap: 0.9rem; margin-left: auto; font-size: 0.82rem; color: var(--text-dim); }
   header#gw-header .totals b { color: var(--text); }
+  /* T-0055: the header is sticky at the top of the page scroll, and anything
+     the browser scrolls into view -- a Tab-focus landing on a deep card, a
+     find-in-page hit -- used to slide underneath it, hiding the card's id
+     and title. The scroller reserves the bar's height for every target
+     (scroll-padding-top), and the repeated scroll targets reserve it again
+     locally (scroll-margin-top) so a future target cannot forget. */
+  html { scroll-padding-top: 3.5rem; }
+  .card, .brief-row, table.gw-table tbody tr { scroll-margin-top: 3.5rem; }
   .snapshot-pill {
     font-size: 0.72rem;
     padding: 0.15rem 0.5rem;
@@ -120,6 +128,19 @@
   }
   nav#gw-tabs button:hover { color: var(--text); }
   nav#gw-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  /* T-0064: the tab bar already scrolled at 390px, but nothing said so --
+     the clipped Export tab just looked broken. The scrollbar is now always
+     drawn (thin on desktop, visibly thumb-styled), and a phone loses the
+     wide per-tab padding that pushes the last tab off the edge in the
+     first place. */
+  nav#gw-tabs { scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
+  nav#gw-tabs::-webkit-scrollbar { height: 6px; }
+  nav#gw-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  nav#gw-tabs::-webkit-scrollbar-track { background: transparent; }
+  @media (max-width: 480px) {
+    nav#gw-tabs { padding: 0.4rem 0.5rem 0; }
+    nav#gw-tabs button { padding: 0.5rem 0.5rem; }
+  }
 
   #gw-filters {
     display: flex;
@@ -182,9 +203,36 @@
   .brief-row span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .brief-row span:last-child { color: var(--text-faint); white-space: nowrap; }
   .brief-card .meta { color: var(--text-dim); font-size: 0.82rem; }
+  /* T-0054: the section expander is a real control now, so it reads as one. */
+  .brief-more {
+    background: none;
+    border: none;
+    padding: 0.25rem 0 0;
+    color: var(--accent);
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .brief-more:hover { text-decoration: underline; text-underline-offset: 2px; }
 
   /* Board */
-  #board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+  /* T-0059: a board with one long column used to become one endless strip --
+     a 111-card Backlog rendered ~16000px tall beside five empty lanes, and
+     roughly 80% of the viewport at any scroll position was bare background.
+     The board is a pipeline, so wrapping the columns would break the
+     left-to-right reading, and auto-scrolling to the populated ones is
+     motion the reader never asked for (and still leaves the void). Instead
+     the board is scoped to the viewport: every column is a lane as tall as
+     the visible screen, and a long column scrolls inside its own lane. All
+     stages stay visible at once, which is the whole point of a board. */
+  #board {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    align-items: stretch;
+    max-height: calc(100vh - 11rem);
+    min-height: 12rem;
+  }
   .column {
     background: var(--bg-raised);
     border: 1px solid var(--border);
@@ -192,6 +240,9 @@
     min-width: 240px;
     max-width: 260px;
     flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   /* A terminal column collapsed to its recent handful gets its width back to
      the non-terminal columns that matter -- see terminalStageIds() and
@@ -208,6 +259,7 @@
     gap: 0.4rem;
     position: sticky;
     top: 0;
+    flex-shrink: 0;
     background: var(--bg-raised);
     border-radius: 0.5rem 0.5rem 0 0;
   }
@@ -223,7 +275,10 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
+  /* T-0059: the lane body is what scrolls now, so a long column never grows
+     the page. The header stays pinned above it because it is outside this
+     scroll container, not because of the sticky fallback above. */
+  .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; overflow-y: auto; }
   .card {
     background: var(--bg-sunken);
     border: 1px solid var(--border);
@@ -315,6 +370,15 @@
     cursor: pointer;
   }
   select.row-move { max-width: 10rem; }
+  /* T-0027: the table scrolls in its own lane so the page never does. On a
+     phone the action controls also give up their nowrap and wrap onto two
+     lines instead of holding the column -- and the whole table -- wide. */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 480px) {
+    table.gw-table td.row-actions-cell { white-space: normal; }
+    .row-actions { flex-wrap: wrap; }
+    select.row-move { max-width: 8rem; }
+  }
 
   /* Stages & rules */
   .stage-rule {
@@ -389,7 +453,7 @@
     margin: 0.6rem 0;
   }
   #gw-panel .readonly-banner code { font-family: var(--mono); }
-  #gw-panel dl { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
+  #gw-panel dl { display: grid; grid-template-columns: 7rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
   #gw-panel dt { color: var(--text-dim); }
   #gw-panel dd { margin: 0; }
   #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; align-items: flex-start; }
@@ -460,6 +524,8 @@
   }
   #gw-panel .evidence-list { list-style: none; margin: 0.3rem 0; padding: 0; }
   #gw-panel .evidence-list li.evidence-chip { font-family: var(--mono); font-size: 0.78rem; padding: 0.15rem 0; }
+  /* T-0062: the gate each entry paid for, next to the text that paid for it. */
+  #gw-panel .evidence-list li.evidence-chip .evidence-gate { margin-left: 0.4rem; font-family: var(--sans); font-size: 0.7rem; }
   #gw-panel .evidence-add, #gw-panel .note-add { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.8rem; }
   #gw-panel .evidence-add input, #gw-panel .note-add textarea {
     flex: 1;
@@ -718,6 +784,24 @@
     }[c]));
   }
 
+  // Evidence entries are `{ text, stage }` objects on every board
+  // lib/store.js reads (it normalises on read), but `import` still accepts
+  // plain strings and the panel's own pending-evidence entries are strings
+  // until the next move posts them -- so both shapes reach the viewer, and
+  // every reader of an entry goes through here. String(entry) is what turned
+  // the panel into a wall of [object Object] the night the shape changed.
+  function evidenceText(e) {
+    if (e && typeof e === 'object') return typeof e.text === 'string' ? e.text : '';
+    return e == null ? '' : String(e);
+  }
+
+  // Which gate an entry paid for -- the whole point of the new shape. Null
+  // for legacy strings and pending entries, which have not been attributed
+  // to a gate yet.
+  function evidenceStage(e) {
+    return e && typeof e === 'object' && typeof e.stage === 'string' && e.stage ? e.stage : null;
+  }
+
   function fmtDate(iso) {
     if (!iso) return '';
     try {
@@ -941,6 +1025,10 @@
     // living on State survives every 2-second poll untouched, so reading
     // Built does not get reset out from under whoever is reading it.
     expandedStages: new Set(),
+    // T-0054: same idea for the Overview's "what next" sections -- which
+    // ones a human has expanded past the first handful. A Set on State, so
+    // the poll cannot fold a section back up while it is being read.
+    briefExpanded: new Set(),
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     runLogs: {}, runLogLoading: {}, runLogErrors: {},
@@ -1347,7 +1435,14 @@
     if (!items.length) {
       return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + '</h2><p class="meta">' + escapeHtml(emptyText) + '</p></div>';
     }
-    const shown = items.slice(0, BRIEF_SECTION_LIMIT);
+    // T-0054: "+N more" was a bare <p> -- a dead end sitting under rows that
+    // are all focusable buttons. It is now the same kind of one-click
+    // reveal a collapsed terminal column's "Show all" is: it expands the
+    // section in place, and folds it back. The section title is the key --
+    // the four sections on the Overview have distinct titles, and the choice
+    // lives on State so the 2-second poll cannot reset it.
+    const expanded = (State.briefExpanded || new Set()).has(title);
+    const shown = expanded ? items : items.slice(0, BRIEF_SECTION_LIMIT);
     // T-0017: the row opens the item's drawer on click, so it is a button in
     // the accessibility tree -- see the delegated keydown handler on #gw-view.
     const rows = shown.map((it) =>
@@ -1355,7 +1450,11 @@
       '<span>' + escapeHtml(it.id) + ' · ' + escapeHtml(it.title) + '</span>' +
       '<span>' + escapeHtml(note(it)) + '</span></div>'
     ).join('');
-    const more = items.length > shown.length ? '<p class="meta">+' + (items.length - shown.length) + ' more</p>' : '';
+    const more = items.length > BRIEF_SECTION_LIMIT
+      ? '<button class="brief-more" data-brief-more="' + escapeHtml(title) + '"' +
+        (expanded ? '' : ' aria-label="Show the remaining ' + (items.length - BRIEF_SECTION_LIMIT) + ' items in ' + escapeHtml(title) + '."') + '>' +
+        (expanded ? 'show less' : '+' + (items.length - BRIEF_SECTION_LIMIT) + ' more') + '</button>'
+      : '';
     return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + ' (' + items.length + ')</h2>' + rows + more + '</div>';
   }
 
@@ -1441,7 +1540,7 @@
     if (requires.evidence_match) {
       let re = null;
       try { re = new RegExp(requires.evidence_match); } catch { return true; }
-      if (!evidence.some((e) => re.test(e))) return true;
+      if (!evidence.some((e) => re.test(evidenceText(e)))) return true;
     }
     return false;
   }
@@ -1492,7 +1591,12 @@
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
-      '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type || '?') + '</span>' +
+      // T-0056: a null type rendered a bare "?" pill -- on a fresh board,
+      // mostly untyped items, that is the pill everywhere. Every other pill
+      // on this card is already conditional, so an absent type now reads
+      // exactly the way an absent flag does: nothing shown. A type that IS
+      // set still renders, glossary tooltip and all.
+      (it.type ? '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</span>' : '') +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
@@ -1596,6 +1700,19 @@
     return reasons.join(' · ');
   }
 
+  // T-0063: a drop the browser refuses (dragover never allowed it) used to
+  // end in nothing at all -- the column was dimmed, the card snapped back,
+  // and the reason stayed locked in a tooltip one hover away. This shows the
+  // very same sentence dropRefusal() puts on the column tooltip and the
+  // panel's move strip, deduped per column so the stream of dragover events
+  // renders the notice once, not continuously.
+  function showDragRefusal(drag, stageId) {
+    const why = dropRefusal(drag.id, stageId);
+    if (!why || drag.refusalShown === stageId) return;
+    drag.refusalShown = stageId;
+    showBoardRefusal(drag.id, stageId, [why]);
+  }
+
   // Which columns would take this card, marked before the drag reaches them
   // rather than after the server refuses it. A backward-eligible column is
   // marked distinctly from an ordinary forward one -- see .drop-back -- so a
@@ -1688,8 +1805,11 @@
       if (!column) return;
       if (!dropAllowed(drag.id, column.dataset.stage)) {
         // No preventDefault: the browser itself refuses the drop, so an
-        // invalid column cannot even accept the card optimistically.
+        // invalid column cannot even accept the card optimistically. The
+        // refusal still says why (T-0063) -- the sentence travels with the
+        // drag, not only in the column's tooltip.
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        showDragRefusal(drag, column.dataset.stage);
         return;
       }
       e.preventDefault();
@@ -1708,8 +1828,18 @@
       const column = e.target.closest('.column');
       if (!column) return;
       const to = column.dataset.stage;
-      if (!dropAllowed(drag.id, to)) return;
+      if (!dropAllowed(drag.id, to)) {
+        // Some delivery paths can still produce a drop here (a programmatic
+        // drag, a browser that fires drop anyway): refuse it with the same
+        // sentence, not with silence.
+        showDragRefusal(drag, to);
+        return;
+      }
       e.preventDefault();
+      // A move the gates allowed should not leave a stale "cannot move"
+      // notice on screen; if the server refuses it anyway, showMoveRefusal
+      // raises its own notice with the fresher reason.
+      hideBoardRefusal();
       const id = drag.id;
       clearDropTargets();
       onCardDrop(id, to, column);
@@ -1728,6 +1858,18 @@
 
   function rowActionsHtml(it) {
     if (!State.live) return '';
+    // T-0058: claiming finished work is meaningless, so the Table view stops
+    // offering it on a terminal item -- the same place Play and the move
+    // picker already go quiet (actionFor, moveSelectHtml). Hidden rather
+    // than refused: the offer itself is the defect, and a button whose only
+    // possible outcome is an error toast is not a control, it is a trap. The
+    // claim route on the server (lib/serve/) should refuse a terminal item
+    // at the API too; that half is not this file's to fix.
+    if (isTerminalItem(it)) {
+      return it.owner
+        ? '<span class="row-actions"><button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button></span>'
+        : '';
+    }
     return '<span class="row-actions">' + (it.owner
       ? '<button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button>'
       : '<button data-claim-row="' + escapeHtml(it.id) + '" title="Claims this item for you.">Claim</button>') + '</span>';
@@ -1774,7 +1916,13 @@
       const cmp = String(av).localeCompare(String(bv));
       return dir === 'asc' ? cmp : -cmp;
     });
-    container.innerHTML = '<table class="gw-table"><thead><tr>' +
+    // T-0027: the table itself may be wider than a phone -- the nowrap
+    // action cells and the sorted-header labels need their width -- but the
+    // PAGE may not. The table scrolls inside its own container now, so at
+    // 390px the page stays exactly one viewport wide and the overflow
+    // belongs to the table, where it is scrollable and visible, not to the
+    // document, where it is neither.
+    container.innerHTML = '<div class="table-scroll"><table class="gw-table"><thead><tr>' +
       cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
       (State.live ? '<th>Actions</th>' : '') +
       '</tr></thead><tbody>' +
@@ -1795,7 +1943,7 @@
         '<td>' + escapeHtml(fmtDate(it.updated)) + '</td>' +
         (State.live ? '<td class="row-actions-cell">' + rowActionsHtml(it) + moveSelectHtml(it) + '</td>' : '') +
         '</tr>').join('') +
-      '</tbody></table>';
+      '</tbody></table></div>';
   }
 
   const STAGE_ROLES = ['initial', 'done', 'dropped', 'paused'];
@@ -2356,6 +2504,20 @@
     return valuesDiverge(State.panelBaseline, capturePanelBaseline());
   }
 
+  // T-0057: the panel spelled fields the way items.jsonl does -- "deps",
+  // "created_by" -- while every other surface on the board spells them the
+  // way a reader reads. One table answers for both of the panel's field
+  // lists; a field missing here falls back to its key, as before.
+  const FIELD_LABELS = {
+    title: 'Title', scope: 'Scope', priority: 'Priority', type: 'Type', phase: 'Phase',
+    deps: 'Dependencies', refs: 'Refs', id: 'ID', stage: 'Stage', flag: 'Flag',
+    owner: 'Owner', parent: 'Parent', created_by: 'Created by', gh: 'GitHub',
+    created: 'Created', updated: 'Updated',
+  };
+  function fieldLabel(f) {
+    return Object.prototype.hasOwnProperty.call(FIELD_LABELS, f) ? FIELD_LABELS[f] : f;
+  }
+
   function renderPanel(it) {
     const panel = document.getElementById('gw-panel');
     // A re-render replaces every element in the drawer, which would drop the
@@ -2478,7 +2640,17 @@
     }).join('');
 
     const evidenceHtml = allEvidence.length
-      ? allEvidence.map((e, idx) => '<li class="evidence-chip">' + escapeHtml(e) + (idx >= (it.evidence || []).length ? ' <span class="meta">(pending &middot; sent with the next stage move)</span>' : '') + '</li>').join('')
+      ? allEvidence.map((e, idx) => {
+          // T-0062: render the entry's text, never the entry itself, and put
+          // the gate it paid for next to it -- that attribution is why the
+          // shape grew a stage field in the first place.
+          const gate = evidenceStage(e)
+            ? ' <span class="tag evidence-gate" title="Evidence supplied for the move to ' + escapeHtml(stageLabel(evidenceStage(e))) + ' (' + escapeHtml(evidenceStage(e)) + ')">'
+              + escapeHtml(stageLabel(evidenceStage(e))) + '</span>'
+            : '';
+          return '<li class="evidence-chip">' + escapeHtml(evidenceText(e)) + gate +
+            (idx >= (it.evidence || []).length ? ' <span class="meta">(pending &middot; sent with the next stage move)</span>' : '') + '</li>';
+        }).join('')
       : '<li class="meta">none</li>';
     const evidenceEditor = State.live
       ? '<div class="evidence-add"><label class="sr-only" for="evidence-input">Add evidence</label><input type="text" id="evidence-input" name="evidence" placeholder="commit SHA, test path, PR/CI URL"><button id="evidence-add-btn">add evidence</button></div>'
@@ -2498,7 +2670,7 @@
       // item's code means, right where the item shows it.
       const glossed = termTitle(GLOSSARY_FIELDS.indexOf(f) === -1 ? null : f, value);
       if (!State.live) {
-        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '"' + glossed + '>' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
+        return '<dt>' + fieldLabel(f) + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '"' + glossed + '>' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
       }
       const lockedNote = linked && ghOwned.has(f)
         ? ' <span class="meta">(GitHub-owned on this linked item &mdash; edits are refused; edit the issue instead)</span>'
@@ -2507,7 +2679,7 @@
       // real <label for> -- before this the field had neither a programmatic
       // name nor an associated label, so a screen reader announced it as
       // "edit text" with nothing attached.
-      return '<dt><label for="panel-field-' + f + '">' + f + '</label></dt><dd><input type="text" id="panel-field-' + f + '" name="' + f + '" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
+      return '<dt><label for="panel-field-' + f + '">' + fieldLabel(f) + '</label></dt><dd><input type="text" id="panel-field-' + f + '" name="' + f + '" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
         '<div class="field-refusal" id="field-fail-' + f + '"></div></dd>';
     }).join('');
     const saveBtn = State.live ? '<button id="save-fields-btn">save fields</button>' : '';
@@ -2517,7 +2689,7 @@
       let v = it[f];
       if (v && typeof v === 'object') v = JSON.stringify(v);
       else if (v == null || v === '') v = '(none)';
-      return '<dt>' + f + '</dt><dd class="' + (f === 'id' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
+      return '<dt>' + fieldLabel(f) + '</dt><dd class="' + (f === 'id' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
     }).join('');
 
     const eventsHtml = itemEvents.length
@@ -3006,6 +3178,18 @@
         const stageId = toggleBtn.dataset.toggleStage;
         if (State.expandedStages.has(stageId)) State.expandedStages.delete(stageId);
         else State.expandedStages.add(stageId);
+        renderView();
+        return;
+      }
+      // T-0054: the Overview section expander -- one click reveals the rest
+      // of a "what next" list, one more folds it back. Stopped from bubbling
+      // for the same reason the toggle above is.
+      const moreBtn = e.target.closest('[data-brief-more]');
+      if (moreBtn) {
+        e.stopPropagation();
+        const section = moreBtn.dataset.briefMore;
+        if (State.briefExpanded.has(section)) State.briefExpanded.delete(section);
+        else State.briefExpanded.add(section);
         renderView();
         return;
       }

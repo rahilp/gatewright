@@ -21,18 +21,59 @@ test('stage helpers preserve pipeline order and exclude extras from indexing', (
 test('owner, evidence minimum, and evidence pattern requirements pass and fail', () => {
   assert.equal(evaluateRequires(item({ owner: 'human:a' }), 'building', { items: [], stages }).ok, true);
   assert.match(evaluateRequires(item(), 'building', { items: [], stages }).failures[0], /gw claim A/);
-  assert.equal(evaluateRequires(item({ evidence: ['commit'] }), 'built', { items: [], stages }).ok, true);
+  assert.equal(evaluateRequires(item({ evidence: [{ text: 'commit', stage: 'built' }] }), 'built', { items: [], stages }).ok, true);
   assert.match(evaluateRequires(item(), 'built', { items: [], stages }).failures.join('\n'), /evidence/);
-  assert.equal(evaluateRequires(item({ evidence: ['https://github.com/a/b/pull/1'] }), 'review', { items: [], stages }).ok, true);
-  assert.match(evaluateRequires(item({ evidence: ['commit'] }), 'review', { items: [], stages }).failures[0], /evidence/);
+  assert.equal(evaluateRequires(item({ evidence: [{ text: 'https://github.com/a/b/pull/1', stage: 'review' }] }), 'review', { items: [], stages }).ok, true);
+  assert.match(evaluateRequires(item({ evidence: [{ text: 'commit', stage: 'review' }] }), 'review', { items: [], stages }).failures[0], /Evidence supplied with the move must include a link to a pull request/);
+});
+
+// T-0029 — the gates count what a move supplies, not the item's lifetime
+// evidence array. Under the lifetime reading the final gate of the shipped
+// pipeline could not fail: by `verified`, earlier stages had already recorded
+// two entries, so the gate was dead code as shipped.
+test('evidence gates count only entries supplied for the stage being entered', () => {
+  const tagged = item({ evidence: [{ text: 'commit', stage: 'built' }, { text: 'c', stage: 'review' }] });
+  assert.equal(evaluateRequires(tagged, 'built', { items: [], stages }).ok, true);
+  assert.equal(evaluateRequires(item({ evidence: [{ text: 'c', stage: 'review' }] }), 'built', { items: [], stages }).ok, false, 'evidence earned at another stage does not clear this gate');
+});
+
+test('duplicates in one move count once, after trimming', () => {
+  const two = { stages: [{ id: 'done', requires: { evidence_min: 2 } }], terminal: ['done'], extra: [] };
+  const dupes = item({ evidence: [{ text: 'x', stage: 'done' }, { text: '  x  ', stage: 'done' }] });
+  assert.equal(evaluateRequires(dupes, 'done', { items: [], stages: two }).ok, false, 'two copies of one string are one distinct entry');
+  assert.equal(evaluateRequires(dupes, 'done', { items: [], stages: two, supplied: [{ text: 'x', stage: null }] }).ok, false, 'a repeat of what is already recorded is not fresh either');
+});
+
+test('a move-supplied entry that repeats recorded evidence is not fresh, so re-entering a stage demands new proof', () => {
+  const recorded = [{ text: 'commit', stage: 'built' }];
+  const reentering = { ...item({ stage: 'building' }), evidence: [...recorded, { text: 'commit', stage: 'built' }] };
+  assert.equal(evaluateRequires(reentering, 'built', { items: [], stages, supplied: recorded }).ok, false);
+  assert.equal(evaluateRequires(reentering, 'built', { items: [], stages }).ok, true, 'with no move in flight the recorded entry still stands');
+});
+
+test('migrated stage-null entries count for gates up to where the item stands, never for a gate ahead of it', () => {
+  const legacy = item({ stage: 'review', evidence: [{ text: 'https://github.com/a/b/pull/1', stage: null }] });
+  assert.equal(evaluateRequires(legacy, 'review', { items: [], stages }).ok, true, 'an upgraded board stays clean at the stage its evidence got it to');
+  const ahead = item({ evidence: [{ text: 'https://github.com/a/b/pull/1', stage: null }] });
+  assert.equal(evaluateRequires(ahead, 'review', { items: [], stages }).ok, false, 'flat strings never satisfy a gate the item is entering');
+});
+
+// T-0033 — a gate refusal names the requirement, in the same English the
+// board and `gw next` already use, not just the rule key.
+test('an evidence refusal states the requirement in plain English', () => {
+  const minimum = evaluateCumulative(item({ owner: 'human:a' }), 'built', { items: [], stages });
+  assert.match(minimum.failures.join('\n'), /built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move A built --evidence <e>`/);
+  const match = evaluateCumulative(item({ owner: 'human:a' }), 'review', { items: [], stages });
+  assert.match(match.failures.join('\n'), /review: Evidence supplied with the move must include a link to a pull request: run `gw move A review --evidence <e>`/);
 });
 
 test('dependency stage requirement accepts its boundary and rejects earlier, missing, and extra stages', () => {
-  const subject = item({ evidence: ['commit'], deps: ['B'] });
+  const evidence = [{ text: 'commit', stage: 'built' }];
+  const subject = item({ evidence, deps: ['B'] });
   assert.equal(evaluateRequires(subject, 'built', { items: [item({ id: 'B', stage: 'built' })], stages }).ok, true);
   assert.match(evaluateRequires(subject, 'built', { items: [item({ id: 'B', stage: 'building' })], stages }).failures[0], /B/);
-  assert.match(evaluateRequires(item({ evidence: ['commit'], deps: ['X'] }), 'built', { items: [], stages }).failures[0], /X/);
-  assert.match(evaluateRequires(item({ evidence: ['commit'], deps: ['D'] }), 'built', { items: [item({ id: 'D', stage: 'dropped' })], stages }).failures[0], /D/);
+  assert.match(evaluateRequires(item({ evidence, deps: ['X'] }), 'built', { items: [], stages }).failures[0], /X/);
+  assert.match(evaluateRequires(item({ evidence, deps: ['D'] }), 'built', { items: [item({ id: 'D', stage: 'dropped' })], stages }).failures[0], /D/);
 });
 
 test('a stage without requirements passes', () => assert.deepEqual(evaluateRequires(item(), 'backlog', { items: [], stages }), { ok: true, failures: [] }));
@@ -41,8 +82,8 @@ test('cumulative rules name each pipeline gate skipped by a late-stage jump', ()
   const result = evaluateCumulative(item(), 'review', { items: [], stages });
   assert.equal(result.ok, false);
   assert.match(result.failures.join('\n'), /building: needs an owner/);
-  assert.match(result.failures.join('\n'), /built: needs at least 1 evidence/);
-  assert.match(result.failures.join('\n'), /review: needs matching evidence/);
+  assert.match(result.failures.join('\n'), /built: Needs at least one new piece of evidence/);
+  assert.match(result.failures.join('\n'), /review: Evidence supplied with the move must include a link to a pull request/);
   assert.deepEqual(evaluateCumulative(item(), 'paused', { items: [], stages }), { ok: true, failures: [] });
 });
 

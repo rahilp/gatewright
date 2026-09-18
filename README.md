@@ -221,13 +221,13 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | --- | --- |
 | `gw init [--gh] [--repo owner/name] [--force]` | Create `.gatewright/` and write the instruction block to `AGENTS.md`; `--gh` enables GitHub sync, and `--repo` supplies the repository when no GitHub origin is available |
 | `gw init --mirror claude,cursor,copilot` | Also write the instruction block to `CLAUDE.md`, `.cursor/rules/gatewright.mdc`, and `.github/copilot-instructions.md` |
-| `gw brief [--me <owner>] [--json] [--recall]` | Print in-flight, blocked, owned, and next-unblocked items in 25 lines or fewer. `--recall` is accepted but has no effect until the v0.5 memory backend is enabled. |
+| `gw brief [--me <owner>] [--json] [--recall]` | Print in-flight, blocked, owned, and next-unblocked items in 25 lines or fewer. `--json` returns that digest structured (buckets with id, title, stage, owner, waiting-on), not the raw board. `--recall` is accepted but has no effect until the v0.5 memory backend is enabled. |
 | `gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--scope "..."] [--by <who>]` | Create an item; print its id |
 | `gw claim <id> [--by <who>]` | Take ownership |
 | `gw release <id>` | Drop ownership |
 | `gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]` | Advance a stage; refused if its exit rule is unmet |
 | `gw next <id> [--json]` | Show the stage(s) an item can move to right now, and the unmet conditions in plain English for the rest |
-| `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--deps a,b] [--refs a,b] [--by <who>]` | Change non-stage, non-evidence, non-notes fields |
+| `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--deps a,b\|""] [--refs a,b\|""] [--force] [--by <who>]` | Change non-stage, non-evidence, non-notes fields. An empty `--deps ""` or `--refs ""` clears the list; a forced `--scope` edit on finished work is recorded in the item's notes |
 | `gw note <id> "<text>" [--by <who>]` | Append a timestamped line to the item's notes |
 | `gw show <id> [--json]` | Print one item and its events |
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
@@ -257,15 +257,18 @@ The full contract, including field ownership, the move algorithm, and the brief 
 ## Work tracking
 This repo uses gatewright. At the start of every session run `gw brief` and act on it.
 - Record progress only through the `gw` CLI. Never edit files in `.gatewright/` directly.
-- Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked.
+- Identify yourself: export `GW_ACTOR=agent:<name>` (e.g. `agent:codex`) once per session, or pass `--by agent:<name>` on any write — without it your work is recorded as done by a human.
+- Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked. Plan steps are items, never notes — `gw note <id>` is only for progress remarks on an existing item.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage.
-- Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`. Your own plan steps: `gw note <id>`.
+- Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
 - If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.
 <!-- gatewright:end -->
 ```
 
-The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item.
+Every command that writes records who did it: `--by <who>` if given, else `$GW_ACTOR`, else `human:<user>`. Agents must identify as `agent:<name>` — a bare `agent` names nobody and is refused, and anything else without the prefix is recorded as a human.
+
+The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item. `brief --json` returns the same digest structured — bucket membership, titles, stage, owner, and what each blocked item waits on — not the raw board, so a polling agent pays for the answer, not for the database.
 
 Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
 

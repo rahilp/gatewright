@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { run } from '../lib/commands/next.js';
+import { describeRule } from '../lib/gates/describe.js';
 import { UsageError } from '../lib/cli/errors.js';
 
 const stages = {
@@ -41,7 +42,7 @@ test('gw next on a fresh item leads with the immediate next stage and keeps side
 
 next: specified (ready): run \`gw move P1-01 specified\`
 
-other moves: ready -> dropped, paused
+other moves: dropped, paused (now)
 `);
 });
 
@@ -49,18 +50,43 @@ test('gw next mid-pipeline leads with the blocked next stage, collapses further 
   const b = board([item({ stage: 'building', owner: 'human:test' })]);
   const c = ctx(b, ['P1-01']);
   run(c);
+  // The gate sentence comes from lib/gates/describe.js; the structure around
+  // it — answer first, dep and count beneath, side moves last — is what this
+  // test pins.
   assert.equal(c.out, `P1-01  stage: building
 
 next: built (blocked)
-  - Needs at least one piece of evidence
+  - ${describeRule('evidence_min', 1, stages)}
   - 4 further stages need this first
 
-other moves: ready -> dropped, paused; needs --force -> backlog, specified
+other moves: dropped, paused (now); backlog, specified (needs --force)
 `);
 
   const answerLine = c.out.indexOf('next: built');
-  const backwardLine = c.out.indexOf('needs --force -> backlog');
+  const backwardLine = c.out.indexOf('backlog, specified (needs --force)');
   assert.ok(answerLine >= 0 && backwardLine > answerLine, 'the answer must appear before the backward/side moves section');
+});
+
+// T-0045 — the gate sentences name conditions, never the item causing them,
+// so an item stuck behind a dependency was told "someone must have claimed
+// it" and never which dependency was in the way. next must name it, the way
+// the brief's BLOCKED section does.
+test('gw next names the dependency that is in the way', () => {
+  const dep = { ...item(), id: 'P1-02', stage: 'dropped' };
+  const b = board([item({ stage: 'specified', deps: ['P1-02'] }), dep]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.match(c.out, /next: building \(blocked\)/);
+  assert.match(c.out, /  - Someone must have claimed it/);
+  assert.match(c.out, /  - waiting on P1-02 \(dropped\)/);
+});
+
+test('gw next stays quiet about dependencies when none is in the way', () => {
+  const dep = { ...item(), id: 'P1-02' };
+  const b = board([item({ deps: ['P1-02'] }), dep]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.doesNotMatch(c.out, /waiting on/);
 });
 
 test('gw next --json matches the shape of the live board\'s /transitions endpoint', () => {
@@ -70,7 +96,14 @@ test('gw next --json matches the shape of the live board\'s /transitions endpoin
   const parsed = JSON.parse(c.out);
   assert.equal(parsed.id, 'P1-01');
   assert.equal(parsed.stage, 'building');
-  assert.deepEqual(parsed.transitions.built, { ok: false, failures: ['built: needs at least 1 evidence entry: run `gw move P1-01 built --evidence <e>`'], reasons: ['Needs at least one piece of evidence'] });
+  // The gate wording belongs to lib/rules.js and lib/gates/describe.js; this
+  // test pins the shape: the machine failure names the stage, the human
+  // reasons carry describe.js's sentence for the same rule.
+  const built = parsed.transitions.built;
+  assert.equal(built.ok, false);
+  assert.equal(built.failures.length, 1);
+  assert.match(built.failures[0], /^built: .+evidence/i);
+  assert.deepEqual(built.reasons, [describeRule('evidence_min', 1, stages)]);
   assert.deepEqual(parsed.transitions.specified, { ok: true, failures: [], force: true });
 });
 
@@ -82,6 +115,6 @@ test('gw next on a terminal item gives one explanation for leaving, not one per 
 
 verified is a terminal stage; leaving it needs --force.
 
-other moves: needs --force -> dropped, paused
+other moves: dropped, paused (needs --force)
 `);
 });

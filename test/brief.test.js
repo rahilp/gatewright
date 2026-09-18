@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js';
 import { run as runBrief } from '../lib/commands/brief.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
-import { renderBrief, inFlightTitles, sanitizeTitle, isFlagged, flaggedItems, outstandingDispatches } from '../lib/brief.js';
+import { renderBrief, inFlightTitles, sanitizeTitle, isFlagged, flaggedItems, outstandingDispatches, briefJson } from '../lib/brief.js';
 import { makeItems, makeEvents } from './fixtures/make-items.js';
 
 const stages = { stages: [
@@ -25,7 +25,7 @@ test('brief reproduces the fixed section order and filters dispatches by owner',
   assert.match(out, /^gw · /);
   assert.ok(out.indexOf('DISPATCHED TO YOU') < out.indexOf('IN FLIGHT'));
   assert.ok(out.indexOf('IN FLIGHT') < out.indexOf('BLOCKED'));
-  assert.ok(out.endsWith('`gw move` needs evidence past Building. Never edit .gatewright/ by hand.\n'));
+  assert.ok(out.endsWith("Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate. Never edit .gatewright/ by hand.\n"));
   assert.match(out, /P2-01.*specified → building/);
 });
 
@@ -46,7 +46,7 @@ test('brief shows each parent its open child count', () => {
   assert.match(out, /P1-01.*1 open child/);
 });
 
-test('brief footer derives the stage before the first evidence gate', () => {
+test('brief footer states the conditional evidence rule on a foreign pipeline (T-0038)', () => {
   const foreignStages = {
     stages: [
       { id: 'icebox', label: 'Icebox' },
@@ -56,21 +56,22 @@ test('brief footer derives the stage before the first evidence gate', () => {
     ],
   };
   const out = renderBrief({ items: [], events: [], stages: foreignStages, config: { brief: { max_lines: 25 } } });
-  assert.match(out, /`gw move` needs evidence past Coding\. Never edit/);
+  assert.match(out, /Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate\. Never edit/);
+  assert.doesNotMatch(out, /needs evidence past/, 'the footer must not name a stage: non-contiguous evidence gates made that a lie');
 });
 
-test('brief title-cases an unlabelled stage id in its footer', () => {
+test('brief footer names no stage even with unlabelled stage ids (T-0038)', () => {
   const out = renderBrief({
     items: [], events: [],
     stages: { stages: [{ id: 'icebox' }, { id: 'coding' }, { id: 'shipped', requires: { evidence_min: 1 } }] },
     config: { brief: { max_lines: 25 } },
   });
-  assert.match(out, /`gw move` needs evidence past Coding\. Never edit/);
+  assert.match(out, /Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate\. Never edit/);
 });
 
-test('brief footer is neutral when no pipeline stage requires evidence', () => {
+test('brief footer is the same conditional rule when no pipeline stage requires evidence (T-0038)', () => {
   const out = renderBrief({ items: [], events: [], stages: { stages: [{ id: 'icebox' }, { id: 'shipped' }] }, config: { brief: { max_lines: 25 } } });
-  assert.match(out, /`gw move` needs evidence where the stage requires it\. Never edit/);
+  assert.match(out, /Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate\. Never edit/);
 });
 
 test('100-item brief stays within the agent token and line budget and keeps dispatch visible', () => {
@@ -397,11 +398,9 @@ test('P8-27: continuation lines are indented with 7 spaces to align with legend 
   }
 });
 
-// T-0006 — `gw brief --json` used to dump the raw board plus the rendered
-// human text, so a script asking "what is blocked right now" had to re-derive
-// the buckets or regex the text. The JSON now carries the same buckets the
-// text computes, from the same code: lib/brief.js's computeBuckets, which
-// renderBrief itself draws from.
+// T-0006 gave `brief --json` its buckets; T-0032 made it return the brief
+// itself — the buckets with titles and waiting-on facts — instead of the
+// whole board plus a copy of the human text.
 // Stage ids match the shipped default pipeline (templates/stages.json), which
 // is what a scratch board actually loads.
 const bucketItems = () => [
@@ -436,38 +435,81 @@ async function bucketJson(flags) {
   return JSON.parse(json);
 }
 
-test('brief --json carries the same buckets the text view computes', async () => {
+// T-0032 — `brief --json` returns the brief — the same facts the text
+// conveys, structured — and nothing else. It used to spread the whole state
+// (items, the full event log, config, stages) plus a duplicate of the human
+// text: ~54k chars on a 100-item board, ~33x the text, paid on every poll by
+// the exact audience told to prefer JSON.
+test('brief --json returns the brief, not the database', async () => {
   const parsed = await bucketJson({ json: true });
-  assert.deepEqual(parsed.brief, {
-    dispatched: ['D-1'],
-    in_flight: ['F-1'],
-    blocked: [{ id: 'B-1', waiting_on: 'F-1' }, { id: 'B-2', waiting_on: null }],
-    needs_triage: ['T-1'],
-    next_unblocked: ['N-1'],
+  for (const forbidden of ['items', 'events', 'stages', 'config', 'output', 'brief', 'git_root']) {
+    assert.ok(!(forbidden in parsed), `--json must not ship '${forbidden}'`);
+  }
+  assert.deepEqual(parsed, {
+    open: 7,
+    in_flight: 2,
+    blocked: 2,
+    // gitState reads the enclosing repo; a tempdir has none.
+    git: null,
+    dispatched: [{ id: 'D-1', title: 'Live dispatch', stage: 'building', next_stage: 'built', owner: null }],
+    in_flight: [{ id: 'F-1', title: 'Moved past first stage', stage: 'building', owner: 'human:rahil' }],
+    blocked: [
+      { id: 'B-1', title: 'Waiting on a dependency', flag: null, waiting_on: 'F-1', waiting_on_stage: 'building' },
+      { id: 'B-2', title: 'Flagged blocked', flag: 'blocked', waiting_on: null, waiting_on_stage: null },
+    ],
+    needs_triage: [{ id: 'T-1', title: 'Held for triage', created_by: null }],
+    next_unblocked: [{ id: 'N-1', title: 'Ready for pickup', phase: null }],
+    rules: [
+      'Rules: use `gw add` for work someone else could pick up; checklists go in notes.',
+      "       Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate. Never edit .gatewright/ by hand.",
+    ],
   });
-  const everyId = Object.values(parsed.brief).flat().map((entry) => entry.id ?? entry);
+  const everyId = [...parsed.dispatched, ...parsed.in_flight, ...parsed.blocked, ...parsed.needs_triage, ...parsed.next_unblocked].map((entry) => entry.id);
   assert.ok(!everyId.includes('C-1'), 'a claimed-but-unmoved item belongs in no bucket');
   assert.ok(!everyId.includes('X-1'), 'a terminal item belongs in no bucket');
-  // Existing keys survive: the shape gains `brief`, it does not reshape.
-  assert.equal(parsed.items.length, bucketItems().length);
-  assert.match(parsed.output, /^gw · 7 open · 2 in flight · 2 blocked/);
+});
+
+test('brief --json payload stays within a polling budget on a 100-item board', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-brief-json-100-'));
+  const store = createStore(root); store.ensure();
+  const items = makeItems(100); store.writeItems(items);
+  const events = makeEvents(items);
+  writeFileSync(store.paths.events, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
+  let json = '';
+  await runBrief({ store, root: store.root, flags: { json: true }, stdout: { write: (value) => { json += value; } } });
+  const parsed = JSON.parse(json);
+  assert.ok(parsed.dispatched.length + parsed.in_flight.length + parsed.blocked.length + parsed.next_unblocked.length > 0);
+  assert.ok(json.length < 20_000, `a 100-item poll cost ${json.length} chars`);
 });
 
 test('brief --json buckets agree with the rendered text, bucket for bucket', async () => {
   const parsed = await bucketJson({ json: true });
-  const { brief, output } = parsed;
-  assert.match(output, /DISPATCHED TO YOU[\s\S]*?D-1/);
-  assert.match(output, /IN FLIGHT[\s\S]*?F-1/);
-  assert.match(output, /BLOCKED[\s\S]*?B-1.*waiting on F-1 \(Building\)/);
-  assert.match(output, /NEEDS TRIAGE \(1\)[\s\S]*?T-1/);
-  assert.match(output, /NEXT UNBLOCKED[\s\S]*?N-1/);
-  assert.deepEqual(brief.blocked[1], { id: 'B-2', waiting_on: null }, 'a flagged-blocked item with no deps is waiting on nothing');
+  const text = renderBrief({
+    items: bucketItems(), events: [{ type: 'dispatch', item: 'D-1', by: 'scheduler' }], stages, config: { brief: { max_lines: 25 } }, git: { branch: 'main', sha: '895e249' },
+  });
+  assert.match(text, /DISPATCHED TO YOU[\s\S]*?D-1/);
+  assert.match(text, /IN FLIGHT[\s\S]*?F-1/);
+  assert.match(text, /BLOCKED[\s\S]*?B-1.*waiting on F-1 \(Building\)/);
+  assert.match(text, /NEEDS TRIAGE \(1\)[\s\S]*?T-1/);
+  assert.match(text, /NEXT UNBLOCKED[\s\S]*?N-1/);
+  // T-0036 — a NEEDS TRIAGE row with no instruction attached sends the reader
+  // hunting; the row must name the command that clears the hold, like `gw
+  // check` already does.
+  assert.match(text, /NEEDS TRIAGE \(1\)[\s\S]*?run `gw triage T-1 --approve` to clear the hold, or `gw triage T-1 --drop` to discard it/);
+  assert.deepEqual(parsed.blocked[1], { id: 'B-2', title: 'Flagged blocked', flag: 'blocked', waiting_on: null, waiting_on_stage: null }, 'a flagged-blocked item with no deps is waiting on nothing');
+  assert.deepEqual(parsed.blocked[0].waiting_on, 'F-1', 'a dep-blocked item names the dependency the text suffix names');
+  assert.deepEqual(briefJson({ items: [], events: [], stages, config: {}, git: null }), {
+    open: 0, in_flight: 0, blocked: 0, git: null,
+    dispatched: [], in_flight: [], blocked: [], needs_triage: [], next_unblocked: [],
+    rules: briefJson({ items: [], events: [], stages, config: {}, git: null }).rules,
+  });
 });
 
 test('brief --json applies --me exactly as the text does', async () => {
   const parsed = await bucketJson({ json: true, me: 'human:rahil' });
-  assert.deepEqual(parsed.brief.dispatched, [], 'a dispatch by someone else is not dispatched to me');
-  assert.deepEqual(parsed.brief.in_flight, ['F-1'], 'in flight keeps only items owned by me');
+  assert.deepEqual(parsed.dispatched, [], 'a dispatch by someone else is not dispatched to me');
+  assert.deepEqual(parsed.in_flight.map((entry) => entry.id), ['F-1'], 'in flight keeps only items owned by me');
+  assert.equal(parsed.in_flight[0].owner, 'human:rahil');
 });
 
 // T-0009 — rendering's half of the guard: whatever a stored title holds, one

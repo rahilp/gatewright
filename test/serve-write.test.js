@@ -415,6 +415,68 @@ test('an out-of-range config value is refused with the CLI message and writes no
   });
 });
 
+// T-0050 — the bracketed JSON list form `gw config` accepts (T-0043) used to
+// be comma-split by POST /api/config's own copy of the coercion, storing the
+// printed form as quoted garbage so `gw add --type doc` was then refused while
+// the same help listed `doc` as allowed. The endpoint now goes through the
+// same list coercion in lib/settings.js the CLI command uses, so the two
+// cannot drift apart again.
+test('T-0050: POST /api/config stores the bracketed list form as a real array and the vocabulary works afterwards', async () => {
+  await withServer(async ({ store, url }) => {
+    const value = JSON.stringify(['decision', 'defect', 'feature', 'test', 'doc', 'spike']);
+    const response = await write(url, '/api/config', { key: 'vocab.type', value });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).config, { 'vocab.type': ['decision', 'defect', 'feature', 'test', 'doc', 'spike'] });
+    const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+    assert.deepEqual(saved.vocab.type, ['decision', 'defect', 'feature', 'test', 'doc', 'spike'], 'the stored value must be a real array, not a comma-split of the printed form');
+    // The saved vocabulary must actually work afterwards, driven through the
+    // same command modules the binary runs.
+    let stderr = '';
+    const code = await runRouter(['add', 'typed work', '--phase', 'P1', '--type', 'doc'], { cwd: store.root, env: {}, stdout: { write() {} }, stderr: { write: (text) => { stderr += text; } } });
+    assert.equal(code, 0, `gw add --type doc must succeed against the saved vocabulary, got: ${stderr}`);
+    assert.equal(store.readItems().find((item) => item.title === 'typed work').type, 'doc');
+  });
+});
+
+test('T-0050: POST /api/config refuses a malformed bracketed list with the CLI wording and writes nothing', async () => {
+  await withServer(async ({ store, url }) => {
+    const before = readFileSync(store.paths.config);
+    const response = await write(url, '/api/config', { key: 'vocab.type', value: '["a", "b"' });
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /that bracketed value is not valid JSON/);
+    assert.deepEqual(readFileSync(store.paths.config), before, 'a refused value leaves config.json byte-identical');
+  });
+});
+
+// T-0051 — the serve write path resolved its own actor, so the CLI's bare
+// `agent` refusal (a kind with no name) and its bare-name qualification
+// (`human:<name>`) did not apply to writes made through the board. It now
+// uses the exported actor() from lib/cli/root.js -- the same resolver every
+// command passes through -- so there is one actor space, consistent with
+// sameOwner().
+test('T-0051: a bare agent actor on a board write is refused with the CLI convention named', async () => {
+  await withServer(async ({ store, url }) => {
+    const before = readFileSync(store.paths.items);
+    const response = await write(url, '/api/items', { title: 'Ghost writer', phase: 'P1', by: 'agent' });
+    assert.equal(response.status, 400, 'the board must refuse what the CLI refuses, not record it as human:agent');
+    const body = await response.json();
+    assert.match(body.error, /the actor names no agent: use --by agent:<name>/);
+    assert.deepEqual(readFileSync(store.paths.items), before, 'a refused write must not create an item');
+    assert.deepEqual(store.readEvents(), [], 'a refused write appends no event');
+  });
+});
+
+test('T-0051: a bare name actor is recorded as human:<name> and a qualified actor is kept as given', async () => {
+  await withServer(async ({ store, url }) => {
+    assert.equal((await write(url, '/api/items', { title: 'Named write', phase: 'P1', by: 'rahil' })).status, 200);
+    const added = store.readItems().find((item) => item.title === 'Named write');
+    assert.equal(added.created_by, 'human:rahil');
+    assert.equal(store.readEvents().find((event) => event.type === 'add').by, 'human:rahil');
+    assert.equal((await write(url, `/api/items/${added.id}/claim`, { by: 'agent:codex' })).status, 200);
+    assert.equal(store.readItems().find((item) => item.id === added.id).owner, 'agent:codex');
+  });
+});
+
 // THE SECURITY PROPERTY. `gw serve --host 0.0.0.0` exists so a colleague can
 // move a card. It must not hand that colleague -- or anyone else who can reach
 // the port -- the power to delete stages, disable a gate or start the runner.
