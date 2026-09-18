@@ -1192,3 +1192,43 @@
 {"ts":"2026-09-18T05:07:10.449Z","type":"move","item":"T-0081","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
 {"ts":"2026-09-18T05:07:10.512Z","type":"move","item":"T-0082","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
 {"ts":"2026-09-18T05:07:10.572Z","type":"move","item":"T-0060","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:22:18.347Z","type":"add","item":"T-0083","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:22:18.405Z","type":"add","item":"T-0084","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:22:18.462Z","type":"add","item":"T-0085","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.187Z","type":"add","item":"T-0086","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.251Z","type":"add","item":"T-0087","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.309Z","type":"add","item":"T-0088","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.369Z","type":"add","item":"T-0089","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:35:12.470Z","type":"claim","item":"T-0083","by":"agent:integrity"}
+{"ts":"2026-09-18T05:35:12.528Z","type":"move","item":"T-0083","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.590Z","type":"claim","item":"T-0085","by":"agent:integrity"}
+{"ts":"2026-09-18T05:35:12.655Z","type":"move","item":"T-0085","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.713Z","type":"claim","item":"T-0086","by":"agent:integrity"}
+{"ts":"2026-09-18T05:35:12.772Z","type":"move","item":"T-0086","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.829Z","type":"claim","item":"T-0087","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:12.893Z","type":"move","item":"T-0087","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.951Z","type":"claim","item":"T-0084","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:13.009Z","type":"move","item":"T-0084","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:13.066Z","type":"claim","item":"T-0088","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:13.126Z","type":"move","item":"T-0088","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:13.182Z","type":"claim","item":"T-0089","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:13.241Z","type":"move","item":"T-0089","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:47:11.103Z","type":"add","item":"T-0090","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:56:38.054Z","type":"add","item":"T-0091","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:56:38.118Z","type":"move","item":"T-0087","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T05:56:38.181Z","type":"move","item":"T-0084","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T05:56:38.244Z","type":"move","item":"T-0088","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T05:56:38.306Z","type":"move","item":"T-0089","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T06:03:10.982Z","type":"move","item":"T-0083","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: parent refused verified naming the open child and its stage; agent creator refused even with --force while a different human and a solo human both approve; the three-command laundering sequence now ends with check rc=1 OUT-OF-BAND WRITE and repair refusing to re-baseline"]}
+{"ts":"2026-09-18T06:03:11.044Z","type":"move","item":"T-0085","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: parent refused verified naming the open child and its stage; agent creator refused even with --force while a different human and a solo human both approve; the three-command laundering sequence now ends with check rc=1 OUT-OF-BAND WRITE and repair refusing to re-baseline"]}
+{"ts":"2026-09-18T06:03:11.106Z","type":"move","item":"T-0086","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: parent refused verified naming the open child and its stage; agent creator refused even with --force while a different human and a solo human both approve; the three-command laundering sequence now ends with check rc=1 OUT-OF-BAND WRITE and repair refusing to re-baseline"]}
+{"ts":"2026-09-18T06:03:31.896Z","type":"add","item":"T-0092","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:03:31.955Z","type":"claim","item":"T-0092","by":"agent:viewer5"}
+{"ts":"2026-09-18T06:03:32.010Z","type":"move","item":"T-0092","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:03:32.068Z","type":"claim","item":"T-0091","by":"agent:viewer5"}
+{"ts":"2026-09-18T06:03:32.127Z","type":"move","item":"T-0091","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:03:32.183Z","type":"claim","item":"T-0090","by":"agent:viewer5"}
+{"ts":"2026-09-18T06:03:32.241Z","type":"move","item":"T-0090","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:15:30.006Z","type":"move","item":"T-0092","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: children_done checkboxes present per stage with verified checked and prose from describe.js; released mid-pipeline item drops out of in flight and appears under STRANDED; panel refusal measured at 6378ms across three 2.1s poll samples"]}
+{"ts":"2026-09-18T06:15:30.067Z","type":"move","item":"T-0091","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: children_done checkboxes present per stage with verified checked and prose from describe.js; released mid-pipeline item drops out of in flight and appears under STRANDED; panel refusal measured at 6378ms across three 2.1s poll samples"]}
+{"ts":"2026-09-18T06:15:30.127Z","type":"move","item":"T-0090","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: children_done checkboxes present per stage with verified checked and prose from describe.js; released mid-pipeline item drops out of in flight and appears under STRANDED; panel refusal measured at 6378ms across three 2.1s poll samples"]}

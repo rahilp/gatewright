@@ -54,7 +54,8 @@
       "exit": "Behaviour confirmed on target; VALIDATION entry linked.",
       "auto": false,
       "requires": {
-        "evidence_min": 2
+        "evidence_min": 2,
+        "children_done": true
       }
     }
   ],

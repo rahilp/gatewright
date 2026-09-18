@@ -252,11 +252,11 @@ test('the gate builder edits exactly the rule keys lib/rules.js reads', async ()
 test('buildRequires omits inert rules, coerces the count, and keeps keys it does not edit', () => {
   const buildRequires = new Function('values', 'existing',
     `${liftConst('RULE_KEYS')}\n${liftHelper('buildRequires')}\nreturn buildRequires(values, existing);`);
-  const empty = { scope: false, owner: false, evidence_min: '', evidence_match: '', deps_at_least: '' };
+  const empty = { scope: false, owner: false, children_done: false, evidence_min: '', evidence_match: '', deps_at_least: '' };
 
   assert.equal(buildRequires(empty, undefined), null, 'a gate that checks nothing is no requires at all');
   assert.equal(buildRequires({ ...empty, evidence_min: '0' }, undefined), null, 'a minimum of zero is not a rule');
-  assert.deepEqual(buildRequires({ ...empty, scope: true, owner: true }, undefined), { scope: true, owner: true });
+  assert.deepEqual(buildRequires({ ...empty, scope: true, owner: true, children_done: true }, undefined), { scope: true, owner: true, children_done: true });
   assert.deepEqual(buildRequires({ ...empty, evidence_min: '2' }, undefined), { evidence_min: 2 });
   assert.equal(buildRequires({ ...empty, evidence_min: '1.5' }, undefined), null, 'a count it cannot use is not written as a rule');
   assert.deepEqual(buildRequires({ ...empty, evidence_match: '  ^https://x  ' }, undefined), { evidence_match: '^https://x' });
@@ -802,7 +802,7 @@ test('the viewer\'s "in flight" is the same set gw brief computes, not a second 
 
   assert.deepEqual(
     viewerInFlight, fromLib,
-    'the viewer and lib/brief.js disagree about which open items are "in flight" -- claiming an item must not count on its own, and a live dispatch must, on both sides',
+    'the viewer and lib/brief.js disagree about which open items are "in flight" -- owned work that has progressed, or a live dispatch, belongs there on both sides',
   );
   assert.deepEqual(fromLib, ['Moved past its first stage', 'Still in its first stage but actively dispatched'].sort());
 });
@@ -1181,6 +1181,21 @@ const PANEL_STATE = () => ({
   pendingEvidence: {},
   activePanelId: null,
   panelBaseline: null,
+});
+
+test('a panel refusal is retained in state and rendered again after a panel refresh', () => {
+  const State = { activePanelId: 'P1-01', creatingItem: false, panelError: null };
+  const errorSlot = { innerHTML: '' };
+  new Function('State', 'document', 'escapeHtml', `
+    ${liftHelper('showPanelError')}
+    showPanelError('another reviewer must approve this item');
+    return State.panelError;
+  `)(State, { getElementById: (id) => (id === 'panel-error' ? errorSlot : null) }, (value) => String(value));
+  assert.deepEqual(State.panelError, { panelId: 'P1-01', message: 'another reviewer must approve this item' });
+
+  const html = renderPanelHtml({ ...PANEL_STATE(), panelError: State.panelError }, { id: 'P1-01', title: 'Held item', stage: 'backlog', evidence: [], flag: 'needs-triage' });
+  assert.match(html, /another reviewer must approve this item/, 'a poll re-render preserves the refused-write explanation');
+  assert.match(html, /panel-error-dismiss/, 'the reader has an explicit way to dismiss the retained error');
 });
 
 // T-0062: lib/store.js changed on-disk evidence to {text, stage} objects, and

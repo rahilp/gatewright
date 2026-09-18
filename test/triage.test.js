@@ -40,40 +40,35 @@ test('triage refuses items that are not held and custom pipelines without a drop
   assert.throws(() => run(ctx(noDropped, { drop: true })), /no dropped role/i);
 });
 
-// T-0036 — needs-triage exists to hold unreviewed agent-created work until
-// someone else looks at it. Letting the approving actor be the item's own
-// creator gates no one: the agent approves its own work. So the creator is
-// refused and a different actor succeeds — by identity, not by string, since
-// a bare `--by rahil` and a default `human:rahil` are the same person.
-test('the creator cannot approve their own held item, and the refusal says who must', () => {
-  const b = board(); b.store.writeItems([item({ created_by: 'human:lead' })]);
-  assert.throws(() => run(ctx(b, { approve: true })), (error) => {
-    assert.match(error.message, /created by human:lead/);
-    assert.match(error.message, /someone else|Another actor/);
-    assert.match(error.message, /--force/);
+// T-0085 — agent-created work crosses a human review boundary. The immutable
+// creator provenance, not a caller-supplied --force, decides whether it does.
+test('an agent creator is refused approval even with --force, without a bypass hint', () => {
+  const b = board(); b.store.writeItems([item({ created_by: 'agent:lead' })]);
+  assert.throws(() => run({ ...ctx(b, { approve: true, force: true }), actor: 'agent:lead' }), (error) => {
+    assert.match(error.message, /created by agent:lead/);
+    assert.match(error.message, /different human approver/);
+    assert.doesNotMatch(error.message, /--force/);
     return error instanceof RuleError;
   });
-  assert.equal(b.store.readItems()[0].flag, 'needs-triage', 'the hold survives the refusal');
+  assert.equal(b.store.readItems()[0].flag, 'needs-triage', 'the hold survives the forced refusal');
 });
 
-test('a qualified default actor and a bare --by name are the same creator', () => {
-  const b = board(); b.store.writeItems([item({ created_by: 'lead' })]);
-  assert.throws(() => run(ctx(b, { approve: true })), /created by lead/, 'the default human:<name> actor is the same person as a bare --by name');
+test('an agent-created item requires a different human, closing the omitted-GW_ACTOR alias', () => {
+  const sameName = board(); sameName.store.writeItems([item({ created_by: 'agent:gates' })]);
+  assert.throws(() => run({ ...ctx(sameName, { approve: true }), actor: 'human:gates' }), /different human approver/, 'human:gates is the fallback alias for agent:gates, not a reviewer');
 
-  const agentBoard = board(); agentBoard.store.writeItems([item({ created_by: 'agent:gates' })]);
-  assert.throws(() => run({ ...ctx(agentBoard, { approve: true }), actor: 'gates' }), /created by agent:gates/, 'a bare name matches its agent: qualified creator');
-  run({ ...ctx(agentBoard, { approve: true }), actor: 'human:gates' });
-  assert.equal(agentBoard.store.readItems()[0].flag, null, 'same name, different kind: provenance is the point of the prefix, so a human namesake may approve');
+  const otherAgent = board(); otherAgent.store.writeItems([item({ created_by: 'agent:gates' })]);
+  assert.throws(() => run({ ...ctx(otherAgent, { approve: true }), actor: 'agent:reviewer' }), /different human approver/, 'an agent-created item needs a human review boundary, not another agent');
+
+  const reviewer = board(); reviewer.store.writeItems([item({ created_by: 'agent:gates' })]);
+  run({ ...ctx(reviewer, { approve: true }), actor: 'human:reviewer' });
+  assert.equal(reviewer.store.readItems()[0].flag, null);
 });
 
-test('a different actor approves the held item, and --force is the deliberate override', () => {
-  const b = board(); b.store.writeItems([item({ created_by: 'agent:gates' })]);
+test('a human creator succeeds without --force', () => {
+  const b = board(); b.store.writeItems([item({ created_by: 'human:lead' })]);
   run(ctx(b, { approve: true }));
-  assert.equal(b.store.readItems()[0].flag, null, 'the actor who did not create the item lifts the hold');
-
-  const forced = board(); forced.store.writeItems([item({ created_by: 'human:lead' })]);
-  run(ctx(forced, { approve: true, force: true }));
-  assert.equal(forced.store.readItems()[0].flag, null, '--force is the documented override for the creator');
+  assert.equal(b.store.readItems()[0].flag, null);
 });
 
 test('the creator may still drop their own held item', () => {

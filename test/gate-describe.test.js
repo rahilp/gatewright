@@ -30,6 +30,7 @@ test('every documented rule key gets a sentence a human can act on', () => {
     'an unfamiliar pattern still gets shown rather than described wrongly',
   );
   assert.equal(describeRule('deps_at_least', 'built', stages), 'Every dependency must have reached Built', 'dependency gates name the stage by label');
+  assert.equal(describeRule('children_done', true, stages), 'Every direct child item must be finished', 'parent completion says that direct child items must finish first');
 });
 
 test('a deps_at_least rule uses the named stage label, not the stage id', () => {
@@ -55,6 +56,7 @@ test('an unrecognised rule is reported, never silently dropped', () => {
 test('an inert rule value is not advertised as a gate', () => {
   assert.equal(describeRule('owner', false, stages), null, 'owner: false enforces nothing and must not read as a requirement');
   assert.equal(describeRule('evidence_min', 0, stages), null, 'a zero minimum enforces nothing and must not read as a requirement');
+  assert.equal(describeRule('children_done', false, stages), null, 'an explicit false child gate is inert');
   assert.deepEqual(
     describeRequires({ owner: false }, stages),
     ['Nothing is checked here: this stage is advanced by hand'],
@@ -104,5 +106,5 @@ test('shipped stages render the exact wording the board will show', () => {
   );
   assert.deepEqual(describeStage(byId.in_review, shipped).sentences, ['Evidence supplied with the move must include a link to a pull request'], 'the In review gate explains its regex as a pull request link');
   assert.deepEqual(describeStage(byId.merged, shipped).sentences, ['Every dependency must have reached Merged'], 'the Merged gate names the dependency boundary by label');
-  assert.deepEqual(describeStage(byId.verified, shipped).sentences, ['Needs at least two new pieces of evidence, distinct from anything already recorded'], 'the Verified gate pluralises its evidence minimum');
+  assert.deepEqual(describeStage(byId.verified, shipped).sentences, ['Needs at least two new pieces of evidence, distinct from anything already recorded', 'Every direct child item must be finished'], 'the Verified gate requires both fresh validation evidence and finished child work');
 });

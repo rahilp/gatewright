@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { tmpdir, platform } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { createServeServer, listen } from '../lib/serve/server.js';
@@ -24,10 +24,13 @@ const PUPPETEER_PATHS = [
 
 const CHROME_PATHS = [
   process.env.GW_CHROMIUM,
+  process.env.PUPPETEER_EXECUTABLE_PATH,
   '/usr/bin/chromium',
   '/usr/bin/chromium-browser',
   '/usr/bin/google-chrome',
-];
+  '/usr/bin/google-chrome-stable',
+  '/snap/bin/chromium',
+].filter(Boolean);
 
 async function loadPuppeteer() {
   for (const candidate of PUPPETEER_PATHS) {
@@ -54,21 +57,30 @@ const STAGES = {
   extra: [{ id: 'dropped', label: 'Dropped' }, { id: 'paused', label: 'Paused' }],
 };
 
-async function withServer(fn, { items } = {}) {
+async function withServer(fn, { items, env } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gw-viewer-browser-'));
   const store = createStore(root); store.ensure();
   store.writeItems(items ?? [item(), item({ id: 'P1-02', title: 'Second unowned item' })]);
   writeFileSync(store.paths.config, JSON.stringify({ version: 1, vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'] }, runner: { paused: false } }));
   writeFileSync(store.paths.stages, JSON.stringify(STAGES));
   store.rebaselineDigest();
-  const server = createServeServer({ store });
+  const server = createServeServer({ store, ...(env ? { env } : {}) });
   const address = await listen(server, { port: 0 });
   try { await fn(`http://127.0.0.1:${address.port}`); } finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
 const found = await loadPuppeteer();
+// Browser coverage belongs in the normal test discovery so a machine that has
+// the capability exercises it automatically. It remains zero-dependency for
+// every other contributor and CI runner: Node reports a visible skip instead
+// of failing a product test because an optional local browser is absent.
+const BROWSER_SKIP = !found
+  ? `needs puppeteer-core; set GW_PUPPETEER_CORE to its module path`
+  : !found.executablePath
+    ? 'needs Chromium; set GW_CHROMIUM or PUPPETEER_EXECUTABLE_PATH to its executable path'
+    : false;
 
-test('the table scrolls in its container and the Title column shows words at 390px', { skip: !found && `needs puppeteer-core (${platform})` }, async () => {
+test('the table scrolls in its container and the Title column shows words at 390px', { skip: BROWSER_SKIP }, async () => {
   const { mod: puppeteer, executablePath } = found;
   assert.ok(executablePath, 'a chromium binary is required');
   await withServer(async (url) => {
@@ -104,4 +116,36 @@ test('the table scrolls in its container and the Title column shows words at 390
       assert.ok(measured.titleCellHeight < measured.titleLineHeight * 6, `the title wraps words, not characters (height ${measured.titleCellHeight} at ${measured.titleLineHeight}/line)`);
     } finally { await browser.close(); }
   });
+});
+
+// T-0090 — a failed drawer write is an outcome a human must be able to read,
+// not transient paint that the two-second poll erases. Exercise the actual
+// server, page event handler, and poll loop rather than calling showPanelError
+// in isolation.
+test('T-0090: a triage self-approval refusal survives three browser poll cycles', { skip: BROWSER_SKIP }, async (t) => {
+  const { mod: puppeteer, executablePath } = found;
+  const held = item({ flag: 'needs-triage', created_by: 'agent:tester', owner: null });
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.click('[data-view="board"]');
+      await page.waitForSelector('.card[data-id="P1-01"]');
+      await page.click('.card[data-id="P1-01"]');
+      await page.waitForSelector('#panel-triage-approve');
+      const started = Date.now();
+      await page.click('#panel-triage-approve');
+      await page.waitForFunction(() => document.querySelector('#panel-error')?.textContent.includes('different human'));
+      const samples = [];
+      for (let cycle = 1; cycle <= 3; cycle += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2100));
+        samples.push(await page.$eval('#panel-error', (el) => el.textContent.trim()));
+      }
+      const elapsed = Date.now() - started;
+      assert.ok(samples.every((text) => /different human/.test(text)), `refusal vanished during polling: ${JSON.stringify(samples)}`);
+      assert.ok(elapsed >= 6300, `measured only ${elapsed}ms across three polls`);
+      t.diagnostic(`triage refusal remained in #panel-error for ${elapsed}ms across three 2.1s samples`);
+    } finally { await browser.close(); }
+  }, { items: [held], env: { ...process.env, GW_ACTOR: 'agent:tester' } });
 });

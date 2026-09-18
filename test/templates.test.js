@@ -99,6 +99,7 @@ test('stages.json parses: pipeline order, auto gates, terminal and side states m
   const auto = Object.fromEntries(parsed.stages.map((s) => [s.id, s.auto === true]));
   assert.deepEqual(auto, { backlog: false, building: true, built: true, in_review: true, reviewed: false, merged: false, verified: false });
   assert.equal(parsed.stages.find((s) => s.id === 'in_review').exit, 'PR opened and reviewer assigned.');
+  assert.equal(parsed.stages.find((s) => s.id === 'verified').requires.children_done, true, 'the default done stage cannot finish before direct children');
   assert.deepEqual(parsed.terminal, ['verified', 'dropped']);
   assert.deepEqual(parsed.extra.map((s) => s.id), ['dropped', 'paused']);
 });

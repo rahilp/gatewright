@@ -1090,7 +1090,7 @@
   // would claim to enforce and does not, and no fewer, because a key only
   // reachable by hand-editing JSON is the problem this view exists to solve.
   // test/viewer.test.js pins this list against lib/rules.js itself.
-  const RULE_KEYS = ['scope', 'owner', 'evidence_min', 'evidence_match', 'deps_at_least'];
+  const RULE_KEYS = ['scope', 'owner', 'children_done', 'evidence_min', 'evidence_match', 'deps_at_least'];
 
   // Build a `requires` object from what the gate form holds. `existing` is the
   // stage's current requires, so any key this form does not know about is
@@ -1104,6 +1104,7 @@
     }
     if (values.scope) requires.scope = true;
     if (values.owner) requires.owner = true;
+    if (values.children_done) requires.children_done = true;
     const min = Number(values.evidence_min);
     if (Number.isInteger(min) && min > 0) requires.evidence_min = min;
     const match = String(values.evidence_match == null ? '' : values.evidence_match).trim();
@@ -1168,6 +1169,11 @@
     // poll compares against this before redrawing the panel -- see
     // panelIsDirty().
     panelBaseline: null,
+    // A refused drawer write is an outcome, not transient paint. It belongs
+    // here rather than only in #panel-error because a poll replaces that DOM
+    // node every two seconds. The panel id keeps an old refusal from leaking
+    // into a different item's drawer.
+    panelError: null,
     // Where focus was when the drawer was opened, so closing it can hand it
     // back to the control that opened it -- see openPanel()/closePanel().
     panelReturnFocus: null,
@@ -1526,10 +1532,11 @@
   // actually opens the board with. `gw brief` already answers that question
   // over the same data, so this mirrors its definitions instead of inventing
   // a second set. In particular "in flight" is copied from lib/brief.js's
-  // computeActive/isInFlight line for line: real progress (the item moved
-  // past the stage it was created in) or a live dispatch (a `dispatch` event
-  // with no matching run_ended/cancel yet). Claiming an item alone does not
-  // qualify -- lib/brief.js has already had two bugs from a second notion of
+  // computeActive/isInFlight line for line: real progress is owned work that
+  // moved past the stage it was created in. A live dispatch is the narrow
+  // exception because it is work presently underway. Claiming an item alone
+  // does not qualify -- lib/brief.js
+  // has already had two bugs from a second notion of
   // "terminal"; this file is not going to add a second notion of "in flight"
   // next to it. test/viewer-brief-parity.test.js runs both implementations
   // over the same fixtures and compares them.
@@ -1549,7 +1556,7 @@
   // module loader to share the original with (see pipelineIndex's own
   // comment for the precedent).
   function isInFlightItem(it, active) {
-    return pipelineIndex(it.stage) > 0 || active.has(it.id);
+    return (Boolean(it.owner) && pipelineIndex(it.stage) > 0) || active.has(it.id);
   }
 
   // Mirrors depsReady in lib/brief.js exactly.
@@ -1571,10 +1578,11 @@
     const open = State.items.filter((it) => !isTerminalItem(it));
     const blocked = open.filter((it) => it.flag === 'blocked' || !depsReadyItem(it));
     const triage = open.filter((it) => it.flag === 'needs-triage');
-    const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && it.flag !== 'needs-triage' && isInFlightItem(it, active));
-    const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 &&
+    const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && isInFlightItem(it, active));
+    const stranded = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && !it.owner && pipelineIndex(it.stage) > 0);
+    const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 && stranded.indexOf(it) === -1 &&
       !it.owner && pipelineIndex(it.stage) <= 0 && depsReadyItem(it));
-    return { open, blocked, triage, inFlight, next };
+    return { open, blocked, triage, inFlight, stranded, next };
   }
 
   const BRIEF_SECTION_LIMIT = 8;
@@ -1610,9 +1618,10 @@
   }
 
   function renderOverview(container) {
-    const { blocked, triage, inFlight, next } = briefBuckets();
+    const { blocked, triage, inFlight, stranded, next } = briefBuckets();
     const whatNext = '<div class="overview-grid">' +
       briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
+      briefSectionHtml('Stranded', stranded, (it) => stageLabel(it.stage).toLowerCase() + ' · unowned', 'Nothing is stranded.') +
       briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
       briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
       briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-'), 'Nothing is unblocked and unowned.') +
@@ -2165,6 +2174,8 @@
       '<input type="checkbox" id="' + id('scope') + '" data-editor="scope"' + (requires.scope ? ' checked' : '') + '>' +
       '<label for="' + id('owner') + '">Claimed by someone</label>' +
       '<input type="checkbox" id="' + id('owner') + '" data-editor="owner"' + (requires.owner ? ' checked' : '') + '>' +
+      '<label for="' + id('children_done') + '">All direct child items finished</label>' +
+      '<input type="checkbox" id="' + id('children_done') + '" data-editor="children_done"' + (requires.children_done ? ' checked' : '') + '>' +
       '<label for="' + id('evidence_min') + '">Minimum evidence</label>' +
       '<input type="number" min="0" step="1" id="' + id('evidence_min') + '" data-editor="evidence_min" value="' +
         escapeHtml(requires.evidence_min == null ? '' : requires.evidence_min) + '" placeholder="0 = no minimum">' +
@@ -2595,8 +2606,16 @@
   }
 
   function showPanelError(msg) {
+    const panelId = State.creatingItem ? null : State.activePanelId;
+    State.panelError = { panelId, message: String(msg) };
     const el = document.getElementById('panel-error');
-    if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '</div>';
+    if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '<button class="close-btn" id="panel-error-dismiss" aria-label="Dismiss">&times;</button></div>';
+    const dismiss = document.getElementById('panel-error-dismiss');
+    if (dismiss) dismiss.addEventListener('click', () => {
+      State.panelError = null;
+      const current = document.getElementById('panel-error');
+      if (current) current.innerHTML = '';
+    });
   }
 
   function refreshTransitions(id) {
@@ -2727,6 +2746,9 @@
       : '<div class="readonly-banner">read-only snapshot' +
         (target ? ' &middot; to advance this item run: <code>gw move ' + escapeHtml(it.id) + ' ' + escapeHtml(target) + ' --evidence &lt;commit&gt;</code>' : '') +
         '</div>';
+    const panelError = State.panelError && State.panelError.panelId === it.id
+      ? '<div class="refusal">' + escapeHtml(State.panelError.message) + '<button class="close-btn" id="panel-error-dismiss" aria-label="Dismiss">&times;</button></div>'
+      : '';
 
     const dispatched = isDispatched(it.id);
     const panelAction = actionFor(it);
@@ -2883,7 +2905,7 @@
 
     panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
       '<p>' + escapeHtml(it.title) + '</p>' +
-      '<div id="panel-error"></div>' +
+      '<div id="panel-error">' + panelError + '</div>' +
       banner + triageHtml + resumeHtml + playStop + logHtml +
       '<h3>Stage</h3><div class="stage-buttons">' + stageButtonsHtml + '</div>' +
       '<h3>Evidence</h3><ul class="evidence-list">' + evidenceHtml + '</ul>' + evidenceEditor +
@@ -2905,6 +2927,13 @@
 
   function wirePanelActions(it) {
     const panel = document.getElementById('gw-panel');
+
+    const dismissError = panel.querySelector('#panel-error-dismiss');
+    if (dismissError) dismissError.addEventListener('click', () => {
+      State.panelError = null;
+      const error = panel.querySelector('#panel-error');
+      if (error) error.innerHTML = '';
+    });
 
     panel.querySelectorAll('[data-move]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -3203,12 +3232,15 @@
       return;
     }
     State.creatingItem = true;
+    const panelError = State.panelError && State.panelError.panelId === null
+      ? '<div class="refusal">' + escapeHtml(State.panelError.message) + '<button class="close-btn" id="panel-error-dismiss" aria-label="Dismiss">&times;</button></div>'
+      : '';
     const vocab = (State.config && State.config.vocab) || {};
     function options(list) {
       return '<option value="">(none)</option>' + (list || []).map((v) => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
     }
     panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
-      '<div id="panel-error"></div>' +
+      '<div id="panel-error">' + panelError + '</div>' +
       '<form id="create-form" class="create-form">' +
       '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
       // T-0081: leaving all three vocab fields at "(none)" is a real choice
@@ -3225,6 +3257,12 @@
       '<button type="submit">create</button>' +
       '</form>';
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
+    const dismissError = panel.querySelector('#panel-error-dismiss');
+    if (dismissError) dismissError.addEventListener('click', () => {
+      State.panelError = null;
+      const error = panel.querySelector('#panel-error');
+      if (error) error.innerHTML = '';
+    });
     panel.querySelector('#create-form').addEventListener('submit', onCreateSubmit);
     overlay.classList.add('open');
     const titleInput = panel.querySelector('#create-form input[name="title"]');

@@ -62,9 +62,9 @@ test('migrated stage-null entries count for gates up to where the item stands, n
 // board and `gw next` already use, not just the rule key.
 test('an evidence refusal states the requirement in plain English', () => {
   const minimum = evaluateCumulative(item({ owner: 'human:a' }), 'built', { items: [], stages });
-  assert.match(minimum.failures.join('\n'), /built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move A built --evidence <e>`/);
+  assert.match(minimum.failures.join('\n'), /built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move A built --evidence "new evidence 1"`/);
   const match = evaluateCumulative(item({ owner: 'human:a' }), 'review', { items: [], stages });
-  assert.match(match.failures.join('\n'), /review: Evidence supplied with the move must include a link to a pull request: run `gw move A review --evidence <e>`/);
+  assert.match(match.failures.join('\n'), /review: Evidence supplied with the move must include a link to a pull request: run `gw move A review --evidence <pull-request url>`/);
 });
 
 test('dependency stage requirement accepts its boundary and rejects earlier, missing, and extra stages', () => {

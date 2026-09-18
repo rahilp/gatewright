@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -91,6 +91,43 @@ test('a repair --write does not read as tampering afterwards', async () => {
   const config = await runCli(b.root, ['config', '--list']);
   assert.equal(config.code, 0, config.stderr);
   assert.doesNotMatch(config.stdout + config.stderr, /out-of-band write/);
+});
+
+// T-0086 — this is the real laundering sequence: a forged terminal item can
+// satisfy every stage rule, so only the digest distinguishes it from a CLI
+// move. `check` must preserve that known-stale baseline and repair must not
+// adopt the surviving forgery merely because it quarantined a later bad line.
+test('repair cannot launder a fully evidenced forged verified item through a corrupt suffix', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-repair-launder-'));
+  const store = createStore(root);
+  store.ensure();
+  store.writeItems([good1]);
+
+  const forged = {
+    id: 'T-0001', title: 'Forged verified item', stage: 'verified', flag: null,
+    owner: 'human:tester', scope: 'fully forged but shape-valid', deps: [],
+    evidence: [
+      { text: 'commit abc123', stage: 'built' },
+      { text: 'https://github.com/acme/app/pull/1', stage: 'in_review' },
+      { text: 'CI green', stage: 'verified' },
+      { text: 'deployed to target', stage: 'verified' },
+    ],
+  };
+  writeFileSync(store.paths.items, `${JSON.stringify(forged)}\n`);
+
+  const initialCheck = await runCli(root, ['check']);
+  assert.equal(initialCheck.code, 1);
+  assert.match(initialCheck.stdout, /OUT-OF-BAND WRITE[\s\S]*items\.jsonl modified outside gw/);
+
+  appendFileSync(store.paths.items, 'not valid json\n');
+  const repair = await runCli(root, ['repair', '--write']);
+  assert.equal(repair.code, 1);
+  assert.match(repair.stdout, /line 2 quarantined/);
+  assert.match(repair.stdout, /digest remains stale[\s\S]*gw check[\s\S]*repair --write --force/);
+
+  const finalCheck = await runCli(root, ['check']);
+  assert.equal(finalCheck.code, 1, finalCheck.stdout + finalCheck.stderr);
+  assert.match(finalCheck.stdout, /OUT-OF-BAND WRITE[\s\S]*items\.jsonl modified outside gw/);
 });
 
 test('a clean board has nothing for repair to do', async () => {

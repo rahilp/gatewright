@@ -546,11 +546,11 @@ test('claim and release are reachable from the board', async () => {
     const reclaim = await write(url, '/api/items/P1-01/claim', {});
     assert.equal(reclaim.status, 409, 'an already-owned item cannot be silently taken');
 
-    const released = await write(url, '/api/items/P1-01/release', {});
+    const released = await write(url, '/api/items/P1-01/release', { actor: 'tester' });
     assert.equal(released.status, 200);
     assert.equal(store.readItems()[0].owner, null);
 
-    const claimed = await write(url, '/api/items/P1-01/claim', {});
+    const claimed = await write(url, '/api/items/P1-01/claim', { actor: 'tester' });
     assert.equal(claimed.status, 200);
     assert.match(store.readItems()[0].owner, /^human:/, 'the board records a real actor, not an anonymous write');
   });

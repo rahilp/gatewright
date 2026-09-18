@@ -163,7 +163,8 @@ The event log is the source of truth for "what happened." `items.jsonl` is a mat
       "exit": "Behaviour confirmed on target; VALIDATION entry linked.",
       "auto": false,
       "requires": {
-        "evidence_min": 2
+        "evidence_min": 2,
+        "children_done": true
       }
     }
   ],
@@ -192,6 +193,7 @@ Semantics:
   - `evidence_min: n` — at least n DISTINCT evidence entries supplied with this move for this stage. Entries are trimmed and de-duplicated against each other and against every entry already recorded on the item, so pasting the same string twice counts once, and evidence recorded at an earlier stage never satisfies a later gate. Forcing an item backward and re-moving it forward therefore demands fresh evidence — intended.
   - `evidence_match: regex` — at least one distinct entry supplied with this move matches
   - `deps_at_least: stage` — every dep must be at that stage or later (by list order)
+  - `children_done: true` — every direct child item must be in a terminal stage. This is normally set on the done stage; a board that does not want parent completion to wait for children omits it. Descendants are covered transitively because each child must clear its own gate before it can finish.
 
   **Migration.** Boards written before evidence carried its stage hold flat
   strings; those read as `{ text, stage: null }`. Normalisation happens on
@@ -532,13 +534,14 @@ Order 1 before 2 before 3 is load-bearing. Reading "no next stage" as "outside t
 First, the out-of-band write check. `store` writes `.gatewright/.digest` after every successful CLI or API write, holding a SHA-256 of `items.jsonl` and the timestamp of that write. `check` re-hashes the file and compares:
 
 - Match → nothing reported.
-- Differ → report `items.jsonl modified outside gw since <ts>`, then re-baseline the digest so the same edit is reported once rather than on every run.
+- Differ → report the modified file(s) and preserve the prior digest. `check` is an audit, never an acknowledgement: a stale digest remains stale until a legitimate `gw` write restores it or `gw repair --write --force` deliberately re-baselines it after review.
 - `.digest` missing (fresh clone that predates it, or first run after upgrade) → write it silently and report nothing. A missing digest is not evidence of an edit.
 
 Then the board itself. Two different scopes, and the difference matters:
 
 **Every item, terminal included:**
 - exit-rule violations at its current stage (should not happen through the CLI; catches the hand edits the digest just flagged)
+- a parent already in the done-role stage while any direct child is open (including boards created before `children_done` was introduced)
 - deps that don't exist, dep cycles, deps in `dropped`
 - `flag: needs-triage` — reported, never silent. It is invisible to the *scheduler* by design (§10), but a board is not; `check` names the item and offers both outs, classifying it or claiming it as-is.
 
@@ -959,7 +962,7 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 - Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked. Plan steps are items, never notes — `gw note <id>` is only for progress remarks on an existing item.
 - **Exception:** if you are working on gatewright itself, or you have otherwise been told not to write to a particular board, do not write to it — that board is the user's live tracker, not your scratchpad. Create a scratch board instead: `D=$(mktemp -d) && cd "$D" && gw init`, and prefix every `gw` command with `cd "$D" && ` (`cd` does not persist between your tool calls). Or keep the plan in your reply and let the human running you track it.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage. The DEFAULT pipeline is backlog → building → built → in_review → reviewed → merged → verified, but a board may define its own — `gw next <id>` names the real, legal moves for the board you are on. No board yet? `gw init` creates one.
-- Items created by an agent may be held with a `needs-triage` flag until reviewed. The creator cannot lift it: someone else runs `gw triage <id> --approve` (you may `--drop` your own item). NEEDS TRIAGE rows in `gw brief` name the command.
+- Items created by an agent may be held with a `needs-triage` flag until reviewed. An agent-created item needs approval from a different human; agents and the creator's `human:<name>` alias cannot lift it. A human-created item may be self-approved. You may always `gw triage <id> --drop` your own item. NEEDS TRIAGE rows in `gw brief` name the command.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
 - If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.

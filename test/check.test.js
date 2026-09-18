@@ -17,10 +17,10 @@ function board(items = [item()], { stages: boardStages = stages, config = {}, vo
  store.rebaselineDigest(); return { root, store }; }
 function ctx(b, flags = {}) { let output = ''; return { output: () => output, ctx: { flags, positionals: [], store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write(s) { output += s; } }, stderr: { write(s) { output += s; } } } }; }
 
-test('check reports an out-of-band edit once then rebaselines it', () => {
+test('check reports an out-of-band edit without treating the audit as acknowledgement', () => {
   const b = board(); writeFileSync(b.store.paths.items, JSON.stringify(item({ title: 'hand edit' })) + '\n');
   const first = ctx(b); assert.equal(run(first.ctx), 1); assert.match(first.output(), /items\.jsonl modified outside gw since/);
-  const second = ctx(b); assert.equal(run(second.ctx), 0); assert.match(second.output(), /clean/i);
+  const second = ctx(b); assert.equal(run(second.ctx), 1); assert.match(second.output(), /items\.jsonl modified outside gw since/);
 });
 
 test('check silently baselines an unknown digest', () => {
@@ -30,15 +30,15 @@ test('check silently baselines an unknown digest', () => {
 
 // T-0002: stages.json DEFINES the gates, so deleting a `requires` block by hand
 // must be reported, not greeted with "Board is clean."
-test('check reports a hand edit to stages.json, then re-baselines it', () => {
+test('check reports a hand edit to stages.json without re-baselining it', () => {
   const b = board();
   const tampered = JSON.parse(JSON.stringify(stages));
   delete tampered.stages.find((stage) => stage.id === 'built').requires;
   writeFileSync(b.store.paths.stages, JSON.stringify(tampered));
   const first = ctx(b); assert.equal(run(first.ctx), 1);
   assert.match(first.output(), /OUT-OF-BAND WRITE\n  stages\.json modified outside gw since /);
-  const second = ctx(b); assert.equal(run(second.ctx), 0);
-  assert.match(second.output(), /^Board is clean\.$/m);
+  const second = ctx(b); assert.equal(run(second.ctx), 1);
+  assert.match(second.output(), /OUT-OF-BAND WRITE[\s\S]*stages\.json modified outside gw since/);
 });
 
 test('check reports a hand edit to config.json in the same style', () => {
@@ -48,8 +48,8 @@ test('check reports a hand edit to config.json in the same style', () => {
   writeFileSync(b.store.paths.config, JSON.stringify(tampered));
   const first = ctx(b); assert.equal(run(first.ctx), 1);
   assert.match(first.output(), /OUT-OF-BAND WRITE\n  config\.json modified outside gw since /);
-  const second = ctx(b); assert.equal(run(second.ctx), 0);
-  assert.match(second.output(), /^Board is clean\.$/m);
+  const second = ctx(b); assert.equal(run(second.ctx), 1);
+  assert.match(second.output(), /OUT-OF-BAND WRITE[\s\S]*config\.json modified outside gw since/);
 });
 
 // The event log is append-only; appending is normal operation, so it must
@@ -160,6 +160,22 @@ test('check catches a hand-edited merged item that skipped the built evidence ga
   const result = ctx(b);
   assert.equal(run(result.ctx), 1);
   assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*built: Needs at least one new piece of evidence/i);
+});
+
+// T-0083 — the stage rule protects future moves, but a board may predate it
+// or have been edited out of band. A parent already presented as done must be
+// audited against its open direct children too.
+test('check reports a done-stage parent whose direct child is still open', () => {
+  const hierarchy = {
+    stages: [{ id: 'backlog' }, { id: 'done', role: 'done' }],
+    terminal: ['done'], extra: [],
+  };
+  const parent = item({ id: 'P1-01', stage: 'done' });
+  const child = item({ id: 'P1-01.1', parent: 'P1-01', stage: 'backlog' });
+  const b = board([parent, child], { stages: hierarchy });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /OPEN CHILD[\s\S]*P1-01: done stage done has open child items: P1-01\.1 \(backlog\)/);
 });
 
 test('check groups current-stage, missing-dependency, cycle, dropped-dependency, stale, and conflict findings', () => {

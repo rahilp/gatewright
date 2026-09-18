@@ -22,6 +22,8 @@ function board(items = [item()]) {
   const store = createStore(root); store.ensure(); store.writeItems(items);
   writeFileSync(store.paths.stages, JSON.stringify(stages));
   writeFileSync(store.paths.config, JSON.stringify({}));
+  // These fixture writes are legitimate setup, not a hand edit under test.
+  store.rebaselineDigest();
   return { root, store };
 }
 function ctx(b, positionals, flags = {}) {

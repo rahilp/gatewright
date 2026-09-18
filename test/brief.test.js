@@ -149,7 +149,7 @@ test('T-0069: a bare --me parses and means the GW_ACTOR', () => {
   assert.equal(equals, out);
 });
 
-test('budget priority differs from printed order: every populated section gets a fair floor', () => {
+test('budget priority differs from printed order: actionable sections get a fair floor', () => {
   const items = makeItems(100);
   items[0] = { ...items[0], stage: 'specified', owner: null, flag: null, deps: [] };
   items[1] = { ...items[1], stage: 'backlog', owner: null, flag: 'blocked', deps: [] };
@@ -157,13 +157,13 @@ test('budget priority differs from printed order: every populated section gets a
   items[3] = { ...items[3], stage: 'backlog', owner: null, flag: 'needs-triage', deps: [] };
   items[4] = { ...items[4], stage: 'backlog', owner: null, flag: null, deps: [] };
   const out = renderBrief({ items, events: [0, 5, 6].map((index) => ({ type: 'dispatch', item: items[index].id, by: 'scheduler' })), stages, config: { brief: { max_lines: 25 } }, git: { branch: 'main', sha: '895e249' } });
-  for (const heading of ['DISPATCHED TO YOU', 'IN FLIGHT', 'BLOCKED', 'NEEDS TRIAGE', 'NEXT UNBLOCKED']) assert.match(out, new RegExp(heading));
+  for (const heading of ['DISPATCHED TO YOU', 'IN FLIGHT', 'STRANDED', 'BLOCKED', 'NEEDS TRIAGE']) assert.match(out, new RegExp(heading));
+  assert.doesNotMatch(out, /NEXT UNBLOCKED/, 'a released mid-pipeline item is more actionable than a fresh pick-up when the short brief is full');
   assert.ok(out.trimEnd().split('\n').length <= 25);
   assert.ok(Math.ceil(out.length / 4) <= 500);
   assert.ok(out.indexOf('DISPATCHED TO YOU') < out.indexOf('IN FLIGHT'));
   assert.ok(out.indexOf('IN FLIGHT') < out.indexOf('BLOCKED'));
   assert.ok(out.indexOf('BLOCKED') < out.indexOf('NEEDS TRIAGE'));
-  assert.ok(out.indexOf('NEEDS TRIAGE') < out.indexOf('NEXT UNBLOCKED'));
   const dispatchedBlock = out.split('DISPATCHED TO YOU')[1].split('\n\n')[0];
   const shown = dispatchedBlock.split('\n').filter((line) => /^  [A-Z]\S*/.test(line)).length;
   const total = 3;
@@ -177,7 +177,7 @@ test('a tiny budget preserves DISPATCHED TO YOU even when lower-priority section
   assert.ok(out.trimEnd().split('\n').length <= 12);
 });
 
-test('in-flight rows align stage and owner columns and use unowned instead of null', () => {
+test('in-flight and stranded rows name their owner state without printing null', () => {
   const items = [
     { ...makeItems(1)[0], id: 'A', stage: 'specified', owner: 'agent:a', flag: null, deps: [] },
     { ...makeItems(1)[0], id: 'B', stage: 'built', owner: null, flag: null, deps: [] },
@@ -186,7 +186,6 @@ test('in-flight rows align stage and owner columns and use unowned instead of nu
   const rows = out.split('\n').filter((line) => line.includes('agent:a') || line.includes('unowned'));
   assert.equal(rows.length, 2);
   assert.ok(rows.every((line) => !line.includes('null')));
-  assert.equal(rows[0].indexOf('agent:a'), rows[1].indexOf('unowned'));
 });
 
 test('fixture titles vary in length for truncation and alignment coverage', () => {
@@ -208,7 +207,17 @@ test('P8-24: an item that is claimed but never moved is not reported in flight',
   assert.equal(out.includes('IN FLIGHT'), false, 'a claimed-but-unmoved item must not populate IN FLIGHT');
 });
 
-test('P8-24: an item is in flight once it has actually moved past its first stage, owned or not', () => {
+test('T-0091: a released item that has moved past its first stage is stranded, not in flight', () => {
+  // `gw release` deliberately only clears owner; it must not leave the
+  // headline claiming that someone is still working on the card.
+  const moved = { ...makeItems(1)[0], id: 'P1-01', stage: 'specified', owner: null, flag: null, deps: [] };
+  const out = renderBrief({ items: [moved], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 1 open · 0 in flight · 0 blocked/m);
+  assert.doesNotMatch(out, /IN FLIGHT/, 'an unowned progressed item must not populate IN FLIGHT');
+  assert.match(out, /STRANDED[\s\S]*P1-01/, 'the abandoned item remains visible and actionable');
+});
+
+test('P8-24: an owned item is in flight once it has actually moved past its first stage', () => {
   const moved = { ...makeItems(1)[0], id: 'P1-01', stage: 'specified', owner: 'human:rahil', flag: null, deps: [] };
   const out = renderBrief({ items: [moved], events: [], stages, config: { brief: { max_lines: 25 } } });
   assert.match(out, /^gw · 1 open · 1 in flight · 0 blocked/m);
@@ -231,11 +240,11 @@ test('P8-24: a claimed item with a live dispatch is in flight even before it has
   assert.match(out, /IN FLIGHT[\s\S]*P1-01/, 'a live run makes an item in flight even while it is still in its first stage');
 });
 
-test('P8-24: inFlightTitles agrees with the brief -- claimed-but-unmoved is excluded, progressed is included', () => {
+test('T-0091: inFlightTitles agrees with the brief -- claimed-but-unmoved and released work are excluded', () => {
   const claimed = { ...makeItems(1)[0], id: 'P1-01', title: 'Claimed only', stage: 'backlog', owner: 'human:rahil', flag: null, deps: [] };
-  const moved = { ...makeItems(1)[0], id: 'P1-02', title: 'Actually moved', stage: 'specified', owner: null, flag: null, deps: [] };
+  const moved = { ...makeItems(1)[0], id: 'P1-02', title: 'Released after moving', stage: 'specified', owner: null, flag: null, deps: [] };
   const titles = inFlightTitles({ items: [claimed, moved], events: [], stages });
-  assert.deepEqual(titles, ['Actually moved']);
+  assert.deepEqual(titles, []);
 });
 
 // P8-26 — NEXT UNBLOCKED prints a bare phase code ("P1") with nothing to say
@@ -471,6 +480,7 @@ test('brief --json returns the brief, not the database', async () => {
     git: null,
     dispatched: [{ id: 'D-1', title: 'Live dispatch', stage: 'building', next_stage: 'built', owner: null }],
     in_flight: [{ id: 'F-1', title: 'Moved past first stage', stage: 'building', owner: 'human:rahil' }],
+    stranded: [],
     blocked: [
       { id: 'B-1', title: 'Waiting on a dependency', flag: null, waiting_on: 'F-1', waiting_on_stage: 'building' },
       { id: 'B-2', title: 'Flagged blocked', flag: 'blocked', waiting_on: null, waiting_on_stage: null },
@@ -519,7 +529,7 @@ test('brief --json buckets agree with the rendered text, bucket for bucket', asy
   assert.deepEqual(parsed.blocked[0].waiting_on, 'F-1', 'a dep-blocked item names the dependency the text suffix names');
   assert.deepEqual(briefJson({ items: [], events: [], stages, config: {}, git: null }), {
     open: 0, in_flight: 0, blocked: 0, finished: 0, git: null,
-    dispatched: [], in_flight: [], blocked: [], needs_triage: [], next_unblocked: [],
+    dispatched: [], in_flight: [], stranded: [], blocked: [], needs_triage: [], next_unblocked: [],
     rules: briefJson({ items: [], events: [], stages, config: {}, git: null }).rules,
   });
 });
@@ -588,20 +598,23 @@ test('outstandingDispatches names the items a run has not ended or cancelled for
 // stopped: an item with an owner, in a non-initial non-terminal stage, is in
 // flight — flag or no flag. The board below is constructed with a known
 // count: two claimed-and-moved items (one still held for triage), one
-// claimed-but-unmoved, one unowned pick-up candidate.
-test('T-0066: an item claimed and moved while held for triage is counted in flight', () => {
+// released mid-pipeline item, one claimed-but-unmoved, and one unowned
+// pick-up candidate.
+test('T-0091: brief counts exactly the owned mid-pipeline items and names released work separately', () => {
   const items = [
     { ...makeItems(1)[0], id: 'P1-01', stage: 'building', owner: 'agent:a', flag: 'needs-triage', deps: [] },
     { ...makeItems(1)[0], id: 'P1-02', stage: 'building', owner: 'agent:b', flag: null, deps: [] },
-    { ...makeItems(1)[0], id: 'P1-03', stage: 'backlog', owner: 'agent:c', flag: 'needs-triage', deps: [] },
-    { ...makeItems(1)[0], id: 'P1-04', stage: 'backlog', owner: null, flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-03', stage: 'building', owner: null, flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-04', stage: 'backlog', owner: 'agent:c', flag: 'needs-triage', deps: [] },
+    { ...makeItems(1)[0], id: 'P1-05', stage: 'backlog', owner: null, flag: null, deps: [] },
   ];
   const out = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } });
-  assert.match(out, /^gw · 4 open · 2 in flight · 0 blocked/m, `got:\n${out}`);
+  assert.match(out, /^gw · 5 open · 2 in flight · 0 blocked/m, `got:\n${out}`);
   assert.match(out, /IN FLIGHT[\s\S]*P1-01/);
   assert.match(out, /IN FLIGHT[\s\S]*P1-02/);
+  assert.match(out, /STRANDED[\s\S]*P1-03/, 'released mid-pipeline work has a compact, actionable home');
   // The hold is still true and still shown; it no longer hides the work.
-  assert.match(out, /NEEDS TRIAGE \(2\)[\s\S]*P1-01[\s\S]*P1-03/);
+  assert.match(out, /NEEDS TRIAGE \(2\)[\s\S]*P1-01[\s\S]*P1-04/);
 });
 
 // T-0066 — after an item reached verified it vanished from the brief

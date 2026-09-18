@@ -48,13 +48,13 @@ test('the board triage refusal names the decision, never a CLI command', async (
     assert.equal(response.status, 409);
     const body = await response.json();
     assert.match(body.error, /needs-triage/, 'the refusal still names the hold');
-    assert.match(body.error, /someone else/, 'it names the decision: another pair of eyes');
+    assert.match(body.error, /different human/, 'it names the required human review boundary');
     assert.doesNotMatch(body.error, /gw triage/, 'and never a command a browser reader cannot run');
     assert.doesNotMatch(body.error, /`/, 'no backticks, no command syntax at all');
     // The terminal keeps its runnable advice -- the same refusal, audience split.
     const stderr = await cliStderr(root, ['triage', 'P1-01', '--approve']);
     assert.match(stderr, /gw triage P1-01 --approve/, 'the CLI wording is untouched');
-  });
+  }, { item: item({ created_by: 'agent:tester' }) });
 });
 
 test('the board move refusal for a held item names the hold, not a command', async () => {

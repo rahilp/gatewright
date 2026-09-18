@@ -16,6 +16,29 @@ test('claim, conflict, force, no-op reclaim, and release', () => { const { store
 test('claim works through the real binary', () => { const { root } = repo(); execFileSync(process.execPath, [BIN, 'claim', 'P1-01', '--by', 'human:bin'], { cwd: root }); });
 test('release works through the real binary', () => { const { root } = repo(); execFileSync(process.execPath, [BIN, 'release', 'P1-01', '--by', 'human:bin'], { cwd: root }); });
 
+test('release refuses another actor without force and reports a successful release', () => {
+  const { store } = repo();
+  store.writeItems([{ id: 'P1-01', owner: 'agent:alpha' }]);
+  let output = '';
+  const ctx = (actor, flags = {}) => ({ store, flags, actor, positionals: ['P1-01'], stdout: { write: (text) => { output += text; } } });
+
+  assert.throws(() => release(ctx('agent:beta')), /--force/);
+  assert.equal(store.readItems()[0].owner, 'agent:alpha', 'a refused release leaves the live claim intact');
+
+  release(ctx('agent:beta', { force: true }));
+  assert.equal(store.readItems()[0].owner, null, 'the explicit override releases the claim');
+  assert.ok(output.length > 0, 'a successful release is visible to its caller');
+});
+
+test('claim keeps its allowed triage-held outcome visible', () => {
+  const { store } = repo();
+  store.writeItems([{ id: 'P1-01', owner: null, flag: 'needs-triage', created_by: 'agent:alpha' }]);
+  let output = '';
+  claim({ store, flags: {}, actor: 'agent:beta', positionals: ['P1-01'], stdout: { write: (text) => { output += text; } } });
+  assert.equal(store.readItems()[0].owner, 'agent:beta', 'claim remains allowed on held work');
+  assert.match(output, /triage/i, 'the successful claim reveals the hold before a later move is refused');
+});
+
 // T-0041 — `--by rahil` stores the bare name; the default actor is
 // "human:rahil". They are the same person: reclaim is a no-op, not a
 // conflict, and no one is ever forced to claim their own item.

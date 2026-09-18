@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -198,23 +198,35 @@ test('the shipped pipeline refuses the verified gate without fresh, distinct evi
   // No evidence at all: the refusal names what it wants (T-0033).
   const bare = refused(['move', 'P1-01', 'verified']);
   assert.equal(bare.status, 1);
-  assert.match(bare.stderr, /verified: Needs at least two new pieces of evidence, distinct from anything already recorded: run `gw move P1-01 verified --evidence <e>`/);
+  const printed = bare.stderr.match(/run `([^`]+)`/);
+  assert.ok(printed, 'the refusal supplies one complete recovery command');
+  const next = JSON.parse(gw(['next', 'P1-01', '--json']));
+  assert.ok(next.transitions.verified.failures.includes(`verified: ${bare.stderr.match(/verified: (.*)/)[1]}`), 'the machine-readable transition exposes the same runnable advice');
+  // T-0087 — execute the exact command we displayed, rather than rebuilding
+  // the flags in this test. This is the only shape that catches advice whose
+  // number of evidence flags is too small (or whose values de-duplicate).
+  symlinkSync(BIN, join(b.root, 'gw'));
+  execFileSync(printed[1], {
+    cwd: b.root,
+    encoding: 'utf8',
+    shell: '/bin/bash',
+    env: { ...process.env, PATH: `${b.root}:${process.env.PATH}` },
+  });
+  assert.equal(b.store.readItems()[0].stage, 'verified', 'the copied command clears the gate it names');
 
   // A string already on the item is not fresh evidence.
-  assert.match(refused(['move', 'P1-01', 'verified', '--evidence', 'commit abc']).stderr, /Needs at least two new pieces of evidence/);
-  assert.equal(b.store.readItems()[0].stage, 'merged');
+  const duplicateBoard = board([item({ stage: 'merged', scope: 'done means verified behaviour', owner: 'human:test', evidence: [
+    { text: 'commit abc', stage: 'built' }, { text: 'https://github.com/gw/gw/pull/42', stage: 'in_review' },
+  ] })], {}, shipped);
+  const duplicate = (args) => {
+    try { execFileSync(process.execPath, [BIN, ...args], { cwd: duplicateBoard.root, encoding: 'utf8' }); } catch (error) { return error; }
+    throw new Error(`gw move ${args.join(' ')} should have refused`);
+  };
+  assert.match(duplicate(['move', 'P1-01', 'verified', '--evidence', 'commit abc', '--by', 'human:test']).stderr, /Needs at least two new pieces of evidence/);
+  assert.equal(duplicateBoard.store.readItems()[0].stage, 'merged');
 
   // Two copies of one string are one entry, not two.
-  assert.match(refused(['move', 'P1-01', 'verified', '--evidence', 'x', '--evidence', 'x']).stderr, /Needs at least two new pieces of evidence/);
-
-  // Two genuinely new, distinct entries clear the gate.
-  gw(['move', 'P1-01', 'verified', '--evidence', 'run 1 green on target', '--evidence', 'https://ci.example.test/run/99']);
-  const final = b.store.readItems()[0];
-  assert.equal(final.stage, 'verified');
-  assert.deepEqual(final.evidence.slice(-2), [
-    { text: 'run 1 green on target', stage: 'verified' },
-    { text: 'https://ci.example.test/run/99', stage: 'verified' },
-  ]);
+  assert.match(duplicate(['move', 'P1-01', 'verified', '--evidence', 'x', '--evidence', 'x', '--by', 'human:test']).stderr, /Needs at least two new pieces of evidence/);
 });
 
 // T-0068 — needs-triage described itself as a hold someone else must lift,
@@ -255,6 +267,30 @@ test('--force remains the recorded override for the triage hold', () => {
   const b = board([item({ flag: 'needs-triage', created_by: 'agent:alpha' })]);
   run(ctx(b, ['P1-01', 'specified'], { force: true }, 'agent:beta'));
   assert.equal(b.store.readItems()[0].stage, 'specified');
+});
+
+// T-0083 — a parent describes the delivery as a whole; letting it reach the
+// done stage while its children remain in backlog turns hierarchy into a
+// cosmetic list. The stage rule refuses that shortcut, and becomes passable
+// only once the direct children are terminal.
+test('children_done refuses a parent with open children and accepts it once they finish', () => {
+  const hierarchy = {
+    stages: [{ id: 'backlog' }, { id: 'done', role: 'done', requires: { children_done: true } }],
+    terminal: ['done'], extra: [],
+  };
+  const parent = item({ id: 'P1-01', stage: 'backlog' });
+  const child = item({ id: 'P1-01.1', parent: 'P1-01', stage: 'backlog' });
+  const b = board([parent, child], {}, hierarchy);
+
+  assert.throws(
+    () => run(ctx(b, ['P1-01', 'done'])),
+    (error) => error instanceof RuleError && /all child items must be finished.*P1-01\.1 \(backlog\)/.test(error.failures.join('\n')),
+  );
+  assert.equal(b.store.readItems().find((entry) => entry.id === 'P1-01').stage, 'backlog');
+
+  run(ctx(b, ['P1-01.1', 'done']));
+  run(ctx(b, ['P1-01', 'done']));
+  assert.equal(b.store.readItems().find((entry) => entry.id === 'P1-01').stage, 'done');
 });
 
 // The half of the hold that was already true and now must stay true: a
