@@ -132,6 +132,23 @@ test('brief works through the real binary', () => {
   assert.match(execFileSync(process.execPath, [BIN, 'brief'], { cwd: root, encoding: 'utf8' }), /^gw · 1 open/m);
 });
 
+// T-0069 — a bare `--me` must parse (it used to die with "flag --me needs a
+// value") and mean the resolved actor: GW_ACTOR here.
+test('T-0069: a bare --me parses and means the GW_ACTOR', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-brief-me-bin-')); const store = createStore(root); store.ensure();
+  store.writeItems([
+    { ...makeItems(1)[0], id: 'P1-01', title: 'Mine', stage: 'building', owner: 'agent:me', flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-02', title: 'Theirs', stage: 'building', owner: 'agent:other', flag: null, deps: [] },
+  ]);
+  const out = execFileSync(process.execPath, [BIN, 'brief', '--me'], { cwd: root, encoding: 'utf8', env: { ...process.env, GW_ACTOR: 'agent:me' } });
+  assert.match(out, /^gw · 1 open · 1 in flight/m);
+  assert.match(out, /P1-01/);
+  assert.equal(out.includes('P1-02'), false);
+  // --me= means the same thing.
+  const equals = execFileSync(process.execPath, [BIN, 'brief', '--me='], { cwd: root, encoding: 'utf8', env: { ...process.env, GW_ACTOR: 'agent:me' } });
+  assert.equal(equals, out);
+});
+
 test('budget priority differs from printed order: every populated section gets a fair floor', () => {
   const items = makeItems(100);
   items[0] = { ...items[0], stage: 'specified', owner: null, flag: null, deps: [] };
@@ -449,6 +466,7 @@ test('brief --json returns the brief, not the database', async () => {
     open: 7,
     in_flight: 2,
     blocked: 2,
+    finished: 1,
     // gitState reads the enclosing repo; a tempdir has none.
     git: null,
     dispatched: [{ id: 'D-1', title: 'Live dispatch', stage: 'building', next_stage: 'built', owner: null }],
@@ -461,6 +479,7 @@ test('brief --json returns the brief, not the database', async () => {
     next_unblocked: [{ id: 'N-1', title: 'Ready for pickup', phase: null }],
     rules: [
       'Rules: use `gw add` for work someone else could pick up; checklists go in notes.',
+      '       Finished work is out of the open counts: `gw list --stage verified` lists it.',
       "       Gates ask for evidence where a stage's rules require it: `gw next <id>` names the gate. Never edit .gatewright/ by hand.",
     ],
   });
@@ -499,7 +518,7 @@ test('brief --json buckets agree with the rendered text, bucket for bucket', asy
   assert.deepEqual(parsed.blocked[1], { id: 'B-2', title: 'Flagged blocked', flag: 'blocked', waiting_on: null, waiting_on_stage: null }, 'a flagged-blocked item with no deps is waiting on nothing');
   assert.deepEqual(parsed.blocked[0].waiting_on, 'F-1', 'a dep-blocked item names the dependency the text suffix names');
   assert.deepEqual(briefJson({ items: [], events: [], stages, config: {}, git: null }), {
-    open: 0, in_flight: 0, blocked: 0, git: null,
+    open: 0, in_flight: 0, blocked: 0, finished: 0, git: null,
     dispatched: [], in_flight: [], blocked: [], needs_triage: [], next_unblocked: [],
     rules: briefJson({ items: [], events: [], stages, config: {}, git: null }).rules,
   });
@@ -561,4 +580,137 @@ test('outstandingDispatches names the items a run has not ended or cancelled for
   ];
   assert.deepEqual(outstandingDispatches(events), ['B']);
   assert.deepEqual(outstandingDispatches([]), []);
+});
+
+// T-0066 — the headline used to read "0 in flight" for an item someone had
+// claimed AND moved to building, because the needs-triage hold excluded it
+// from the bucket. The hold is a review requirement, not evidence that work
+// stopped: an item with an owner, in a non-initial non-terminal stage, is in
+// flight — flag or no flag. The board below is constructed with a known
+// count: two claimed-and-moved items (one still held for triage), one
+// claimed-but-unmoved, one unowned pick-up candidate.
+test('T-0066: an item claimed and moved while held for triage is counted in flight', () => {
+  const items = [
+    { ...makeItems(1)[0], id: 'P1-01', stage: 'building', owner: 'agent:a', flag: 'needs-triage', deps: [] },
+    { ...makeItems(1)[0], id: 'P1-02', stage: 'building', owner: 'agent:b', flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-03', stage: 'backlog', owner: 'agent:c', flag: 'needs-triage', deps: [] },
+    { ...makeItems(1)[0], id: 'P1-04', stage: 'backlog', owner: null, flag: null, deps: [] },
+  ];
+  const out = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 4 open · 2 in flight · 0 blocked/m, `got:\n${out}`);
+  assert.match(out, /IN FLIGHT[\s\S]*P1-01/);
+  assert.match(out, /IN FLIGHT[\s\S]*P1-02/);
+  // The hold is still true and still shown; it no longer hides the work.
+  assert.match(out, /NEEDS TRIAGE \(2\)[\s\S]*P1-01[\s\S]*P1-03/);
+});
+
+// T-0066 — after an item reached verified it vanished from the brief
+// entirely, so a fresh agent could not tell that anything had already
+// happened. The headline now carries the finished count, and the footer
+// names the command that lists them. Dropped is not finished.
+test('T-0066: the headline counts finished work and the footer names how to list it', () => {
+  const items = [
+    { ...makeItems(1)[0], id: 'P1-01', stage: 'verified', flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-02', stage: 'dropped', flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-03', stage: 'backlog', owner: null, flag: null, deps: [] },
+  ];
+  const out = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /^gw · 1 open · 0 in flight · 0 blocked · 1 finished/m, `got:\n${out}`);
+  assert.match(out, /Finished work is out of the open counts: `gw list --stage verified` lists it\./);
+  assert.doesNotMatch(out, /2 finished/);
+  // A board with nothing finished prints the headline exactly as before.
+  const clean = renderBrief({ items: [items[2]], events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(clean, /^gw · 1 open · 0 in flight · 0 blocked$/m);
+  assert.equal(clean.includes('finished'), false);
+});
+
+// T-0073 — the brief's BLOCKED row used to dead-end on "waiting on X
+// (dropped)" with no command, the only state in the product that did. It
+// must name the same exact edit `gw next` names, keeping the live deps.
+test('T-0073: the blocked row advises the same edit next names, keeping live deps', () => {
+  const stranded = { ...makeItems(1)[0], id: 'P1-02', stage: 'dropped', owner: null, flag: null, deps: [] };
+  const alive = { ...makeItems(1)[0], id: 'P1-03', stage: 'specified', owner: null, flag: null, deps: [] };
+  const items = [
+    { ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: ['P1-02', 'P1-03'] },
+    stranded,
+    alive,
+  ];
+  const out = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /BLOCKED[\s\S]*?waiting on P1-02 \(dropped\) — run `gw edit P1-01 --deps P1-03`/);
+});
+
+test('T-0073: the advice says --deps "" only when the stranded dep was the last one', () => {
+  const stranded = { ...makeItems(1)[0], id: 'P1-02', stage: 'dropped', owner: null, flag: null, deps: [] };
+  const items = [{ ...makeItems(1)[0], id: 'P1-01', stage: 'backlog', owner: null, flag: null, deps: ['P1-02'] }, stranded];
+  const out = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(out, /waiting on P1-02 \(dropped\) — run `gw edit P1-01 --deps ""`/);
+});
+
+// T-0069 — `--me` used to filter only the DISPATCHED and IN FLIGHT buckets,
+// so on a board where the other actors' items sat elsewhere the output was
+// byte-identical to the unfiltered brief. Now every section filters through
+// one ownership rule, and an empty view says so instead of pretending the
+// board is empty.
+test('T-0069: --me filters every section to the actor and names an empty view', () => {
+  const items = [
+    { ...makeItems(1)[0], id: 'P1-01', stage: 'building', owner: 'agent:other', flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-02', stage: 'backlog', owner: null, flag: 'blocked', deps: [] },
+    { ...makeItems(1)[0], id: 'P1-03', stage: 'backlog', owner: null, flag: 'needs-triage', deps: [] },
+    { ...makeItems(1)[0], id: 'P1-04', stage: 'backlog', owner: null, flag: null, deps: [] },
+  ];
+  const plain = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } });
+  assert.match(plain, /agent:other/);
+  assert.match(plain, /^gw · 4 open · 1 in flight · 1 blocked/m);
+  const mine = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } }, { me: 'agent:whoever' });
+  assert.doesNotMatch(mine, /agent:other/, 'the whole view must be filtered to the actor');
+  assert.doesNotMatch(mine, /P1-02[\s\S]*BLOCKED|BLOCKED[\s\S]*P1-02/, 'a blocked item owned by no one is not mine');
+  assert.match(mine, /^gw · 0 open · 0 in flight · 0 blocked/m);
+  assert.match(mine, /Nothing open is owned by agent:whoever\. Run `gw brief` for the whole board\./);
+});
+
+test('T-0069: --me keeps a bare name matching its qualified owner form', () => {
+  const items = [{ ...makeItems(1)[0], id: 'P1-01', stage: 'built', owner: 'human:rahil', flag: null, deps: [] }];
+  const mine = renderBrief({ items, events: [], stages, config: { brief: { max_lines: 25 } } }, { me: 'rahil' });
+  assert.match(mine, /^gw · 1 open · 1 in flight/m);
+  assert.match(mine, /IN FLIGHT[\s\S]*P1-01/);
+});
+
+test('T-0069: brief --json applies --me to every bucket, and the buckets agree with the text', async () => {
+  const items = [
+    { id: 'M-1', title: 'Mine, moving', stage: 'building', owner: 'agent:me', flag: null, deps: [] },
+    { id: 'M-2', title: 'Mine, blocked', stage: 'backlog', owner: 'agent:me', flag: 'blocked', deps: [] },
+    { id: 'O-1', title: 'Theirs, moving', stage: 'building', owner: 'agent:other', flag: null, deps: [] },
+  ];
+  const parsed = await (async () => {
+    const root = mkdtempSync(join(tmpdir(), 'gw-brief-json-'));
+    const store = createStore(root); store.ensure();
+    store.writeItems(items);
+    let json = '';
+    await runBrief({ store, root: store.root, flags: { json: true, me: 'agent:me' }, stdout: { write: (value) => { json += value; } } });
+    return JSON.parse(json);
+  })();
+  assert.equal(parsed.open, 2);
+  assert.deepEqual(parsed.in_flight.map((entry) => entry.id), ['M-1']);
+  assert.deepEqual(parsed.blocked.map((entry) => entry.id), ['M-2']);
+  assert.deepEqual(parsed.next_unblocked, []);
+  assert.deepEqual(parsed.needs_triage, []);
+});
+
+test('T-0069: a bare --me resolves to the actor and filters the board', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-brief-me-'));
+  const store = createStore(root); store.ensure();
+  const items = [
+    { ...makeItems(1)[0], id: 'P1-01', title: 'Theirs', stage: 'building', owner: 'agent:other', flag: null, deps: [] },
+    { ...makeItems(1)[0], id: 'P1-02', title: 'Mine', stage: 'building', owner: 'agent:me', flag: null, deps: [] },
+  ];
+  store.writeItems(items);
+  let out = '';
+  await runBrief({ store, root: store.root, actor: 'agent:me', flags: { me: true }, stdout: { write: (value) => { out += value; } } });
+  assert.match(out, /^gw · 1 open · 1 in flight/m);
+  assert.match(out, /P1-02/);
+  assert.equal(out.includes('P1-01'), false, 'the other actor\'s work must not leak into my view');
+  // The same board, --me naming the actor explicitly, must agree with the bare form.
+  let explicit = '';
+  await runBrief({ store, root: store.root, actor: 'human:rahil', flags: { me: 'agent:me' }, stdout: { write: (value) => { explicit += value; } } });
+  assert.equal(explicit, out);
 });

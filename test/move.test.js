@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
 import { run } from '../lib/commands/move.js';
 import { run as check } from '../lib/commands/check.js';
+import { run as claim } from '../lib/commands/claim.js';
+import { run as triage } from '../lib/commands/triage.js';
 import { RuleError, UsageError } from '../lib/cli/errors.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
@@ -27,7 +29,7 @@ function board(items = [item()], config = {}, stagesFixture = stages) {
   writeFileSync(store.paths.config, JSON.stringify({ github: { enabled: false, comment_on_move: true }, ...config }));
   return { root, store };
 }
-function ctx(b, positionals, flags = {}) { return { flags, positionals, store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write() {} }, stderr: { write() {} } }; }
+function ctx(b, positionals, flags = {}, actor = 'human:test') { return { flags, positionals, store: b.store, root: b.root, actor, env: {}, stdout: { write() {} }, stderr: { write() {} } }; }
 
 test('--force never bypasses requires', () => {
   const b = board();
@@ -147,9 +149,12 @@ test('move preserves a paused flag when leaving a non-paused stage', () => {
 
 test('gw move works through the real binary with the expected exit code', () => {
   const b = board([item({ stage: 'building', owner: 'human:test' })]);
-  execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'built', '--evidence', 'abc123'], { cwd: b.root, encoding: 'utf8' });
+  // The board's owner gate (T-0072) reads the real actor, so the binary run
+  // is made as the item's owner, the way a real operator would.
+  const env = { ...process.env, GW_ACTOR: 'human:test' };
+  execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'built', '--evidence', 'abc123'], { cwd: b.root, env, encoding: 'utf8' });
   assert.equal(b.store.readItems()[0].stage, 'built');
-  assert.throws(() => execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'verified'], { cwd: b.root, encoding: 'utf8' }), (error) => error.status === 1);
+  assert.throws(() => execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'verified'], { cwd: b.root, env, encoding: 'utf8' }), (error) => error.status === 1);
 });
 
 // T-0010 — refusing a terminal-stage move is the board refusing based on
@@ -210,4 +215,86 @@ test('the shipped pipeline refuses the verified gate without fresh, distinct evi
     { text: 'run 1 green on target', stage: 'verified' },
     { text: 'https://ci.example.test/run/99', stage: 'verified' },
   ]);
+});
+
+// T-0068 — needs-triage described itself as a hold someone else must lift,
+// yet a flagged item could be claimed and walked to verified while still
+// flagged: the only thing it gated was `gw triage --approve`. Asserted as
+// outcomes: the advance is REFUSED while flagged, side stages and claim stay
+// open, and the same advance is ACCEPTED once another actor approves.
+test('a needs-triage item is refused advancement past the initial stage, and accepted once another actor approves', () => {
+  const b = board([item({ flag: 'needs-triage', created_by: 'agent:alpha' })]);
+  assert.throws(
+    () => run(ctx(b, ['P1-01', 'specified'], {}, 'agent:beta')),
+    (error) => error instanceof RuleError
+      && /needs-triage/.test(error.message)
+      && /agent:alpha/.test(error.message)
+      && /gw triage P1-01 --approve/.test(error.message),
+    'the refusal names the flag, its creator, and the command that lifts the hold',
+  );
+  assert.equal(b.store.readItems()[0].stage, 'backlog', 'a refused move leaves the item where it was');
+
+  // Discarding or parking unreviewed capture needs no ceremony: side stages stay open.
+  const parked = board([item({ flag: 'needs-triage', created_by: 'agent:alpha' })]);
+  run(ctx(parked, ['P1-01', 'paused']));
+  assert.equal(parked.store.readItems()[0].stage, 'paused');
+
+  // Taking responsibility for unreviewed work is harmless and a useful signal.
+  const b2 = board([item({ flag: 'needs-triage', created_by: 'agent:alpha' })]);
+  claim(ctx(b2, ['P1-01'], {}, 'agent:beta'));
+  assert.equal(b2.store.readItems()[0].owner, 'agent:beta');
+
+  // The hold is lifted by someone other than the creator; the same advance then succeeds.
+  triage(ctx(b2, ['P1-01'], { approve: true }, 'human:reviewer'));
+  assert.equal(b2.store.readItems()[0].flag, null);
+  run(ctx(b2, ['P1-01', 'specified'], {}, 'agent:beta'));
+  assert.equal(b2.store.readItems()[0].stage, 'specified');
+});
+
+test('--force remains the recorded override for the triage hold', () => {
+  const b = board([item({ flag: 'needs-triage', created_by: 'agent:alpha' })]);
+  run(ctx(b, ['P1-01', 'specified'], { force: true }, 'agent:beta'));
+  assert.equal(b.store.readItems()[0].stage, 'specified');
+});
+
+// The half of the hold that was already true and now must stay true: a
+// terminal item carrying needs-triage would sit in brief's NEEDS TRIAGE list
+// as finished-but-unreviewed, which is nonsense.
+test('the needs-triage flag does not survive into a terminal stage', () => {
+  const done = { stages: [{ id: 'todo' }, { id: 'done' }], terminal: ['done'], extra: [] };
+  const b = board([item({ stage: 'todo', flag: 'needs-triage', created_by: 'agent:alpha' })], {}, done);
+  run(ctx(b, ['P1-01', 'done'], { force: true }));
+  const moved = b.store.readItems()[0];
+  assert.equal(moved.stage, 'done');
+  assert.equal(moved.flag, null);
+});
+
+// T-0072 — claim is a lock at `claim` and not at `move`: a second agent was
+// refused the claim yet could move the item out from under its owner with the
+// owner left on it. Asserted as outcomes: the non-owner is REFUSED, the owner
+// SUCCEEDS, and --force on the move stays a deliberate one-off.
+test('move respects the claim: a non-owner is refused and the owner succeeds', () => {
+  const b = board([item({ stage: 'building', owner: 'agent:alpha' })]);
+  assert.throws(
+    () => run(ctx(b, ['P1-01', 'built'], { evidence: ['abc123'] }, 'agent:beta')),
+    (error) => error instanceof RuleError
+      && /owned by agent:alpha/.test(error.message)
+      && /gw claim P1-01 --force/.test(error.message),
+    'the refusal names the current owner and the honest way in',
+  );
+  assert.equal(b.store.readItems()[0].stage, 'building');
+  assert.equal(b.store.readItems()[0].owner, 'agent:alpha', 'the refusal does not touch the owner');
+
+  run(ctx(b, ['P1-01', 'built'], { evidence: ['abc123'] }, 'agent:alpha'));
+  assert.equal(b.store.readItems()[0].stage, 'built', 'the owner moves their own item');
+
+  // The one-off override stays available, exactly as claim's --force is.
+  const stolen = board([item({ stage: 'building', owner: 'agent:alpha' })]);
+  run(ctx(stolen, ['P1-01', 'built'], { evidence: ['abc123'], force: true }, 'agent:beta'));
+  assert.equal(stolen.store.readItems()[0].stage, 'built');
+
+  // An unowned item is unaffected: anyone may move it, subject to the gates.
+  const unowned = board([item({ stage: 'backlog', owner: null })]);
+  run(ctx(unowned, ['P1-01', 'specified'], {}, 'agent:beta'));
+  assert.equal(unowned.store.readItems()[0].stage, 'specified');
 });

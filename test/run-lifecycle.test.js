@@ -15,7 +15,7 @@ function board({ timeout = 0.02 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gw-run-lifecycle-')); const store = createStore(root); store.ensure();
   mkdirSync(join(root, '.gatewright', 'runs'), { recursive: true }); mkdirSync(join(root, 'worktree'));
   writeFileSync(store.paths.config, JSON.stringify({ runner: { stop_timeout_s: timeout, run_timeout_min: 1, paused: false } }));
-  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }], terminal: [], extra: [{ id: 'paused', role: 'paused' }] }));
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }, { id: 'building' }], terminal: [], extra: [{ id: 'paused', role: 'paused' }] }));
   store.writeItems([{ id: 'P4-07', title: 'fixture', stage: 'building', flag: null, owner: 'agent:r-1', updated: new Date().toISOString() }]);
   return { root, store, registry: createRunRegistry({ store }), worktree: join(root, 'worktree') };
 }

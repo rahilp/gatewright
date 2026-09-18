@@ -272,6 +272,9 @@ test('a gw list --json dump round-trips through import into a fresh board', () =
 
   run(source, 'init');
   run(source, 'add', 'round trip', '--scope', 's', '--by', 'agent:roundtrip');
+  // T-0068 — agent-created capture is held for triage and the hold now gates
+  // pipeline advancement; the round trip lifts it before working the item.
+  run(source, 'triage', 'T-0001', '--approve', '--force', '--by', 'human:reviewer');
   run(source, 'claim', 'T-0001', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'building', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'built', '--evidence', 'commit abc', '--by', 'agent:roundtrip');
@@ -298,6 +301,7 @@ test('a verified item with four evidence entries across three stages round-trips
 
   run(source, 'init');
   run(source, 'add', 'deep', '--scope', 'what done looks like', '--by', 'agent:roundtrip');
+  run(source, 'triage', 'T-0001', '--approve', '--force', '--by', 'human:reviewer');
   run(source, 'claim', 'T-0001', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'building', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'built', '--evidence', 'commit def', '--by', 'agent:roundtrip');

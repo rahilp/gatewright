@@ -219,3 +219,60 @@ test('the hook steps aside rather than blocking commits when gw cannot answer', 
     assert.equal(result.status, 0, `${label}: the hook must not refuse the commit (${result.stderr})`);
   }
 });
+
+// T-0067 — the hook steps aside when the gw on PATH cannot answer
+// `gw guard --help`, and used to do it silently: install announced the hook
+// and status reported it installed while every commit passed unguarded. Both
+// now run the same probe the hook runs and say so loudly when it fails.
+test('install and status warn loudly when the guard probe fails, and stay exit 0', () => {
+  const r = repo();
+  const install = ctx(r, {}, ['install']);
+  assert.equal(run(install.ctx, { probe: () => false }), 0, 'fail-open is correct; the silence was the defect');
+  assert.match(install.out(), /WARNING/);
+  assert.match(install.out(), /will not fire/);
+  assert.match(install.out(), /passes unguarded/i);
+  assert.match(install.out(), /npm install -g gatewright/, 'the warning says what to do about it');
+
+  const status = ctx(r, {}, ['status']);
+  assert.equal(run(status.ctx, { probe: () => false }), 0);
+  assert.match(status.out(), /commit-msg hook: installed/);
+  assert.match(status.out(), /guard probe: FAILED/);
+  assert.match(status.out(), /passes unguarded/i);
+});
+
+test('a passing probe is silent: no warning about a condition the machine is not in', () => {
+  const r = repo();
+  const install = ctx(r, {}, ['install']);
+  assert.equal(run(install.ctx, { probe: () => true }), 0);
+  assert.doesNotMatch(install.out(), /WARNING/);
+  const status = ctx(r, {}, ['status']);
+  assert.equal(run(status.ctx, { probe: () => true }), 0);
+  assert.doesNotMatch(status.out(), /guard probe/);
+});
+
+// The defect was found on a real machine: a global gw 0.7.0 with no `guard`.
+// Driven through the real binary with a stale shim on PATH, the way the hook
+// itself would meet it.
+test('a real guardless gw on PATH is announced at install and status time', () => {
+  const r = repo();
+  const stale = mkdtempSync(join(tmpdir(), 'gw-stale-'));
+  writeFileSync(join(stale, 'gw'), '#!/bin/sh\nexit 2\n');
+  chmodSync(join(stale, 'gw'), 0o755);
+  const capable = mkdtempSync(join(tmpdir(), 'gw-capable-'));
+  writeFileSync(join(capable, 'gw'), `#!/bin/sh\nexec "${process.execPath}" "${BIN}" "$@"\n`);
+  chmodSync(join(capable, 'gw'), 0o755);
+  const env = (dir) => ({ ...process.env, PATH: `${dir}:${process.env.PATH}` });
+
+  const installed = spawnSync(process.execPath, [BIN, 'hook', 'install'], { cwd: r.root, env: env(stale), encoding: 'utf8' });
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.match(installed.stdout, /WARNING/);
+  assert.match(installed.stdout, /will not fire/);
+
+  const status = spawnSync(process.execPath, [BIN, 'hook', 'status'], { cwd: r.root, env: env(stale), encoding: 'utf8' });
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /guard probe: FAILED/);
+
+  const fixed = spawnSync(process.execPath, [BIN, 'hook', 'install'], { cwd: r.root, env: env(capable), encoding: 'utf8' });
+  assert.equal(fixed.status, 0, fixed.stderr);
+  assert.doesNotMatch(fixed.stdout, /WARNING/, 'once a guard-capable gw is on PATH the warning is gone');
+});

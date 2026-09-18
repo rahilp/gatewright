@@ -339,3 +339,24 @@ test('an inbox and a queued dispatch get their own headings in one report', () =
   assert.match(out, /^QUEUED DISPATCH — 1 dispatch no agent will ever run while the runner is disabled\.$/m);
   assert.ok(out.indexOf('INBOX') < out.indexOf('QUEUED DISPATCH'));
 });
+
+// T-0071 — the digest proves items.jsonl was not touched since the last gw
+// write; it never proved the items were valid. A line of valid JSON with
+// stage "nonsense" loaded fine and sailed through as "Board is clean." Shape
+// is judged independently of digest state: the fixture's rebaseline puts this
+// board in exactly the "out-of-band write that predates the last repair"
+// state the digest cannot see.
+test('check fails a stage no board defines, even when the digest is clean', () => {
+  const b = board([item({ stage: 'nonsense' })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /INVALID STAGE[\s\S]*P1-01: stage "nonsense" is not a stage on this board/);
+  assert.doesNotMatch(result.output(), /Board is clean/);
+});
+
+test('check fails a flag the board does not know', () => {
+  const b = board([item({ flag: 'urgent' })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /INVALID FLAG[\s\S]*P1-01: flag "urgent" is not a flag this board knows/);
+});

@@ -52,6 +52,10 @@ test('a fresh default board goes from a bare `gw add` to "working on it" in add,
   assert.equal(created.stage, 'backlog');
 
   execFileSync(process.execPath, [BIN, 'claim', id], { cwd: root, encoding: 'utf8' });
+  // T-0068 — an unclassified capture is held for triage, and the hold now
+  // gates advancement past the initial stage. The capture itself still needs
+  // no edit; the hold is lifted as triage's own override allows.
+  execFileSync(process.execPath, [BIN, 'triage', id, '--approve', '--force'], { cwd: root, encoding: 'utf8' });
   execFileSync(process.execPath, [BIN, 'move', id, 'building'], { cwd: root, encoding: 'utf8' });
   const building = store.readItems().find((item) => item.id === id);
   assert.equal(building.stage, 'building');

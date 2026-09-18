@@ -55,6 +55,29 @@ test('the agent block documents the agent actor convention', () => {
   assert.match(block, /--by agent:<name>/);
 });
 
+// T-0070 — a reviewer following the block guessed `in_progress` and burned a
+// move on it: the block never named the stages. It must list the DEFAULT
+// pipeline, say a board can define its own, and point at the command that
+// names the real, legal moves — the list is a description, never gospel.
+test('the agent block names the default pipeline and points at the real one', () => {
+  const block = readTemplate('agents-block.md');
+  assert.match(block, /The DEFAULT pipeline is backlog → building → built → in_review → reviewed → merged → verified/);
+  assert.match(block, /a board may define its own/);
+  assert.match(block, /`gw next <id>` names the real, legal moves/);
+});
+
+// T-0070 — how a board comes to exist was left to `--help`; the block is the
+// only instruction a fresh agent reads.
+test('the agent block says how a board comes to exist', () => {
+  assert.match(readTemplate('agents-block.md'), /No board yet\? `gw init` creates one\./);
+});
+
+// T-0066 — the brief drops finished work from its open counts, so the block
+// must say where it went.
+test('the agent block names the command that lists finished work', () => {
+  assert.match(readTemplate('agents-block.md'), /`gw list --stage verified` lists it\./);
+});
+
 test('stages.json parses: pipeline order, auto gates, terminal and side states match the spec default', () => {
   const parsed = JSON.parse(readTemplate('stages.json'));
   assert.deepEqual(parsed.stages.map((s) => s.id), ['backlog', 'building', 'built', 'in_review', 'reviewed', 'merged', 'verified']);

@@ -101,3 +101,33 @@ test('a clean board has nothing for repair to do', async () => {
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Nothing to repair/);
 });
+
+// T-0071 — repair used to quarantine only unparseable lines, then re-baseline
+// the digest: a line of VALID JSON with an invalid stage became permanent
+// truth, and check blessed it. Now repair reports content-invalid lines
+// (without quarantining them — the board still loads, and removing an item is
+// an edit nobody directed), and check judges shape independently of the
+// digest, so the re-baseline legitimises nothing.
+test('a valid-JSON line with an invalid stage is reported by repair and still fails check after the re-baseline', async () => {
+  const b = makeBoard();
+  const FORGED = JSON.stringify({ id: 'T-0099', title: 'forged', stage: 'nonsense', deps: [], evidence: [] });
+  const { appendFileSync } = await import('node:fs');
+  appendFileSync(b.store.paths.items, `${FORGED}\n`);
+
+  const dry = await runCli(b.root, ['repair']);
+  assert.match(dry.stdout, /line 4 has stage "nonsense", which is not a stage on this board/);
+  assert.match(dry.stdout, /reported, not quarantined/);
+
+  const write = await runCli(b.root, ['repair', '--write']);
+  assert.equal(write.code, 1, 'content-invalid lines keep repair --write from reporting success');
+  assert.match(write.stdout, /line 2 quarantined/, 'the unparseable line is still quarantined');
+  assert.match(write.stdout, /line 4 has stage "nonsense".*reported, not quarantined/);
+  assert.equal(readFileSync(b.store.paths.items, 'utf8').includes(FORGED), true, 'nothing was deleted: the line survives in place');
+
+  // The point of the fix: repair's digest re-baseline does not launder the
+  // forged item — check fails on shape, every time.
+  const check = await runCli(b.root, ['check']);
+  assert.equal(check.code, 1);
+  assert.match(check.stdout, /INVALID STAGE[\s\S]*T-0099/);
+  assert.match(check.stdout, /nonsense/);
+});

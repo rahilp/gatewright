@@ -32,6 +32,9 @@ test('the full binary workflow uses a foreign pipeline exclusively', () => {
   const output = [];
   output.push(run(root, ['add', 'Ship the first item']));
   assert.equal(store.readItems().find((item) => item.id === 'T-0001').stage, 'icebox');
+  // T-0068 — agent-created capture is held for triage and the hold now gates
+  // pipeline advancement; the workflow approves it before working the item.
+  output.push(run(root, ['triage', 'T-0001', '--approve', '--force']));
   output.push(run(root, ['claim', 'T-0001']));
   output.push(run(root, ['move', 'T-0001', 'speccing']));
   output.push(run(root, ['move', 'T-0001', 'coding']));
@@ -77,8 +80,11 @@ test('a pipeline without a dropped role never reports a dropped dependency', () 
   const store = createStore(root);
   writeFileSync(store.paths.stages, JSON.stringify({ ...foreignStages, extra: [] }));
   store.writeItems([
+    // T-0071 — shape is validated against the board's stages, so the dependency
+    // sits at a stage this pipeline defines (the subject here is that no
+    // dropped role means no dropped-dependency report, not orphaned stages).
     { id: 'P0-01', title: 'Dependent', stage: 'icebox', flag: null, owner: null, deps: ['P0-02'], evidence: [], updated: new Date().toISOString() },
-    { id: 'P0-02', title: 'Former side state', stage: 'binned', flag: null, owner: null, deps: [], evidence: [], updated: new Date().toISOString() },
+    { id: 'P0-02', title: 'Former side state', stage: 'speccing', flag: null, owner: null, deps: [], evidence: [], updated: new Date().toISOString() },
   ]);
   assert.equal(run(root, ['check']), 'Board is clean.\n');
 });

@@ -89,6 +89,39 @@ test('gw next stays quiet about dependencies when none is in the way', () => {
   assert.doesNotMatch(c.out, /waiting on/);
 });
 
+// T-0073 — "waiting on T-0002 (dropped)" used to be the one failure state in
+// the product that printed no command: the user had to guess
+// `gw edit <id> --deps ""`, which would also wipe every other dependency.
+// The advice must name the edit that removes exactly the stranded deps.
+test('gw next names the edit that drops a stranded dependency and keeps the live ones', () => {
+  const dep = { ...item(), id: 'P1-02', stage: 'dropped' };
+  const other = { ...item(), id: 'P1-03', stage: 'specified' };
+  const b = board([item({ stage: 'specified', deps: ['P1-02', 'P1-03'] }), dep, other]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.match(c.out, /  - waiting on P1-02 \(dropped\)/);
+  assert.match(c.out, /  - it cannot advance: run `gw edit P1-01 --deps P1-03` to remove it from the deps/);
+  assert.doesNotMatch(c.out, /--deps ""/, 'the live dependency P1-03 must survive the advised edit');
+});
+
+test('gw next advises --deps "" only when the stranded dependency was the last one', () => {
+  const dep = { ...item(), id: 'P1-02', stage: 'dropped' };
+  const b = board([item({ stage: 'specified', deps: ['P1-02'] }), dep]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.match(c.out, /  - it cannot advance: run `gw edit P1-01 --deps ""` to remove it from the deps/);
+});
+
+test('gw next stays quiet about a stranded-dep edit when the dependency is merely behind', () => {
+  const dep = { ...item(), id: 'P1-02', stage: 'backlog' };
+  const b = board([item({ stage: 'specified', deps: ['P1-02'] }), dep]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  // A dep that can still move is not stranded: the gate refusal already
+  // names `gw move` for it, and the edit would be the wrong advice.
+  assert.doesNotMatch(c.out, /cannot advance/);
+});
+
 test('gw next --json matches the shape of the live board\'s /transitions endpoint', () => {
   const b = board([item({ stage: 'building', owner: 'human:test' })]);
   const c = ctx(b, ['P1-01'], { json: true });

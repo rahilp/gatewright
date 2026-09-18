@@ -53,7 +53,9 @@ test('write endpoints use command behaviour and append one event each', async ()
     const added = store.readItems().find((candidate) => candidate.title === 'New item');
     assert.ok(added);
     assert.equal((await write(url, `/api/items/${added.id}`, { scope: 'finished when tested' })).status, 200);
-    assert.equal((await write(url, '/api/items/P1-01/move', { to: 'building', evidence: [] })).status, 200);
+    // T-0072 — the claim is a lock at move too, so the board moves the item as
+    // its owner; these posts carry the acting actor explicitly.
+    assert.equal((await write(url, '/api/items/P1-01/move', { to: 'building', evidence: [], by: 'human:tester' })).status, 200);
     assert.equal((await write(url, '/api/items/P1-01/note', { text: 'A note' })).status, 200);
     assert.equal((await write(url, '/api/items/P1-01/dispatch', { actor: 'sam' })).status, 200);
     assert.equal((await write(url, '/api/items/P1-01/cancel', {})).status, 200);
@@ -499,7 +501,7 @@ test('stage and settings writes are refused from a non-loopback host even when i
 test('an item move from that same allowed non-loopback host still succeeds', async () => {
   await withServer(async ({ store, url }) => {
     const headers = { Host: 'board.local', Origin: 'http://board.local', 'Content-Type': 'application/json' };
-    const moved = await raw(url, '/api/items/P1-01/move', { body: JSON.stringify({ to: 'building', evidence: [] }), headers });
+    const moved = await raw(url, '/api/items/P1-01/move', { body: JSON.stringify({ to: 'building', evidence: [], by: 'human:tester' }), headers });
     assert.equal(moved.status, 200, 'the colleague on the LAN is the feature; only the rules are loopback-only');
     assert.equal(store.readItems().find((candidate) => candidate.id === 'P1-01').stage, 'building');
   }, { allowedHosts: ['board.local'] });
@@ -521,15 +523,15 @@ test('/api/state reports whether this caller may change stages and settings', as
 // move was refused despite the UI having offered it.
 test('a backward move from the board is accepted when it asks for force, and refused when it does not', async () => {
   await withServer(async ({ url, store }) => {
-    await write(url, '/api/items/P1-01/move', { to: 'building' });
+    await write(url, '/api/items/P1-01/move', { to: 'building', by: 'human:tester' });
     assert.equal(store.readItems()[0].stage, 'building');
 
-    const withoutForce = await write(url, '/api/items/P1-01/move', { to: 'backlog' });
+    const withoutForce = await write(url, '/api/items/P1-01/move', { to: 'backlog', by: 'human:tester' });
     // 409, the status this API uses for a rule violation, not 400.
     assert.equal(withoutForce.status, 409, 'a backward move is force-only by definition');
     assert.equal(store.readItems()[0].stage, 'building', 'and nothing moved');
 
-    const forced = await write(url, '/api/items/P1-01/move', { to: 'backlog', force: true });
+    const forced = await write(url, '/api/items/P1-01/move', { to: 'backlog', force: true, by: 'human:tester' });
     assert.equal(forced.status, 200);
     assert.equal(store.readItems()[0].stage, 'backlog', 'the human corrected their own mistake from the board');
   });
