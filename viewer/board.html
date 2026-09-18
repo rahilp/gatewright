@@ -5,6 +5,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gatewright</title>
+<!-- T-0082: a data URI, not a file request -- the only favicon the file://
+     snapshot can ever load without a 404 in the console. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='3.5' fill='%23297ab6'/%3E%3Crect x='4' y='4' width='3.4' height='8' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3Crect x='8.6' y='4' width='3.4' height='5' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light dark;
@@ -82,6 +85,14 @@
   header#gw-header .meta { color: var(--text-dim); font-size: 0.82rem; }
   header#gw-header .totals { display: flex; gap: 0.9rem; margin-left: auto; font-size: 0.82rem; color: var(--text-dim); }
   header#gw-header .totals b { color: var(--text); }
+  /* T-0055: the header is sticky at the top of the page scroll, and anything
+     the browser scrolls into view -- a Tab-focus landing on a deep card, a
+     find-in-page hit -- used to slide underneath it, hiding the card's id
+     and title. The scroller reserves the bar's height for every target
+     (scroll-padding-top), and the repeated scroll targets reserve it again
+     locally (scroll-margin-top) so a future target cannot forget. */
+  html { scroll-padding-top: 3.5rem; }
+  .card, .brief-row, table.gw-table tbody tr { scroll-margin-top: 3.5rem; }
   .snapshot-pill {
     font-size: 0.72rem;
     padding: 0.15rem 0.5rem;
@@ -120,6 +131,19 @@
   }
   nav#gw-tabs button:hover { color: var(--text); }
   nav#gw-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  /* T-0064: the tab bar already scrolled at 390px, but nothing said so --
+     the clipped Export tab just looked broken. The scrollbar is now always
+     drawn (thin on desktop, visibly thumb-styled), and a phone loses the
+     wide per-tab padding that pushes the last tab off the edge in the
+     first place. */
+  nav#gw-tabs { scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
+  nav#gw-tabs::-webkit-scrollbar { height: 6px; }
+  nav#gw-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  nav#gw-tabs::-webkit-scrollbar-track { background: transparent; }
+  @media (max-width: 480px) {
+    nav#gw-tabs { padding: 0.4rem 0.5rem 0; }
+    nav#gw-tabs button { padding: 0.5rem 0.5rem; }
+  }
 
   #gw-filters {
     display: flex;
@@ -175,12 +199,43 @@
   .overview-distribution .overview-grid { margin-top: 0.7rem; }
   .brief-row { cursor: pointer; gap: 0.6rem; }
   .brief-row:hover { color: var(--accent); }
-  .brief-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* T-0021: without min-width: 0 a flex item's automatic minimum is its
+     content, so one unbroken 118-character title resists the ellipsis below
+     and pushes the card past the viewport. The span may now actually shrink;
+     the full title stays in the aria-label and the detail panel. */
+  .brief-row span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .brief-row span:last-child { color: var(--text-faint); white-space: nowrap; }
   .brief-card .meta { color: var(--text-dim); font-size: 0.82rem; }
+  /* T-0054: the section expander is a real control now, so it reads as one. */
+  .brief-more {
+    background: none;
+    border: none;
+    padding: 0.25rem 0 0;
+    color: var(--accent);
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .brief-more:hover { text-decoration: underline; text-underline-offset: 2px; }
 
   /* Board */
-  #board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+  /* T-0059: a board with one long column used to become one endless strip --
+     a 111-card Backlog rendered ~16000px tall beside five empty lanes, and
+     roughly 80% of the viewport at any scroll position was bare background.
+     The board is a pipeline, so wrapping the columns would break the
+     left-to-right reading, and auto-scrolling to the populated ones is
+     motion the reader never asked for (and still leaves the void). Instead
+     the board is scoped to the viewport: every column is a lane as tall as
+     the visible screen, and a long column scrolls inside its own lane. All
+     stages stay visible at once, which is the whole point of a board. */
+  #board {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    align-items: stretch;
+    max-height: calc(100vh - 11rem);
+    min-height: 12rem;
+  }
   .column {
     background: var(--bg-raised);
     border: 1px solid var(--border);
@@ -188,6 +243,9 @@
     min-width: 240px;
     max-width: 260px;
     flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   /* A terminal column collapsed to its recent handful gets its width back to
      the non-terminal columns that matter -- see terminalStageIds() and
@@ -204,6 +262,7 @@
     gap: 0.4rem;
     position: sticky;
     top: 0;
+    flex-shrink: 0;
     background: var(--bg-raised);
     border-radius: 0.5rem 0.5rem 0 0;
   }
@@ -219,7 +278,10 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
+  /* T-0059: the lane body is what scrolls now, so a long column never grows
+     the page. The header stays pinned above it because it is outside this
+     scroll container, not because of the sticky fallback above. */
+  .column-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; overflow-y: auto; }
   .card {
     background: var(--bg-sunken);
     border: 1px solid var(--border);
@@ -269,7 +331,12 @@
   @keyframes card-moved { from { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); } to { border-color: var(--border); box-shadow: none; } }
   @media (prefers-reduced-motion: reduce) { .card.card-moved { animation: none; border-color: var(--accent); } }
   .card .card-id { font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim); }
-  .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; }
+  /* T-0021: a title that is one very long word has no break points, so it
+     paints past the 260px column and becomes horizontal scroll on a phone.
+     `anywhere` (not break-word) also shrinks min-content, which is what lets
+     the auto-layout table give its title column room back. Titles wrap, so
+     nothing is truncated and no title attribute is needed. */
+  .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; overflow-wrap: anywhere; }
   .card .card-meta { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.7rem; color: var(--text-dim); }
   .tag {
     display: inline-block;
@@ -284,6 +351,15 @@
   /* Table */
   table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
   table.gw-table th, table.gw-table td { text-align: left; padding: 0.45rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+  /* T-0021: the title cell is the one column whose content has no natural
+     width limit; without break opportunities it forces the table wider than
+     the viewport. `anywhere` lets that one column shrink and the title wrap.
+     T-0027 (reopened): the rule used to sit on EVERY td, which is how every
+     column got permission to break words mid-word and crush to one
+     character -- "featur/e", "B/l/o/c/k/e/d". The short vocab columns have
+     natural min-content widths (their longest word); only the title needs
+     the emergency break, inside its own 13rem floor. */
+  table.gw-table td.cell-title { overflow-wrap: anywhere; }
   table.gw-table th { cursor: pointer; user-select: none; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
   table.gw-table th.sorted { color: var(--text); }
   table.gw-table tbody tr:hover { background: var(--bg-sunken); cursor: pointer; }
@@ -302,6 +378,25 @@
     cursor: pointer;
   }
   select.row-move { max-width: 10rem; }
+  /* T-0027 (reopened): overflow on the container was never the whole bug --
+     the table itself had to be willing to shrink, and it was: width:100%
+     plus overflow-wrap:anywhere let every column crush to a single
+     character and still call the result "no overflow". A table cannot be
+     allowed to negotiate its own readability away, so two floors hold:
+     the table keeps a minimum width of its own (the container scrolls
+     beyond it), and the Title column keeps a minimum wide enough to show
+     words -- the earlier failure was "B/l/o/c/k/e/d" at 30px. */
+  table.gw-table { min-width: 640px; }
+  table.gw-table th.cell-title, table.gw-table td.cell-title { min-width: 13rem; }
+  /* T-0027: the table scrolls in its own lane so the page never does. On a
+     phone the action controls also give up their nowrap and wrap onto two
+     lines instead of holding the column -- and the whole table -- wide. */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 480px) {
+    table.gw-table td.row-actions-cell { white-space: normal; }
+    .row-actions { flex-wrap: wrap; }
+    select.row-move { max-width: 8rem; }
+  }
 
   /* Stages & rules */
   .stage-rule {
@@ -358,6 +453,9 @@
     transition: transform 0.15s ease;
     z-index: 101;
     padding: 1rem 1.25rem 2.5rem;
+    /* T-0021: inherited, so the item title, field values and evidence chips
+       all break instead of pushing the drawer's fixed width sideways. */
+    overflow-wrap: anywhere;
   }
   #gw-overlay.open #gw-panel { transform: translateX(0); }
   #gw-panel .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
@@ -373,11 +471,27 @@
     margin: 0.6rem 0;
   }
   #gw-panel .readonly-banner code { font-family: var(--mono); }
-  #gw-panel dl { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
+  #gw-panel dl { display: grid; grid-template-columns: 7rem 1fr; gap: 0.3rem 0.6rem; font-size: 0.82rem; margin: 0.8rem 0; }
   #gw-panel dt { color: var(--text-dim); }
   #gw-panel dd { margin: 0; }
   #gw-panel .stage-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; align-items: flex-start; }
-  #gw-panel .stage-button-wrap { display: flex; flex-direction: column; gap: 0.2rem; max-width: 13rem; }
+  /* T-0078: the button and its reasons have to survive as one visual unit
+     wherever the flex-wrap flow puts them. In the bare wrap, a disabled
+     button's reason could sit directly under a NEIGHBOURING button's slot --
+     a faint button reads as nothing, so the eye attached the reason to the
+     last prominent (enabled) button above it, and "Merged" appeared to be
+     the move being refused. A boundary around each pair makes the
+     association geometric, not a reading habit. */
+  #gw-panel .stage-button-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-width: 13rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+  }
   #gw-panel .stage-buttons button {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -444,6 +558,8 @@
   }
   #gw-panel .evidence-list { list-style: none; margin: 0.3rem 0; padding: 0; }
   #gw-panel .evidence-list li.evidence-chip { font-family: var(--mono); font-size: 0.78rem; padding: 0.15rem 0; }
+  /* T-0062: the gate each entry paid for, next to the text that paid for it. */
+  #gw-panel .evidence-list li.evidence-chip .evidence-gate { margin-left: 0.4rem; font-family: var(--sans); font-size: 0.7rem; }
   #gw-panel .evidence-add, #gw-panel .note-add { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.8rem; }
   #gw-panel .evidence-add input, #gw-panel .note-add textarea {
     flex: 1;
@@ -471,6 +587,16 @@
   #gw-panel .panel-actions.triage button { border-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
   #gw-panel #panel-error:empty { display: none; }
   .create-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.8rem; }
+  /* T-0081: the hold that an unclassified creation earns, stated in the
+     form itself. Warn colours: it is a cost the creator can avoid. */
+  .create-hold-note {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    border-radius: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.78rem;
+  }
   .create-form label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--text-dim); }
   .create-form input, .create-form select, .create-form textarea {
     background: var(--bg-sunken);
@@ -610,6 +736,139 @@
   .glossary-legend dd { margin: 0; }
 
   .hidden { display: none !important; }
+  /* T-0017: a visible label for controls whose label would only duplicate
+     what is already on screen (the Evidence heading, the filter bar), and a
+     focus ring for the two role="button" mentions whose keyboard focus the
+     default outline would otherwise draw at odd offsets. */
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .card:focus-visible, .brief-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  table.gw-table td.id button.id-open {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-family: var(--mono);
+    color: var(--accent);
+    cursor: pointer;
+  }
+  table.gw-table td.id button.id-open:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+  /* ============================================================
+     T-0060 — glass treatment (Rahil's reference dashboard)
+     One material, laid over the existing rules so the tags, stage
+     colours and every queried class are untouched. The glass is a
+     background treatment: translucent panel fills over a warm
+     dark-to-darker gradient, a hairline top edge highlight, layered
+     shadows for depth, 14-18px corners.
+     Fallback contract: every glass surface first gets a solid-ish
+     --glass-base fill, and the translucency + backdrop-filter only
+     switch on inside @supports -- where the filter is not supported
+     (or the reader asks for reduced transparency) the panels stay
+     legible opaque surfaces, never a washed blur.
+     ============================================================ */
+  :root {
+    --glass-radius-panel: 16px;
+    --glass-radius-card: 14px;
+    --glass-edge: rgba(255, 255, 255, 0.17);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.22);
+    /* Solid-ish base: high enough alpha to carry text on its own. */
+    --glass-base: rgba(34, 36, 40, 0.93);
+    --glass-base-head: rgba(28, 30, 33, 0.97);
+    --glass-fill: rgba(40, 42, 47, 0.46);
+    --glass-fill-head: rgba(26, 28, 31, 0.72);
+    --glass-sunken: rgba(18, 19, 21, 0.55);
+    --glass-backdrop: blur(18px) saturate(150%);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --glass-edge: rgba(255, 255, 255, 0.85);
+      --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      --glass-shadow: 0 8px 24px rgba(64, 54, 36, 0.14), 0 2px 6px rgba(64, 54, 36, 0.08);
+      --glass-base: rgba(252, 251, 248, 0.94);
+      --glass-base-head: rgba(250, 248, 244, 0.97);
+      --glass-fill: rgba(252, 251, 248, 0.62);
+      --glass-fill-head: rgba(250, 248, 244, 0.78);
+      --glass-sunken: rgba(238, 235, 228, 0.6);
+    }
+  }
+  body {
+    /* Warm-to-dark gradient backdrop, not flat black; fixed so the panels
+       blur one steady scene instead of resampling on every scroll. */
+    background:
+      radial-gradient(120% 90% at 18% 0%, rgba(128, 94, 52, 0.26) 0%, rgba(128, 94, 52, 0) 58%),
+      radial-gradient(90% 70% at 85% 100%, rgba(96, 74, 52, 0.16) 0%, rgba(96, 74, 52, 0) 60%),
+      linear-gradient(168deg, #2c2925 0%, #1e1f21 48%, #141517 100%);
+    background-attachment: fixed;
+  }
+  @media (prefers-color-scheme: light) {
+    body {
+      background:
+        radial-gradient(120% 90% at 18% 0%, rgba(196, 156, 96, 0.18) 0%, rgba(196, 156, 96, 0) 55%),
+        linear-gradient(168deg, #f7f4ee 0%, #f0ede6 55%, #e7e3da 100%);
+      background-attachment: fixed;
+    }
+  }
+  header#gw-header,
+  .column,
+  #gw-panel,
+  .overview-card,
+  table.gw-table,
+  .stage-rule,
+  .export-panel {
+    background: var(--glass-base);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+  }
+  header#gw-header { border-radius: 0; border-width: 0 0 1px; }
+  #gw-panel { border-width: 1px 0 0; }
+  .column { border-radius: var(--glass-radius-panel); }
+  .overview-card { border-radius: var(--glass-radius-card); }
+  .stage-rule { border-radius: var(--glass-radius-card); }
+  table.gw-table { border-radius: var(--glass-radius-card); }
+  .export-panel { border-radius: var(--glass-radius-card); }
+  .column-head {
+    /* Sticky head over a translucent lane: it needs near-solid fill of its
+       own or scrolled cards would ghost through it. */
+    background: var(--glass-base-head);
+    border-radius: calc(var(--glass-radius-panel) - 1px) calc(var(--glass-radius-panel) - 1px) 0 0;
+  }
+  .card { background: var(--glass-sunken); border-radius: 10px; }
+  table.gw-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+  @media (prefers-color-scheme: light) {
+    table.gw-table tbody tr:hover { background: rgba(38, 36, 30, 0.05); }
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    header#gw-header,
+    .column,
+    #gw-panel,
+    .overview-card,
+    table.gw-table,
+    .stage-rule,
+    .export-panel {
+      background: var(--glass-fill);
+      -webkit-backdrop-filter: var(--glass-backdrop);
+      backdrop-filter: var(--glass-backdrop);
+    }
+    .column-head { background: var(--glass-fill-head); -webkit-backdrop-filter: var(--glass-backdrop); backdrop-filter: var(--glass-backdrop); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    header#gw-header, .column, #gw-panel, .overview-card, table.gw-table, .stage-rule, .export-panel, .column-head {
+      background: var(--glass-base-head);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
 </style>
 </head>
 <body>
@@ -631,10 +890,15 @@
   </nav>
 
   <div id="gw-filters">
+    <label class="sr-only" for="f-phase">Filter by phase</label>
     <select id="f-phase"><option value="">phase: all</option></select>
+    <label class="sr-only" for="f-type">Filter by type</label>
     <select id="f-type"><option value="">type: all</option></select>
+    <label class="sr-only" for="f-stage">Filter by stage</label>
     <select id="f-stage"><option value="">stage: all</option></select>
+    <label class="sr-only" for="f-flag">Filter by flag</label>
     <select id="f-flag"><option value="">flag: all</option></select>
+    <label class="sr-only" for="f-search">Search items</label>
     <input type="search" id="f-search" placeholder="search id / title / scope">
     <button class="clear-filters" id="f-clear">clear</button>
     <button class="clear-filters hidden" id="f-new">+ new item</button>
@@ -669,6 +933,24 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
+  }
+
+  // Evidence entries are `{ text, stage }` objects on every board
+  // lib/store.js reads (it normalises on read), but `import` still accepts
+  // plain strings and the panel's own pending-evidence entries are strings
+  // until the next move posts them -- so both shapes reach the viewer, and
+  // every reader of an entry goes through here. String(entry) is what turned
+  // the panel into a wall of [object Object] the night the shape changed.
+  function evidenceText(e) {
+    if (e && typeof e === 'object') return typeof e.text === 'string' ? e.text : '';
+    return e == null ? '' : String(e);
+  }
+
+  // Which gate an entry paid for -- the whole point of the new shape. Null
+  // for legacy strings and pending entries, which have not been attributed
+  // to a gate yet.
+  function evidenceStage(e) {
+    return e && typeof e === 'object' && typeof e.stage === 'string' && e.stage ? e.stage : null;
   }
 
   function fmtDate(iso) {
@@ -808,7 +1090,7 @@
   // would claim to enforce and does not, and no fewer, because a key only
   // reachable by hand-editing JSON is the problem this view exists to solve.
   // test/viewer.test.js pins this list against lib/rules.js itself.
-  const RULE_KEYS = ['scope', 'owner', 'evidence_min', 'evidence_match', 'deps_at_least'];
+  const RULE_KEYS = ['scope', 'owner', 'children_done', 'evidence_min', 'evidence_match', 'deps_at_least'];
 
   // Build a `requires` object from what the gate form holds. `existing` is the
   // stage's current requires, so any key this form does not know about is
@@ -822,6 +1104,7 @@
     }
     if (values.scope) requires.scope = true;
     if (values.owner) requires.owner = true;
+    if (values.children_done) requires.children_done = true;
     const min = Number(values.evidence_min);
     if (Number.isInteger(min) && min > 0) requires.evidence_min = min;
     const match = String(values.evidence_match == null ? '' : values.evidence_match).trim();
@@ -881,11 +1164,28 @@
     // Set while someone is typing in the stages or settings editors, so the
     // two-second poll cannot wipe a half-filled form out from under them.
     formDirty: false,
+    // The item panel's equivalent of formDirty, decided live rather than by a
+    // flag: the values its editable controls held at the last render. The
+    // poll compares against this before redrawing the panel -- see
+    // panelIsDirty().
+    panelBaseline: null,
+    // A refused drawer write is an outcome, not transient paint. It belongs
+    // here rather than only in #panel-error because a poll replaces that DOM
+    // node every two seconds. The panel id keeps an old refusal from leaking
+    // into a different item's drawer.
+    panelError: null,
+    // Where focus was when the drawer was opened, so closing it can hand it
+    // back to the control that opened it -- see openPanel()/closePanel().
+    panelReturnFocus: null,
     // Which terminal columns a human has clicked open. Absent means
     // collapsed -- see terminalStageIds() and renderBoard() -- and a Set
     // living on State survives every 2-second poll untouched, so reading
     // Built does not get reset out from under whoever is reading it.
     expandedStages: new Set(),
+    // T-0054: same idea for the Overview's "what next" sections -- which
+    // ones a human has expanded past the first handful. A Set on State, so
+    // the poll cannot fold a section back up while it is being read.
+    briefExpanded: new Set(),
     lastLiveUpdate: null, liveError: null, pollingDelay: 2000, activePanelId: null,
     transitions: {}, transitionLoading: {}, transitionErrors: {},
     runLogs: {}, runLogLoading: {}, runLogErrors: {},
@@ -1018,6 +1318,9 @@
             runs: data.runs || [], scheduler: data.scheduler || { status: 'disabled' },
             admin: data.admin || { allowed: false },
             generatedAt: data.generatedAt || new Date().toISOString(), live: true,
+            // True only when a server actually answered /api/state. boot() will
+            // not enter live mode without it -- see the comment there.
+            fromServer: true,
           };
         }
       } catch { /* no server yet; fall through to whatever was injected */ }
@@ -1029,6 +1332,7 @@
       sync: { status: 'off' },
       admin: { allowed: false },
       generatedAt: (config && config.generatedAt) || null, live: false,
+      fromServer: false,
     };
   }
 
@@ -1228,10 +1532,11 @@
   // actually opens the board with. `gw brief` already answers that question
   // over the same data, so this mirrors its definitions instead of inventing
   // a second set. In particular "in flight" is copied from lib/brief.js's
-  // computeActive/isInFlight line for line: real progress (the item moved
-  // past the stage it was created in) or a live dispatch (a `dispatch` event
-  // with no matching run_ended/cancel yet). Claiming an item alone does not
-  // qualify -- lib/brief.js has already had two bugs from a second notion of
+  // computeActive/isInFlight line for line: real progress is owned work that
+  // moved past the stage it was created in. A live dispatch is the narrow
+  // exception because it is work presently underway. Claiming an item alone
+  // does not qualify -- lib/brief.js
+  // has already had two bugs from a second notion of
   // "terminal"; this file is not going to add a second notion of "in flight"
   // next to it. test/viewer-brief-parity.test.js runs both implementations
   // over the same fixtures and compares them.
@@ -1251,7 +1556,7 @@
   // module loader to share the original with (see pipelineIndex's own
   // comment for the precedent).
   function isInFlightItem(it, active) {
-    return pipelineIndex(it.stage) > 0 || active.has(it.id);
+    return (Boolean(it.owner) && pipelineIndex(it.stage) > 0) || active.has(it.id);
   }
 
   // Mirrors depsReady in lib/brief.js exactly.
@@ -1273,10 +1578,11 @@
     const open = State.items.filter((it) => !isTerminalItem(it));
     const blocked = open.filter((it) => it.flag === 'blocked' || !depsReadyItem(it));
     const triage = open.filter((it) => it.flag === 'needs-triage');
-    const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && it.flag !== 'needs-triage' && isInFlightItem(it, active));
-    const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 &&
+    const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && isInFlightItem(it, active));
+    const stranded = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && !it.owner && pipelineIndex(it.stage) > 0);
+    const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 && stranded.indexOf(it) === -1 &&
       !it.owner && pipelineIndex(it.stage) <= 0 && depsReadyItem(it));
-    return { open, blocked, triage, inFlight, next };
+    return { open, blocked, triage, inFlight, stranded, next };
   }
 
   const BRIEF_SECTION_LIMIT = 8;
@@ -1288,20 +1594,34 @@
     if (!items.length) {
       return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + '</h2><p class="meta">' + escapeHtml(emptyText) + '</p></div>';
     }
-    const shown = items.slice(0, BRIEF_SECTION_LIMIT);
+    // T-0054: "+N more" was a bare <p> -- a dead end sitting under rows that
+    // are all focusable buttons. It is now the same kind of one-click
+    // reveal a collapsed terminal column's "Show all" is: it expands the
+    // section in place, and folds it back. The section title is the key --
+    // the four sections on the Overview have distinct titles, and the choice
+    // lives on State so the 2-second poll cannot reset it.
+    const expanded = (State.briefExpanded || new Set()).has(title);
+    const shown = expanded ? items : items.slice(0, BRIEF_SECTION_LIMIT);
+    // T-0017: the row opens the item's drawer on click, so it is a button in
+    // the accessibility tree -- see the delegated keydown handler on #gw-view.
     const rows = shown.map((it) =>
-      '<div class="count-row brief-row" data-id="' + escapeHtml(it.id) + '">' +
+      '<div class="count-row brief-row" data-id="' + escapeHtml(it.id) + '" role="button" tabindex="0" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '">' +
       '<span>' + escapeHtml(it.id) + ' · ' + escapeHtml(it.title) + '</span>' +
       '<span>' + escapeHtml(note(it)) + '</span></div>'
     ).join('');
-    const more = items.length > shown.length ? '<p class="meta">+' + (items.length - shown.length) + ' more</p>' : '';
+    const more = items.length > BRIEF_SECTION_LIMIT
+      ? '<button class="brief-more" data-brief-more="' + escapeHtml(title) + '"' +
+        (expanded ? '' : ' aria-label="Show the remaining ' + (items.length - BRIEF_SECTION_LIMIT) + ' items in ' + escapeHtml(title) + '."') + '>' +
+        (expanded ? 'show less' : '+' + (items.length - BRIEF_SECTION_LIMIT) + ' more') + '</button>'
+      : '';
     return '<div class="overview-card brief-card"><h2>' + escapeHtml(title) + ' (' + items.length + ')</h2>' + rows + more + '</div>';
   }
 
   function renderOverview(container) {
-    const { blocked, triage, inFlight, next } = briefBuckets();
+    const { blocked, triage, inFlight, stranded, next } = briefBuckets();
     const whatNext = '<div class="overview-grid">' +
       briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
+      briefSectionHtml('Stranded', stranded, (it) => stageLabel(it.stage).toLowerCase() + ' · unowned', 'Nothing is stranded.') +
       briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
       briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
       briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-'), 'Nothing is unblocked and unowned.') +
@@ -1380,7 +1700,7 @@
     if (requires.evidence_match) {
       let re = null;
       try { re = new RegExp(requires.evidence_match); } catch { return true; }
-      if (!evidence.some((e) => re.test(e))) return true;
+      if (!evidence.some((e) => re.test(evidenceText(e)))) return true;
     }
     return false;
   }
@@ -1420,11 +1740,23 @@
     // Draggable only when a server is there to accept the move. A snapshot has
     // nothing to POST to, and a card that drags but can never land is a lie.
     const drag = State.live ? ' draggable="true" title="Drag to another column, or open this card to use the stage buttons."' : '';
-    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + drag + '>' +
+    // T-0017: the card is what a mouse click opens the drawer with, so it is
+    // a button in the accessibility tree too -- focusable, named after the
+    // item it opens, activated by Enter and Space (wired once in the
+    // delegated keydown handler on #gw-view). The name is explicit rather
+    // than derived from the card's text because a live card also contains
+    // Play/Stop buttons, and their labels must not be glued into its name.
+    const openLabel = ' role="button" tabindex="0" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '"';
+    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + openLabel + drag + '>' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
-      '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type || '?') + '</span>' +
+      // T-0056: a null type rendered a bare "?" pill -- on a fresh board,
+      // mostly untyped items, that is the pill everywhere. Every other pill
+      // on this card is already conditional, so an absent type now reads
+      // exactly the way an absent flag does: nothing shown. A type that IS
+      // set still renders, glossary tooltip and all.
+      (it.type ? '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</span>' : '') +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
@@ -1518,10 +1850,27 @@
       return State.transitionErrors[id] ? 'Unable to check this gate.' : 'Checking this gate…';
     }
     const transition = transitions[stageId];
-    if (!transition) return 'Not reachable from here — `gw move --force` skips stages.';
-    if (transition.ok && transition.force) return 'A jump like this needs `gw move --force`.';
+    // T-0018: these refusals go to a mouse or touch user in a browser, so they
+    // name a decision -- never a command the reader cannot run. The board
+    // deliberately does not offer forward skips (P8-18): saying so plainly is
+    // the fix, not a friendlier way to say "go use the CLI".
+    if (!transition) return 'Not reachable from here — the board does not skip stages.';
+    if (transition.ok && transition.force) return 'The board does not offer this jump — forcing past gates stays a CLI decision.';
     const reasons = (transition.reasons && transition.reasons.length) ? transition.reasons : (transition.failures || []);
     return reasons.join(' · ');
+  }
+
+  // T-0063: a drop the browser refuses (dragover never allowed it) used to
+  // end in nothing at all -- the column was dimmed, the card snapped back,
+  // and the reason stayed locked in a tooltip one hover away. This shows the
+  // very same sentence dropRefusal() puts on the column tooltip and the
+  // panel's move strip, deduped per column so the stream of dragover events
+  // renders the notice once, not continuously.
+  function showDragRefusal(drag, stageId) {
+    const why = dropRefusal(drag.id, stageId);
+    if (!why || drag.refusalShown === stageId) return;
+    drag.refusalShown = stageId;
+    showBoardRefusal(drag.id, stageId, [why]);
   }
 
   // Which columns would take this card, marked before the drag reaches them
@@ -1614,10 +1963,26 @@
       if (!drag || !e.target.closest) return;
       const column = e.target.closest('.column');
       if (!column) return;
+      // T-0079: while the verdict is still in flight the board does not know
+      // whether this column would take the card -- and refusing the dragover
+      // here is doubly wrong: it paints "Checking this gate…" on a move that
+      // may be perfectly legal, and a refused dragover means the browser
+      // fires no drop event at all, so a fast flick could never drop even
+      // where the move is legal. Unknown is not a refusal: the column
+      // neither dims nor highlights, the drop stays possible, and the real
+      // verdict decides at the drop.
+      if (!State.transitions[drag.id] && !State.transitionErrors[drag.id]) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        return;
+      }
       if (!dropAllowed(drag.id, column.dataset.stage)) {
         // No preventDefault: the browser itself refuses the drop, so an
-        // invalid column cannot even accept the card optimistically.
+        // invalid column cannot even accept the card optimistically. The
+        // refusal still says why (T-0063) -- the sentence travels with the
+        // drag, not only in the column's tooltip.
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        showDragRefusal(drag, column.dataset.stage);
         return;
       }
       e.preventDefault();
@@ -1635,13 +2000,37 @@
       if (!drag || !e.target.closest) return;
       const column = e.target.closest('.column');
       if (!column) return;
-      const to = column.dataset.stage;
-      if (!dropAllowed(drag.id, to)) return;
+      // Taken synchronously and for every outcome, accepted or refused: this
+      // listener owns the drop, so the browser must never run its own.
       e.preventDefault();
-      const id = drag.id;
-      clearDropTargets();
-      onCardDrop(id, to, column);
+      decideDrop(drag, column);
     });
+
+    // T-0079: a drop can beat the lazy transitions fetch (dragstart fires the
+    // request; a touch flick completes the drop before the answer lands).
+    // The verdict is awaited before deciding, so what the board says at the
+    // end of a drag is always a real answer -- a legal move completes, an
+    // illegal one gets its actual reason. "Checking this gate…" is a status,
+    // and a status was standing in for a refusal only when nobody had looked.
+    async function decideDrop(drag, column) {
+      const to = column.dataset.stage;
+      if (!State.transitions[drag.id] && !State.transitionErrors[drag.id]) {
+        await refreshTransitions(drag.id);
+      }
+      if (!dropAllowed(drag.id, to)) {
+        // Some delivery paths can still produce a drop here (a programmatic
+        // drag, a browser that fires drop anyway): refuse it with the same
+        // sentence, not with silence.
+        showDragRefusal(drag, to);
+        return;
+      }
+      // A move the gates allowed should not leave a stale "cannot move"
+      // notice on screen; if the server refuses it anyway, showMoveRefusal
+      // raises its own notice with the fresher reason.
+      hideBoardRefusal();
+      clearDropTargets();
+      onCardDrop(drag.id, to, column);
+    }
 
     view.addEventListener('dragend', clearDropTargets);
   }
@@ -1656,7 +2045,19 @@
 
   function rowActionsHtml(it) {
     if (!State.live) return '';
-    return '<span class="row-actions">' + (it.owner
+    // T-0058: claiming finished work is meaningless, so the Table view stops
+    // offering it on a terminal item -- the same place Play and the move
+    // picker already go quiet (actionFor, moveSelectHtml). Hidden rather
+    // than refused: the offer itself is the defect, and a button whose only
+    // possible outcome is an error toast is not a control, it is a trap. The
+    // claim route on the server (lib/serve/) should refuse a terminal item
+    // at the API too; that half is not this file's to fix.
+    if (isTerminalItem(it)) {
+      return it.can_release
+        ? '<span class="row-actions"><button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button></span>'
+        : '';
+    }
+    return '<span class="row-actions">' + (it.can_release
       ? '<button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button>'
       : '<button data-claim-row="' + escapeHtml(it.id) + '" title="Claims this item for you.">Claim</button>') + '</span>';
   }
@@ -1676,7 +2077,7 @@
 
   function moveSelectHtml(it) {
     if (!State.live || isTerminalItem(it)) return '';
-    return '<select class="row-move" data-move-row="' + escapeHtml(it.id) + '" title="Move to another stage.">' + moveSelectOptionsHtml(it) + '</select>';
+    return '<select class="row-move" data-move-row="' + escapeHtml(it.id) + '" aria-label="Move ' + escapeHtml(it.id) + ' to another stage." title="Move to another stage.">' + moveSelectOptionsHtml(it) + '</select>';
   }
 
   // Called once a verdict lands (refreshTransitions), so a row does not have
@@ -1702,13 +2103,24 @@
       const cmp = String(av).localeCompare(String(bv));
       return dir === 'asc' ? cmp : -cmp;
     });
-    container.innerHTML = '<table class="gw-table"><thead><tr>' +
-      cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === key ? 'sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+    // T-0027: the table itself may be wider than a phone -- the nowrap
+    // action cells and the sorted-header labels need their width -- but the
+    // PAGE may not. The table scrolls inside its own container now, so at
+    // 390px the page stays exactly one viewport wide and the overflow
+    // belongs to the table, where it is scrollable and visible, not to the
+    // document, where it is neither.
+    container.innerHTML = '<div class="table-scroll"><table class="gw-table"><thead><tr>' +
+      cols.map(([k, label]) => '<th data-key="' + k + '" class="' + (k === 'title' ? 'cell-title' : '') + (k === key ? ' sorted' : '') + '">' + label + (k === key ? (dir === 'asc' ? ' ↑' : ' ↓') : '') + '</th>').join('') +
       (State.live ? '<th>Actions</th>' : '') +
       '</tr></thead><tbody>' +
       sorted.map((it) => '<tr data-id="' + escapeHtml(it.id) + '">' +
-        '<td class="id">' + escapeHtml(it.id) + '</td>' +
-        '<td>' + escapeHtml(it.title) + '</td>' +
+        // T-0017: a real button on the id gives the row a keyboard-activatable
+        // control without turning the <tr> itself into one (that would erase
+        // the table semantics screen readers navigate by). The click bubbles
+        // to the row and opens the drawer exactly as a mouse click on the row
+        // already did -- there is no second open path.
+        '<td class="id"><button class="id-open" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '">' + escapeHtml(it.id) + '</button></td>' +
+        '<td class="cell-title">' + escapeHtml(it.title) + '</td>' +
         '<td' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</td>' +
         '<td' + termTitle('phase', it.phase) + '>' + escapeHtml(it.phase) + '</td>' +
         '<td' + termTitle('priority', it.priority) + '>' + escapeHtml(it.priority) + '</td>' +
@@ -1718,7 +2130,7 @@
         '<td>' + escapeHtml(fmtDate(it.updated)) + '</td>' +
         (State.live ? '<td class="row-actions-cell">' + rowActionsHtml(it) + moveSelectHtml(it) + '</td>' : '') +
         '</tr>').join('') +
-      '</tbody></table>';
+      '</tbody></table></div>';
   }
 
   const STAGE_ROLES = ['initial', 'done', 'dropped', 'paused'];
@@ -1762,6 +2174,8 @@
       '<input type="checkbox" id="' + id('scope') + '" data-editor="scope"' + (requires.scope ? ' checked' : '') + '>' +
       '<label for="' + id('owner') + '">Claimed by someone</label>' +
       '<input type="checkbox" id="' + id('owner') + '" data-editor="owner"' + (requires.owner ? ' checked' : '') + '>' +
+      '<label for="' + id('children_done') + '">All direct child items finished</label>' +
+      '<input type="checkbox" id="' + id('children_done') + '" data-editor="children_done"' + (requires.children_done ? ' checked' : '') + '>' +
       '<label for="' + id('evidence_min') + '">Minimum evidence</label>' +
       '<input type="number" min="0" step="1" id="' + id('evidence_min') + '" data-editor="evidence_min" value="' +
         escapeHtml(requires.evidence_min == null ? '' : requires.evidence_min) + '" placeholder="0 = no minimum">' +
@@ -1868,6 +2282,18 @@
     container.querySelectorAll('[data-stage-remove]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.stageRemove;
+        // Removing a stage reshapes the pipeline and cannot be undone from the
+        // board, so a misclick must never be enough. The confirmation names
+        // the stage -- id and label, plus whatever is lost with it -- so the
+        // human can tell WHICH stage they are deleting before it is gone.
+        // confirm() is native, so it works on touch where there is no hover.
+        const stage = stageList(State.stages).find((s) => s.id === id);
+        const lost = [];
+        if (stage && stage.requires) lost.push('its gate rules');
+        if (terminalStageIds().has(id)) lost.push('its terminal role');
+        const detail = lost.length ? ' Deleting it loses ' + lost.join(' and ') + '.' : '';
+        const label = stage && stage.label ? stage.label : id;
+        if (!window.confirm('Remove stage "' + label + '" (' + id + ') from the board?' + detail + ' This cannot be undone.')) return;
         const doc = stagesDoc();
         doc.stages = doc.stages.filter((stage) => stage.id !== id);
         doc.extra = doc.extra.filter((stage) => stage.id !== id);
@@ -1941,13 +2367,38 @@
     { key: 'runner.run_timeout_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes before a run is stopped as overrunning.' },
     { key: 'runner.stop_timeout_s', type: 'integer', min: 0, max: 600, summary: 'Grace period between a stop request and force.' },
     { key: 'runner.paused', type: 'boolean', summary: 'Global pause. Keeps config intact while stopping new runs.' },
+    { key: 'runner.prompt_template', type: 'string', summary: 'Prompt file used to start each run, resolved from the board root.' },
+    { key: 'runner.worktree_root', type: 'string', summary: 'Where per-item worktrees are created, resolved from the board root.' },
     { key: 'policy.auto_dispatch_children', type: 'boolean', summary: 'Whether agent-created children dispatch without a human.', danger: 'Leaving this off is what stops a run filing work that starts more runs.' },
     { key: 'policy.max_children_per_item', type: 'integer', min: 0, max: 100, summary: 'Cap on children one item may create.' },
     { key: 'policy.max_depth', type: 'integer', min: 1, max: 10, summary: 'How deep agent-created work may nest.' },
+    { key: 'policy.triage_required_for', type: 'list', summary: 'Actor kinds whose created items are held for triage.' },
+    { key: 'guard.enabled', type: 'boolean', summary: 'Gate commits on the board. Off means every commit is allowed through.', danger: 'This is the only check that a commit is accounted for on the board.' },
+    { key: 'guard.mode', type: 'string', choices: ['block', 'warn'], summary: 'block refuses an unaccounted commit; warn reports it and lets it through.', danger: 'warn reports and allows the commit.' },
+    { key: 'guard.accept', type: 'list', summary: 'Evidence the guard accepts, in order: message, branch, owner.' },
+    { key: 'guard.exempt_paths', type: 'list', summary: 'Paths the guard ignores when accounting a commit.', danger: 'Every path listed here is invisible to the guard.' },
     { key: 'id_scheme', type: 'string', choices: ['phase-seq', 'seq'], summary: 'phase-seq gives P1-01; seq gives T-0001.' },
+    { key: 'brief.max_lines', type: 'integer', min: 4, max: 200, summary: 'Line budget for `gw brief`.' },
+    { key: 'check.stale_days', type: 'integer', min: 1, max: 365, summary: 'Days without movement before `gw check` reports an item stale.' },
+    { key: 'check.stale_exempt_stages', type: 'list', summary: 'Stages `gw check` never reports stale.' },
     { key: 'memory.enabled', type: 'boolean', summary: 'Recall prior context into prompts and remember completed work.' },
+    { key: 'memory.provider', type: 'string', summary: 'Which entry in memory.providers to invoke.', choicesFrom: 'memory.providers' },
+    { key: 'memory.project_id', type: 'string', summary: 'Prompt-capsule id passed to the memory provider on dispatch.' },
+    { key: 'memory.recall.on_dispatch', type: 'boolean', summary: 'Recall prior context into the prompt when a run starts.' },
+    { key: 'memory.recall.top_k', type: 'integer', min: 1, max: 50, summary: 'How many recalled memories to include.' },
+    { key: 'memory.recall.max_chars', type: 'integer', min: 1, max: 100000, summary: 'Character cap on recalled context in a prompt.' },
+    { key: 'memory.remember.on_run_ok', type: 'boolean', summary: 'Remember completed work when a run ends ok.' },
+    { key: 'memory.remember.on_close', type: 'boolean', summary: 'Remember completed work when an item reaches the closing stage.' },
+    { key: 'memory.remember.max_chars', type: 'integer', min: 1, max: 100000, summary: 'Character cap on a stored memory.' },
+    { key: 'memory.remember.extra_tags', type: 'list', summary: 'Extra tags added to every stored memory.' },
     { key: 'github.enabled', type: 'boolean', summary: 'Pull linked GitHub issues and push comments.' },
+    { key: 'github.repo', type: 'string', summary: 'owner/name of the linked GitHub repository.' },
     { key: 'github.sync_interval_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes between automatic syncs while `gw serve` runs.' },
+    { key: 'github.dispatch_label', type: 'string', summary: 'Issue label that queues the linked item for dispatch.' },
+    { key: 'github.mirror_children', type: 'boolean', summary: 'Comment agent-created children on the parent issue.' },
+    { key: 'github.comment_on_move', type: 'boolean', summary: 'Comment on the linked issue when the item moves stage.' },
+    { key: 'github.close_on', type: 'string', summary: 'Stage that closes the linked issue on the next sync.' },
+    { key: 'github.milestone_to', type: 'string', summary: 'Vocab field GitHub milestones map onto, such as phase.' },
     { key: 'vocab.phase', type: 'list', summary: 'Allowed --phase values, in order. Comma-separated.' },
     { key: 'vocab.priority', type: 'list', summary: 'Allowed --priority values, most urgent first.' },
     { key: 'vocab.type', type: 'list', summary: 'Allowed --type values.' },
@@ -2112,11 +2563,23 @@
   function openPanel(id) {
     const it = State.items.find((i) => i.id === id);
     if (!it) return;
+    const overlay = document.getElementById('gw-overlay');
+    // T-0017: a dialog that opens without moving focus leaves a keyboard user
+    // on the very control they just activated, still inside a now-obscured
+    // page. Focus moves into the drawer when it opens -- and only then: the
+    // poll's re-render of an already-open panel must never steal focus back
+    // from whoever is typing in it.
+    const opening = !overlay.classList.contains('open');
+    if (opening) State.panelReturnFocus = document.activeElement;
     State.activePanelId = id;
     State.creatingItem = false;
     if (!State.pendingEvidence[id]) State.pendingEvidence[id] = [];
     renderPanel(it);
-    document.getElementById('gw-overlay').classList.add('open');
+    overlay.classList.add('open');
+    if (opening) {
+      const closeBtn = panelCloseButton();
+      if (closeBtn) closeBtn.focus();
+    }
     if (State.live) {
       refreshTransitions(id);
       const run = activeRunFor(id);
@@ -2124,41 +2587,74 @@
     }
   }
 
+  // The drawer's close button is the focus target on open; it exists in both
+  // the item panel and the create panel.
+  function panelCloseButton() {
+    return document.querySelector('#gw-panel #panel-close');
+  }
+
   function closePanel() {
     State.activePanelId = null;
     State.creatingItem = false;
+    State.panelBaseline = null;
     document.getElementById('gw-overlay').classList.remove('open');
+    // Hiding the overlay alone leaves a full, focusable drawer in the DOM.
+    // That made Escape and native Enter on Close appear to do nothing to
+    // browser users and to assistive technology. A closed drawer is empty.
+    document.getElementById('gw-panel').innerHTML = '';
+    const returnFocus = State.panelReturnFocus;
+    State.panelReturnFocus = null;
+    // The control that opened the drawer may have been re-rendered away by
+    // the poll in the meantime; only restore focus if it still exists.
+    if (returnFocus && typeof returnFocus.focus === 'function' && document.contains(returnFocus)) returnFocus.focus();
   }
 
   function showPanelError(msg) {
+    const panelId = State.creatingItem ? null : State.activePanelId;
+    State.panelError = { panelId, message: String(msg) };
     const el = document.getElementById('panel-error');
-    if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '</div>';
+    if (el) el.innerHTML = '<div class="refusal">' + escapeHtml(msg) + '<button class="close-btn" id="panel-error-dismiss" aria-label="Dismiss">&times;</button></div>';
+    const dismiss = document.getElementById('panel-error-dismiss');
+    if (dismiss) dismiss.addEventListener('click', () => {
+      State.panelError = null;
+      const current = document.getElementById('panel-error');
+      if (current) current.innerHTML = '';
+    });
   }
 
-  async function refreshTransitions(id) {
-    if (State.transitionLoading[id]) return;
-    State.transitionLoading[id] = true;
+  function refreshTransitions(id) {
+    // T-0079: a caller that arrives mid-flight (a drop beating the fetch that
+    // dragstart started) has to wait on the SAME verdict, not be told "still
+    // loading" -- the old early return left the awaiting drop with no way to
+    // ever see the answer land.
+    if (State.transitionLoading[id]) return State.transitionLoading[id];
     delete State.transitionErrors[id];
-    try {
-      const res = await fetch('/api/items/' + encodeURIComponent(id) + '/transitions');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      State.transitions[id] = await res.json();
-    } catch (error) {
-      State.transitionErrors[id] = error.message || 'request failed';
-    } finally {
-      State.transitionLoading[id] = false;
-      if (State.activePanelId === id) {
-        const current = State.items.find((item) => item.id === id);
-        if (current) renderPanel(current);
+    const run = (async () => {
+      try {
+        const res = await fetch('/api/items/' + encodeURIComponent(id) + '/transitions');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        State.transitions[id] = await res.json();
+      } catch (error) {
+        State.transitionErrors[id] = error.message || 'request failed';
+      } finally {
+        delete State.transitionLoading[id];
+        if (State.activePanelId === id) {
+          const current = State.items.find((item) => item.id === id);
+          // A half-typed panel is not redrawn from under its typist, even for
+          // good news like a verdict landing -- same contract as the editors.
+          if (current && !panelIsDirty()) renderPanel(current);
+        }
+        // A drag that started before the verdicts landed gets its columns marked
+        // the moment they do, rather than staying uniformly invalid.
+        if (State.drag && State.drag.id === id) markDropTargets();
+        // Same idea for the table's move picker (P8-14): its options are
+        // disabled until a verdict exists, so the moment one lands they are
+        // refreshed in place rather than waiting for the next 2-second poll.
+        if (State.view === 'table') updateTableRowMove(id);
       }
-      // A drag that started before the verdicts landed gets its columns marked
-      // the moment they do, rather than staying uniformly invalid.
-      if (State.drag && State.drag.id === id) markDropTargets();
-      // Same idea for the table's move picker (P8-14): its options are
-      // disabled until a verdict exists, so the moment one lands they are
-      // refreshed in place rather than waiting for the next 2-second poll.
-      if (State.view === 'table') updateTableRowMove(id);
-    }
+    })();
+    State.transitionLoading[id] = run;
+    return run;
   }
 
   async function refreshRunLog(id, run) {
@@ -2177,13 +2673,72 @@
       State.runLogLoading[key] = false;
       if (State.activePanelId === id) {
         const current = State.items.find((item) => item.id === id);
-        if (current) renderPanel(current);
+        if (current && !panelIsDirty()) renderPanel(current);
       }
     }
   }
 
+  // The item panel's editable controls, read as { key: value }. A field input
+  // is keyed by its data-field, the note and evidence boxes by their id.
+  function capturePanelBaseline() {
+    const panel = document.getElementById('gw-panel');
+    const values = {};
+    panel.querySelectorAll('input[data-field], #note-input, #evidence-input').forEach((el) => {
+      values[el.dataset.field || el.id] = el.value;
+    });
+    return values;
+  }
+
+  // Whether two baseline snapshots disagree on any control. A missing key and
+  // an empty string count as the same value: a control that only exists in one
+  // snapshot (the evidence box is live-only) is not by itself a difference.
+  function valuesDiverge(base, now) {
+    const keys = new Set(Object.keys(now).concat(Object.keys(base)));
+    for (const key of keys) {
+      if ((now[key] || '') !== (base[key] || '')) return true;
+    }
+    return false;
+  }
+
+  // "Dirty" for the item panel means: some editable control in it now holds a
+  // different value than the render that created it put there. Typing makes
+  // the panel dirty; undoing the typing makes it clean again; every
+  // renderPanel re-baselines. The poll consults this for the same reason it
+  // consults State.formDirty for the editors -- redrawing over a half-typed
+  // note throws the words away -- but a comparison, unlike a sticky flag,
+  // also unlatches itself the moment the typing is undone or saved.
+  function panelIsDirty() {
+    if (State.panelBaseline == null) return false;
+    return valuesDiverge(State.panelBaseline, capturePanelBaseline());
+  }
+
+  // T-0057: the panel spelled fields the way items.jsonl does -- "deps",
+  // "created_by" -- while every other surface on the board spells them the
+  // way a reader reads. One table answers for both of the panel's field
+  // lists; a field missing here falls back to its key, as before.
+  const FIELD_LABELS = {
+    title: 'Title', scope: 'Scope', priority: 'Priority', type: 'Type', phase: 'Phase',
+    deps: 'Dependencies', refs: 'Refs', id: 'ID', stage: 'Stage', flag: 'Flag',
+    owner: 'Owner', parent: 'Parent', created_by: 'Created by', gh: 'GitHub',
+    created: 'Created', updated: 'Updated',
+  };
+  function fieldLabel(f) {
+    return Object.prototype.hasOwnProperty.call(FIELD_LABELS, f) ? FIELD_LABELS[f] : f;
+  }
+
   function renderPanel(it) {
     const panel = document.getElementById('gw-panel');
+    // A re-render replaces every element in the drawer, which would drop the
+    // keyboard focus on the floor: someone parked on the close button lands
+    // on <body> the moment the poll (or a transition verdict) redraws the
+    // panel under them. Remember WHICH control had focus -- by id, or by
+    // data-field for the editable item fields -- and hand focus to its
+    // replacement. Elements with neither lose focus, as before.
+    const active = panel.contains(document.activeElement) ? document.activeElement : null;
+    const focusSel = active
+      ? (active.id ? '#' + CSS.escape(active.id)
+        : (active.dataset && active.dataset.field ? 'input[data-field="' + CSS.escape(active.dataset.field) + '"]' : null))
+      : null;
     const itemEvents = State.events.filter((e) => e.item === it.id).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
 
     const pendingEv = State.pendingEvidence[it.id] || [];
@@ -2195,6 +2750,9 @@
       : '<div class="readonly-banner">read-only snapshot' +
         (target ? ' &middot; to advance this item run: <code>gw move ' + escapeHtml(it.id) + ' ' + escapeHtml(target) + ' --evidence &lt;commit&gt;</code>' : '') +
         '</div>';
+    const panelError = State.panelError && State.panelError.panelId === it.id
+      ? '<div class="refusal">' + escapeHtml(State.panelError.message) + '<button class="close-btn" id="panel-error-dismiss" aria-label="Dismiss">&times;</button></div>'
+      : '';
 
     const dispatched = isDispatched(it.id);
     const panelAction = actionFor(it);
@@ -2223,6 +2781,13 @@
     const triageHtml = (State.live && it.flag === 'needs-triage')
       ? '<div class="panel-actions triage"><button id="panel-triage-approve" title="Clears the hold and makes this item schedulable again.">Approve</button> ' +
         '<button id="panel-triage-drop" title="Moves this item to the dropped stage.">Drop</button></div>'
+      : '';
+
+    // `can_release` is calculated by /api/state with lib/owner.js's sameOwner
+    // rule. Never offer the control to a non-owner -- release now correctly
+    // refuses them server-side, and a button guaranteed to fail is a trap.
+    const releaseHtml = (State.live && it.can_release)
+      ? '<div class="panel-actions"><button id="panel-release" title="Release ownership of this item.">Release</button></div>'
       : '';
 
     const resumeHtml = (State.live && it.flag === 'paused')
@@ -2259,14 +2824,19 @@
           ? 'unable to check transition rules'
           : 'checking transition rules…';
       } else if (!transition) {
-        note = 'use `gw move --force` to skip stages';
+        // T-0018: the button is off, and the reason is a fact about the board
+        // -- it never skips stages -- not an instruction to run a command the
+        // browser cannot run. The same holds for the forced-skip branches
+        // below: where the board does not offer an action, it says so instead
+        // of pointing at the CLI.
+        note = 'Not reachable from here — the board does not skip stages; forcing a jump is a CLI decision.';
       } else if (transition.force && transition.ok && backward) {
         disabled = false;
         note = 'Backward move — this skips the gates ahead of ' + s.label + '.';
       } else if (transition.force && transition.ok) {
-        note = 'use `gw move --force` to skip stages';
+        note = 'The board does not skip gates — a forced skip is a CLI decision.';
       } else if (!transition.ok) {
-        if (transition.force && !backward) note = 'and a jump like this also needs `gw move --force`';
+        if (transition.force && !backward) note = 'and a jump across stages is never offered here';
         else if (backward) note = 'Backward move — not met yet.';
         heading = 'Not met yet:';
         machine = transition.failures || [];
@@ -2288,14 +2858,24 @@
     }).join('');
 
     const evidenceHtml = allEvidence.length
-      ? allEvidence.map((e, idx) => '<li class="evidence-chip">' + escapeHtml(e) + (idx >= (it.evidence || []).length ? ' <span class="meta">(pending &middot; sent with the next stage move)</span>' : '') + '</li>').join('')
+      ? allEvidence.map((e, idx) => {
+          // T-0062: render the entry's text, never the entry itself, and put
+          // the gate it paid for next to it -- that attribution is why the
+          // shape grew a stage field in the first place.
+          const gate = evidenceStage(e)
+            ? ' <span class="tag evidence-gate" title="Evidence supplied for the move to ' + escapeHtml(stageLabel(evidenceStage(e))) + ' (' + escapeHtml(evidenceStage(e)) + ')">'
+              + escapeHtml(stageLabel(evidenceStage(e))) + '</span>'
+            : '';
+          return '<li class="evidence-chip">' + escapeHtml(evidenceText(e)) + gate +
+            (idx >= (it.evidence || []).length ? ' <span class="meta">(pending &middot; sent with the next stage move)</span>' : '') + '</li>';
+        }).join('')
       : '<li class="meta">none</li>';
     const evidenceEditor = State.live
-      ? '<div class="evidence-add"><input type="text" id="evidence-input" placeholder="commit SHA, test path, PR/CI URL"><button id="evidence-add-btn">add evidence</button></div>'
+      ? '<div class="evidence-add"><label class="sr-only" for="evidence-input">Add evidence</label><input type="text" id="evidence-input" name="evidence" placeholder="commit SHA, test path, PR/CI URL"><button id="evidence-add-btn">add evidence</button></div>'
       : '';
 
     const notesEditor = State.live
-      ? '<div class="note-add"><textarea id="note-input" rows="2" placeholder="append a note"></textarea><button id="note-add-btn">add note</button></div>'
+      ? '<div class="note-add"><label class="sr-only" for="note-input">Add a note</label><textarea id="note-input" name="note" rows="2" placeholder="append a note"></textarea><button id="note-add-btn">add note</button></div>'
       : '';
 
     const editableFields = ['title', 'scope', 'priority', 'type', 'phase', 'deps', 'refs'];
@@ -2308,12 +2888,16 @@
       // item's code means, right where the item shows it.
       const glossed = termTitle(GLOSSARY_FIELDS.indexOf(f) === -1 ? null : f, value);
       if (!State.live) {
-        return '<dt>' + f + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '"' + glossed + '>' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
+        return '<dt>' + fieldLabel(f) + '</dt><dd class="' + (f === 'deps' || f === 'refs' ? 'mono' : '') + '"' + glossed + '>' + escapeHtml(value === '' ? '(none)' : value) + '</dd>';
       }
       const lockedNote = linked && ghOwned.has(f)
         ? ' <span class="meta">(GitHub-owned on this linked item &mdash; edits are refused; edit the issue instead)</span>'
         : '';
-      return '<dt>' + f + '</dt><dd><input type="text" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
+      // T-0017: the input carries an id and name, and the dt's text becomes a
+      // real <label for> -- before this the field had neither a programmatic
+      // name nor an associated label, so a screen reader announced it as
+      // "edit text" with nothing attached.
+      return '<dt><label for="panel-field-' + f + '">' + fieldLabel(f) + '</label></dt><dd><input type="text" id="panel-field-' + f + '" name="' + f + '" data-field="' + f + '" value="' + escapeHtml(value) + '"' + (f === 'title' ? ' maxlength="120"' : '') + glossed + '>' + lockedNote +
         '<div class="field-refusal" id="field-fail-' + f + '"></div></dd>';
     }).join('');
     const saveBtn = State.live ? '<button id="save-fields-btn">save fields</button>' : '';
@@ -2323,17 +2907,17 @@
       let v = it[f];
       if (v && typeof v === 'object') v = JSON.stringify(v);
       else if (v == null || v === '') v = '(none)';
-      return '<dt>' + f + '</dt><dd class="' + (f === 'id' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
+      return '<dt>' + fieldLabel(f) + '</dt><dd class="' + (f === 'id' ? 'mono' : '') + '">' + escapeHtml(v) + '</dd>';
     }).join('');
 
     const eventsHtml = itemEvents.length
       ? itemEvents.map((e) => '<div class="event-line"><time>' + escapeHtml(fmtDate(e.ts)) + '</time><span>' + escapeHtml(e.type) + (e.from ? ' ' + escapeHtml(e.from) + '→' + escapeHtml(e.to) : '') + ' by ' + escapeHtml(e.by) + '</span></div>').join('')
       : '<p class="meta">no events recorded</p>';
 
-    panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
+    panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
       '<p>' + escapeHtml(it.title) + '</p>' +
-      '<div id="panel-error"></div>' +
-      banner + triageHtml + resumeHtml + playStop + logHtml +
+      '<div id="panel-error">' + panelError + '</div>' +
+      banner + triageHtml + resumeHtml + releaseHtml + playStop + logHtml +
       '<h3>Stage</h3><div class="stage-buttons">' + stageButtonsHtml + '</div>' +
       '<h3>Evidence</h3><ul class="evidence-list">' + evidenceHtml + '</ul>' + evidenceEditor +
       '<h3>Fields</h3><dl>' + fieldRows + '</dl>' + saveBtn +
@@ -2343,10 +2927,24 @@
 
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
     wirePanelActions(it);
+    if (focusSel) {
+      const again = panel.querySelector(focusSel);
+      if (again) again.focus();
+    }
+    // What the panel shows right now is the baseline the poll compares
+    // against; anything the human types from here on makes it dirty.
+    State.panelBaseline = capturePanelBaseline();
   }
 
   function wirePanelActions(it) {
     const panel = document.getElementById('gw-panel');
+
+    const dismissError = panel.querySelector('#panel-error-dismiss');
+    if (dismissError) dismissError.addEventListener('click', () => {
+      State.panelError = null;
+      const error = panel.querySelector('#panel-error');
+      if (error) error.innerHTML = '';
+    });
 
     panel.querySelectorAll('[data-move]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -2371,6 +2969,8 @@
     if (approveBtn) approveBtn.addEventListener('click', () => onTriageClick(it.id, 'approve', approveBtn));
     const dropBtn = panel.querySelector('#panel-triage-drop');
     if (dropBtn) dropBtn.addEventListener('click', () => onTriageClick(it.id, 'drop', dropBtn));
+    const releaseBtn = panel.querySelector('#panel-release');
+    if (releaseBtn) releaseBtn.addEventListener('click', () => onReleaseClick(it.id, releaseBtn));
 
     const evBtn = panel.querySelector('#evidence-add-btn');
     if (evBtn) evBtn.addEventListener('click', () => {
@@ -2598,6 +3198,12 @@
     Inflight.delete(key);
     btn.disabled = false;
     if (result.ok) {
+      // The values just saved are now the server's values, but the baseline
+      // still holds what the last render put in the inputs. Re-baseline here
+      // or panelIsDirty() would keep reporting a divergence that no longer
+      // exists -- and a guard that never clears would block the poll's
+      // re-render forever.
+      State.panelBaseline = capturePanelBaseline();
       await refreshNow();
     } else if (result.status === 409) {
       const failures = (result.data && result.data.failures && result.data.failures.length)
@@ -2618,15 +3224,44 @@
     const panel = document.getElementById('gw-panel');
     const overlay = document.getElementById('gw-overlay');
     State.activePanelId = null;
+    // T-0017: same focus contract as openPanel -- in on open, back on close.
+    const opening = !overlay.classList.contains('open');
+    if (opening) State.panelReturnFocus = document.activeElement;
+    // A snapshot has no server to POST /api/items to, and every other write
+    // control on the page degrades to a read-only notice naming the command
+    // to run instead -- the create form must never be the one control that
+    // still renders live and dies on submit with a raw "Failed to fetch".
+    // Reaching this branch needs a regression in the f-new hiding (or a
+    // caller that bypasses it); the guard is what keeps the form itself from
+    // ever lying about what it can do.
+    if (!State.live) {
+      State.creatingItem = false;
+      panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
+        '<div class="readonly-banner">read-only snapshot &middot; to add an item run: <code>gw add "&lt;title&gt;"</code>, then <code>gw open</code> again to refresh this snapshot.</div>';
+      panel.querySelector('#panel-close').addEventListener('click', closePanel);
+      overlay.classList.add('open');
+      const closeBtn = panelCloseButton();
+      if (closeBtn) closeBtn.focus();
+      return;
+    }
     State.creatingItem = true;
+    const panelError = State.panelError && State.panelError.panelId === null
+      ? '<div class="refusal">' + escapeHtml(State.panelError.message) + '<button class="close-btn" id="panel-error-dismiss" aria-label="Dismiss">&times;</button></div>'
+      : '';
     const vocab = (State.config && State.config.vocab) || {};
     function options(list) {
       return '<option value="">(none)</option>' + (list || []).map((v) => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
     }
-    panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close">&times;</button></div>' +
-      '<div id="panel-error"></div>' +
+    panel.innerHTML = '<div class="panel-head"><h2>New item</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
+      '<div id="panel-error">' + panelError + '</div>' +
       '<form id="create-form" class="create-form">' +
       '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
+      // T-0081: leaving all three vocab fields at "(none)" is a real choice
+      // with a real cost -- the server holds the item for triage and nobody
+      // (including its creator) can approve the hold away. The dialog used
+      // to let that happen silently; now it says so before the submit, not
+      // after the surprise. The holding itself is deliberate and stays.
+      '<div class="create-hold-note">An item created with no phase, type or priority is held for triage: it stays off the scheduler until someone other than you approves it. Classify it here to skip the hold.</div>' +
       '<label>Phase<select name="phase">' + options(vocab.phase) + '</select></label>' +
       '<label>Type<select name="type">' + options(vocab.type) + '</select></label>' +
       '<label>Priority<select name="priority">' + options(vocab.priority) + '</select></label>' +
@@ -2635,8 +3270,16 @@
       '<button type="submit">create</button>' +
       '</form>';
     panel.querySelector('#panel-close').addEventListener('click', closePanel);
+    const dismissError = panel.querySelector('#panel-error-dismiss');
+    if (dismissError) dismissError.addEventListener('click', () => {
+      State.panelError = null;
+      const error = panel.querySelector('#panel-error');
+      if (error) error.innerHTML = '';
+    });
     panel.querySelector('#create-form').addEventListener('submit', onCreateSubmit);
     overlay.classList.add('open');
+    const titleInput = panel.querySelector('#create-form input[name="title"]');
+    if (titleInput) titleInput.focus();
   }
 
   async function onCreateSubmit(e) {
@@ -2732,7 +3375,13 @@
         const changed = beforeEditable !== JSON.stringify([State.stages, State.config, State.admin]);
         if (changed && !State.formDirty) renderView();
       } else renderView();
-      if (State.activePanelId) openPanel(State.activePanelId);
+      // The item panel refreshes with every poll only while nothing in it is
+      // half-typed -- the same contract the editors above get from
+      // State.formDirty. A dirty panel keeps its typed text through the poll;
+      // saving, reverting the typing or closing the panel makes it clean, and
+      // the next poll takes over again. openPanel always renders, so opening
+      // or switching to another item is never blocked by this.
+      if (State.activePanelId && !panelIsDirty()) openPanel(State.activePanelId);
     } catch (error) {
       State.liveError = error.message || 'server unavailable'; State.pollingDelay = Math.min(State.pollingDelay * 2, 30000); renderHeader();
     }
@@ -2774,6 +3423,18 @@
         renderView();
         return;
       }
+      // T-0054: the Overview section expander -- one click reveals the rest
+      // of a "what next" list, one more folds it back. Stopped from bubbling
+      // for the same reason the toggle above is.
+      const moreBtn = e.target.closest('[data-brief-more]');
+      if (moreBtn) {
+        e.stopPropagation();
+        const section = moreBtn.dataset.briefMore;
+        if (State.briefExpanded.has(section)) State.briefExpanded.delete(section);
+        else State.briefExpanded.add(section);
+        renderView();
+        return;
+      }
       const playBtn = e.target.closest('[data-play]');
       if (playBtn) { e.stopPropagation(); onDispatchClick(playBtn.dataset.play, 'dispatch', playBtn); return; }
       const stopBtn = e.target.closest('[data-stop]');
@@ -2793,6 +3454,19 @@
       if (e.target.closest('select.row-move')) return;
       const card = e.target.closest('[data-id]');
       if (card) openPanel(card.dataset.id);
+    });
+    // T-0017: cards and brief rows are buttons in the accessibility tree, so
+    // Enter and Space must activate them the way a native button does. The
+    // check that the focused element IS the control (not a descendant) keeps
+    // a Space on the card's own Play/Stop button from ALSO opening the
+    // drawer -- those are real buttons with their own native click.
+    document.getElementById('gw-view').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (!e.target.closest) return;
+      const control = e.target.closest('[data-id][role="button"]');
+      if (!control || control !== e.target) return;
+      e.preventDefault();
+      openPanel(control.dataset.id);
     });
     document.getElementById('gw-view').addEventListener('click', (e) => {
       const th = e.target.closest('th[data-key]');
@@ -2866,7 +3540,14 @@
     renderHeader();
     wireStatic();
     renderView();
-    if (location.protocol.indexOf('http') === 0) {
+    // Live mode is earned by a server answering /api/state, not by the page
+    // being served over http. `gw serve` serves this shell with no injected
+    // blocks, so its pages get here through fromServer; a snapshot written by
+    // `gw open` carries its own data, and serving that file through any other
+    // static server must leave it exactly what it is -- a snapshot. Forcing
+    // it live was what showed a "live" pill, a clickable "+ new item" and a
+    // create form whose submit died with a raw "Failed to fetch".
+    if (loaded.fromServer) {
       State.live = true; State.lastLiveUpdate = Date.now(); renderHeader();
       schedulePoll(2000);
       window.setInterval(() => { if (State.live) { renderHeader(); tickRunAges(); } }, 1000);

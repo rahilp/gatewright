@@ -34,6 +34,64 @@ test('templates/agents-block.md is a byte-exact copy of the AGENTS.md block in s
   assert.match(readTemplate('agents-block.md'), new RegExp(`${END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n$`));
 });
 
+// T-0031 — the block used to say plan steps go on the board as items AND
+// that "your own plan steps" are notes, so an agent following it literally
+// could not tell where its plan belongs. One statement, stated once.
+test('the agent block states the plan-steps rule once and never contradicts itself', () => {
+  const block = readTemplate('agents-block.md');
+  assert.ok(!block.includes('Your own plan steps'), 'the old contradiction must be gone');
+  assert.equal((block.match(/put the plan on the board/g) ?? []).length, 1, 'the plan-steps rule is stated exactly once');
+  assert.match(block, /Plan steps are items, never notes/);
+  const noteLine = block.split('\n').find((line) => line.includes('`gw note'));
+  assert.ok(noteLine, 'gw note is still documented');
+  assert.match(noteLine, /progress remarks/, 'gw note is described only as progress remarks, never as a home for plan steps');
+});
+
+// T-0030 — the block is the only instruction a real agent gets, so it must
+// say how to be recorded as itself.
+test('the agent block documents the agent actor convention', () => {
+  const block = readTemplate('agents-block.md');
+  assert.match(block, /GW_ACTOR=agent:<name>/);
+  assert.match(block, /--by agent:<name>/);
+});
+
+// T-0070 — a reviewer following the block guessed `in_progress` and burned a
+// move on it: the block never named the stages. It must list the DEFAULT
+// pipeline, say a board can define its own, and point at the command that
+// names the real, legal moves — the list is a description, never gospel.
+test('the agent block names the default pipeline and points at the real one', () => {
+  const block = readTemplate('agents-block.md');
+  assert.match(block, /The DEFAULT pipeline is backlog → building → built → in_review → reviewed → merged → verified/);
+  assert.match(block, /a board may define its own/);
+  assert.match(block, /`gw next <id>` names the real, legal moves/);
+});
+
+// T-0070 — how a board comes to exist was left to `--help`; the block is the
+// only instruction a fresh agent reads.
+test('the agent block says how a board comes to exist', () => {
+  assert.match(readTemplate('agents-block.md'), /No board yet\? `gw init` creates one\./);
+});
+
+// T-0065 — five agents in one night wrote plan items into the live board of
+// the project they were fixing, because "put the plan on the board" gave them
+// no way out. The block must name the exception and the concrete remedy
+// without hedging the default.
+test('the agent block carves out boards you must not write to, with a concrete scratch-board recipe', () => {
+  const block = readTemplate('agents-block.md');
+  assert.match(block, /working on gatewright itself/);
+  assert.match(block, /been told not to write to a particular board/);
+  assert.match(block, /do not write to it/);
+  assert.match(block, /mktemp -d/);
+  assert.match(block, /`cd` does not persist between your tool calls/);
+  assert.match(block, /keep the plan in your reply/);
+});
+
+// T-0066 — the brief drops finished work from its open counts, so the block
+// must say where it went.
+test('the agent block names the command that lists finished work', () => {
+  assert.match(readTemplate('agents-block.md'), /`gw list --stage verified` lists it\./);
+});
+
 test('stages.json parses: pipeline order, auto gates, terminal and side states match the spec default', () => {
   const parsed = JSON.parse(readTemplate('stages.json'));
   assert.deepEqual(parsed.stages.map((s) => s.id), ['backlog', 'building', 'built', 'in_review', 'reviewed', 'merged', 'verified']);
@@ -41,6 +99,7 @@ test('stages.json parses: pipeline order, auto gates, terminal and side states m
   const auto = Object.fromEntries(parsed.stages.map((s) => [s.id, s.auto === true]));
   assert.deepEqual(auto, { backlog: false, building: true, built: true, in_review: true, reviewed: false, merged: false, verified: false });
   assert.equal(parsed.stages.find((s) => s.id === 'in_review').exit, 'PR opened and reviewer assigned.');
+  assert.equal(parsed.stages.find((s) => s.id === 'verified').requires.children_done, true, 'the default done stage cannot finish before direct children');
   assert.deepEqual(parsed.terminal, ['verified', 'dropped']);
   assert.deepEqual(parsed.extra.map((s) => s.id), ['dropped', 'paused']);
 });

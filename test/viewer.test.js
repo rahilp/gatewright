@@ -118,6 +118,7 @@ test('evidenceGateUnmet fires only when the item\'s own next stage is short on e
   };
   const State = { stages };
   const call = (it) => new Function('State', 'it', `
+    ${liftHelper('evidenceText')}
     ${liftHelper('stageList')}
     ${liftHelper('nextStageId')}
     ${liftHelper('evidenceGateUnmet')}
@@ -126,8 +127,10 @@ test('evidenceGateUnmet fires only when the item\'s own next stage is short on e
 
   assert.equal(call({ stage: 'backlog', evidence: [] }), true, 'built requires 2 entries and there are none yet');
   assert.equal(call({ stage: 'backlog', evidence: ['a', 'b'] }), false, 'enough entries for the next stage\'s minimum');
+  assert.equal(call({ stage: 'backlog', evidence: [{ text: 'a', stage: 'backlog' }, { text: 'b', stage: 'backlog' }] }), false, 'T-0062: object entries count by their text, not by their String()');
   assert.equal(call({ stage: 'built', evidence: ['not a pr link'] }), true, 'reviewed requires a PR link and none matches');
   assert.equal(call({ stage: 'built', evidence: ['https://github.com/x/y/pull/1'] }), false, 'a matching entry clears the gate');
+  assert.equal(call({ stage: 'built', evidence: [{ text: 'https://github.com/x/y/pull/1', stage: 'built' }] }), false, 'an object entry whose TEXT matches clears the gate -- String(entry) never reaches the matcher');
   assert.equal(call({ stage: 'reviewed', evidence: [] }), false, 'merged has no requires at all');
   assert.equal(call({ stage: 'nope', evidence: [] }), false, 'a stage outside the pipeline has no next gate either');
 });
@@ -225,7 +228,13 @@ test('a viewer choicesFrom path resolves to the same choices the CLI computes', 
       checked += 1;
     }
   }
-  assert.equal(checked, configs.length, 'expected exactly one derived-choice setting to exercise');
+  // Exact and derived from the table itself: every settings entry that
+  // derives choices must have been checked against every config shape, so a
+  // second choicesFrom setting added later is exercised here automatically
+  // rather than silently dropping out of coverage.
+  const derived = SETTINGS.filter((setting) => setting.choicesFrom);
+  assert.ok(derived.length >= 1, 'expected at least one derived-choice setting to exercise');
+  assert.equal(checked, derived.length * configs.length, 'every derived-choice setting was checked against every config shape');
 });
 
 test('the gate builder edits exactly the rule keys lib/rules.js reads', async () => {
@@ -243,11 +252,11 @@ test('the gate builder edits exactly the rule keys lib/rules.js reads', async ()
 test('buildRequires omits inert rules, coerces the count, and keeps keys it does not edit', () => {
   const buildRequires = new Function('values', 'existing',
     `${liftConst('RULE_KEYS')}\n${liftHelper('buildRequires')}\nreturn buildRequires(values, existing);`);
-  const empty = { scope: false, owner: false, evidence_min: '', evidence_match: '', deps_at_least: '' };
+  const empty = { scope: false, owner: false, children_done: false, evidence_min: '', evidence_match: '', deps_at_least: '' };
 
   assert.equal(buildRequires(empty, undefined), null, 'a gate that checks nothing is no requires at all');
   assert.equal(buildRequires({ ...empty, evidence_min: '0' }, undefined), null, 'a minimum of zero is not a rule');
-  assert.deepEqual(buildRequires({ ...empty, scope: true, owner: true }, undefined), { scope: true, owner: true });
+  assert.deepEqual(buildRequires({ ...empty, scope: true, owner: true, children_done: true }, undefined), { scope: true, owner: true, children_done: true });
   assert.deepEqual(buildRequires({ ...empty, evidence_min: '2' }, undefined), { evidence_min: 2 });
   assert.equal(buildRequires({ ...empty, evidence_min: '1.5' }, undefined), null, 'a count it cannot use is not written as a rule');
   assert.deepEqual(buildRequires({ ...empty, evidence_match: '  ^https://x  ' }, undefined), { evidence_match: '^https://x' });
@@ -485,6 +494,74 @@ test('the poll loop cannot wipe a half-filled stages or settings form', () => {
   assert.match(SHELL, /State\.admin = data\.admin \|\| \{ allowed: false \};/, 'every poll re-reads whether this browser may still change the rules');
 });
 
+// T-0014: the remove button in Stages & rules deleted a stage on one
+// unconfirmed click. The viewer had zero confirm() calls anywhere, so the
+// misclick case -- an EMPTY stage, which the server happily deletes -- had no
+// guard at all, while the case that was guarded (a stage still holding items)
+// is the one the server refuses anyway.
+test('removing a stage asks for confirmation and names what is lost', () => {
+  const handler = SHELL.match(/\[data-stage-remove\][\s\S]*?saveStages\(doc, 'stage-row-error-' \+ id\);/);
+  assert.ok(handler, 'the stage remove handler exists');
+  const confirmAt = handler[0].indexOf('window.confirm');
+  const docAt = handler[0].indexOf('const doc = stagesDoc()');
+  assert.notEqual(confirmAt, -1, 'removal must pass through window.confirm() -- native, so it works on touch');
+  assert.notEqual(docAt, -1);
+  assert.ok(confirmAt < docAt, 'the confirmation must be answered before the stages document is built or saved');
+  assert.match(handler[0], /stage\.label/, 'the confirmation names the stage label');
+  assert.match(handler[0], /' \+ id \+ '\)/, 'the confirmation names the stage id');
+  assert.match(handler[0], /its gate rules/, 'a stage carrying a gate says the gate is lost');
+  assert.match(handler[0], /its terminal role/, 'a terminal stage says the role is lost');
+  assert.match(handler[0], /cannot be undone/, 'the confirmation says there is no undo');
+});
+
+// T-0015: the poll re-rendered the open item panel every two seconds, wiping
+// whatever a human was typing into the note box or a field. The editors had a
+// dirty guard (State.formDirty); the panel -- where typing actually happens
+// -- did not. "Dirty" for the panel is decided live: a control differs from
+// what the render that created it put there. Unlike a sticky flag it
+// unlatches itself when the typing is undone, and every render re-baselines
+// it, so a saved panel is clean again and the poll takes over.
+test('panel dirty means a control differs from what its render put there', () => {
+  const valuesDiverge = new Function('base', 'now', `${liftHelper('valuesDiverge')}\nreturn valuesDiverge(base, now);`);
+
+  assert.equal(valuesDiverge({ title: 'a', 'note-input': '' }, { title: 'a', 'note-input': '' }), false, 'identical snapshots are not dirty');
+  assert.equal(valuesDiverge({ title: 'a' }, { title: 'b' }), true, 'typed text diverges');
+  assert.equal(valuesDiverge({ title: 'a' }, { title: 'a', 'note-input': 'x' }), true, 'typing into a control that was empty at baseline diverges');
+  assert.equal(valuesDiverge({ title: 'a', 'note-input': 'x' }, { title: 'a', 'note-input': 'x' }), false);
+  assert.equal(valuesDiverge({ title: 'a' }, { title: '' }), true, 'clearing a value is a divergence, not a match');
+  assert.equal(valuesDiverge({ 'evidence-input': '' }, {}), false, 'a control absent from both sides in practice (missing vs empty) is not a difference');
+});
+
+test('the poll cannot wipe a half-typed item panel', () => {
+  assert.match(
+    SHELL,
+    /if \(State\.activePanelId && !panelIsDirty\(\)\) openPanel\(State\.activePanelId\);/,
+    'the poll redraws the open panel only while nothing in it is half-typed',
+  );
+  // T-0079: refreshTransitions returns its in-flight promise, so a caller
+  // arriving mid-fetch (a drop beating dragstart's request) waits on the SAME
+  // verdict instead of being told the answer is still loading.
+  const refreshTransitions = SHELL.match(/function refreshTransitions\([\s\S]*?\n  \}/);
+  assert.ok(refreshTransitions);
+  assert.match(refreshTransitions[0], /!panelIsDirty\(\)/, 'a transition verdict landing must not wipe typing either');
+  assert.match(refreshTransitions[0], /return State\.transitionLoading\[id\];/, 'an in-flight fetch is awaited, never silently dropped');
+  const refreshRunLog = SHELL.match(/async function refreshRunLog\([\s\S]*?\n  \}/);
+  assert.ok(refreshRunLog);
+  assert.match(refreshRunLog[0], /!panelIsDirty\(\)/, 'a run log landing must not wipe typing either');
+  const openPanel = SHELL.match(/function openPanel\(id\) \{[\s\S]*?\n  \}/);
+  assert.ok(openPanel);
+  assert.match(openPanel[0], /renderPanel\(it\);/, 'opening or switching items always renders -- the dirty guard only ever defers the poll, never a deliberate switch');
+  const renderPanel = SHELL.match(/function renderPanel\(it\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderPanel);
+  assert.match(renderPanel[0], /State\.panelBaseline = capturePanelBaseline\(\);/, 'every render re-baselines, so saving or reverting unlatches the guard and no panel can go stale forever');
+  const closePanel = SHELL.match(/function closePanel\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(closePanel);
+  assert.match(closePanel[0], /State\.panelBaseline = null;/, 'closing the panel retires its baseline');
+  const saveFields = SHELL.match(/async function onSaveFields\([\s\S]*?\n  \}/);
+  assert.ok(saveFields);
+  assert.match(saveFields[0], /State\.panelBaseline = capturePanelBaseline\(\);/, 'a successful save re-baselines -- otherwise the guard would report a divergence that no longer exists and the poll could never re-render the panel again');
+});
+
 // --------------------------------------------------------------------------
 // P8-12: a terminal column (Built holding 103 of 113 cards on a real board)
 // squeezed the columns that matter off to the left and pushed Dropped off the
@@ -645,6 +722,41 @@ test('a backward move looks different everywhere it is offered, and carries forc
 });
 
 // --------------------------------------------------------------------------
+// T-0018: the disabled forward-skip stage buttons said "use `gw move --force`
+// to skip stages" -- a command a browser-only reader cannot run. The board's
+// position (P8-18, and the dropAllowed test above) is that a forward skip
+// stays a CLI decision; the fix is to say that plainly instead of naming a
+// command, not to open the door to forward skips from the board.
+
+test('a refused forward skip is explained as a board decision, never as a CLI command', () => {
+  const dropRefusal = new Function('State', 'id', 'stageId',
+    `${liftHelper('dropRefusal')}\nreturn dropRefusal(id, stageId);`);
+  const State = (transitions, extra) => ({ transitions: { 'P1-01': transitions }, ...extra });
+
+  const skip = dropRefusal(State({ built: { ok: true, force: true } }), 'P1-01', 'built');
+  assert.match(skip, /board does not offer this jump/, 'a reachable-but-force-only target says the board does not offer it');
+  assert.doesNotMatch(skip, /gw move --force/, 'and it does not name a command a browser user cannot run');
+  assert.doesNotMatch(skip, /--force/, 'no flag a mouse has no way to pass');
+
+  const unreachable = dropRefusal(State({}), 'P1-01', 'merged');
+  assert.match(unreachable, /board does not skip stages/, 'a target with no transition verdict says the board does not skip stages');
+  assert.doesNotMatch(unreachable, /gw move --force/, 'and equally does not name the CLI command');
+
+  assert.doesNotMatch(SHELL, /use `gw move --force` to skip stages/, 'the old instruction is gone from the panel stage buttons');
+  assert.doesNotMatch(SHELL, /A jump like this needs `gw move --force`/, 'and from the drag tooltips');
+  assert.doesNotMatch(SHELL, /and a jump like this also needs `gw move --force`/, 'and from the unmet-gate-with-jump note');
+});
+
+test('the forward-skip stage buttons stay disabled while they say why', () => {
+  // The refusal text must be attached to a button that is still off: the note
+  // explains a disabled button, it must not appear on one that could fire.
+  const branch = SHELL.match(/else if \(transition\.force && transition\.ok\) \{[\s\S]*?\n      \} else if/);
+  assert.ok(branch, 'the forced-ok forward-skip branch is still there');
+  assert.match(branch[0], /note = 'The board does not skip gates/, 'it explains itself as a board decision');
+  assert.doesNotMatch(branch[0], /disabled = false/, 'a forced forward skip never becomes a live button');
+});
+
+// --------------------------------------------------------------------------
 // P8-13: Overview used to be four census charts and nothing else. It is now
 // "what should I do next", built on the same "in flight" lib/brief.js just
 // had two bugs from a second definition of ("terminal" -- inflightTitles'
@@ -690,7 +802,7 @@ test('the viewer\'s "in flight" is the same set gw brief computes, not a second 
 
   assert.deepEqual(
     viewerInFlight, fromLib,
-    'the viewer and lib/brief.js disagree about which open items are "in flight" -- claiming an item must not count on its own, and a live dispatch must, on both sides',
+    'the viewer and lib/brief.js disagree about which open items are "in flight" -- owned work that has progressed, or a live dispatch, belongs there on both sides',
   );
   assert.deepEqual(fromLib, ['Moved past its first stage', 'Still in its first stage but actively dispatched'].sort());
 });
@@ -750,4 +862,651 @@ test('the item panel wires the Claim button to a claim action, not a dead end', 
     /async function onClaimClick\(id, btn\) \{[\s\S]*?apiWrite\('\/api\/items\/' \+ encodeURIComponent\(id\) \+ '\/claim', \{\}\)/,
     'onClaimClick posts to this item\'s claim action, mirroring the existing dispatch/cancel/resume/triage actions',
   );
+});
+
+// --------------------------------------------------------------------------
+// T-0016: the create flow was the one write control that still rendered
+// live-looking on a static snapshot and died on submit with a raw
+// "Failed to fetch" (a CORS error from file://, with no console on a phone
+// to discover what actually happened). Two things hold it shut:
+// the "+ new item" button is hidden whenever the page is not live, and
+// openCreatePanel itself refuses to render the form on a snapshot, degrading
+// to the read-only banner wording every other write control already uses.
+// A page also only goes live when a server actually answered /api/state --
+// http alone is not permission, or a snapshot served through any static file
+// server claimed to be "live" and offered that same lying form.
+
+test('the "+ new item" control is hidden on a snapshot, and the create panel cannot render live there', () => {
+  assert.match(
+    SHELL,
+    /<button class="clear-filters hidden" id="f-new">\+ new item<\/button>/,
+    'the control ships hidden, so a snapshot shows it never',
+  );
+  assert.match(
+    SHELL,
+    /document\.getElementById\('f-new'\)\.classList\.toggle\('hidden', !State\.live\);/,
+    'renderHeader keeps the hiding tied to State.live, so the two cannot drift',
+  );
+
+  // Run openCreatePanel against stub elements: once on a snapshot, once live.
+  const panel = {
+    innerHTML: '',
+    classList: { add() {}, remove() {}, contains() { return false; } },
+    addEventListener() {},
+    querySelector() { return { addEventListener() {}, focus() {} }; },
+  };
+  const overlay = { classList: { add() {}, remove() {}, contains() { return false; } } };
+  const doc = { getElementById: (id) => (id === 'gw-panel' ? panel : overlay), querySelector: () => null };
+  const run = (state) => {
+    panel.innerHTML = '';
+    new Function('State', 'document', 'panelEl', `
+      function closePanel() {}
+      function onCreateSubmit() {}
+      ${liftHelper('escapeHtml')}
+      ${liftHelper('panelCloseButton')}
+      ${liftFunction('openCreatePanel')}
+      openCreatePanel();
+      return panelEl.innerHTML;
+    `)(state, doc, panel);
+    return { html: panel.innerHTML, state };
+  };
+
+  const snapshot = run({ live: false, activePanelId: null, creatingItem: null, config: {} });
+  assert.match(snapshot.html, /class="readonly-banner"/, 'the degraded panel uses the read-only snapshot wording the item panel already uses');
+  assert.match(snapshot.html, /gw add "&lt;title&gt;"/, 'and names the exact command to run instead');
+  assert.match(snapshot.html, /gw open/, 'and says how to refresh the snapshot afterwards');
+  assert.doesNotMatch(snapshot.html, /<form/, 'no form is rendered where nothing can be submitted');
+  assert.equal(snapshot.state.creatingItem, false, 'a snapshot never enters the creating state');
+
+  const live = run({ live: true, activePanelId: null, creatingItem: null, config: {} });
+  assert.match(live.html, /<form id="create-form" class="create-form">/, 'the live branch still renders the real form');
+  // The guard must sit before the form markup, so the form is unreachable on
+  // a snapshot rather than merely hidden after the fact.
+  const fn = liftFunction('openCreatePanel');
+  assert.ok(
+    fn.indexOf('if (!State.live) {') > -1 && fn.indexOf('if (!State.live) {') < fn.indexOf('<form id="create-form"'),
+    'the snapshot guard is the first thing openCreatePanel does',
+  );
+});
+
+test('a page only goes live when a server actually answered /api/state', () => {
+  assert.match(SHELL, /fromServer: true,/, 'loadState must report when the state came from the server');
+  assert.match(
+    SHELL,
+    /generatedAt: \(config && config\.generatedAt\) \|\| null, live: false,\n\s*fromServer: false,/,
+    'an injected snapshot is reported as never having talked to a server',
+  );
+  assert.match(
+    SHELL,
+    /if \(loaded\.fromServer\) \{\n\s*State\.live = true;/,
+    'boot goes live only for a real server',
+  );
+  assert.doesNotMatch(
+    SHELL,
+    /location\.protocol\.indexOf\('http'\) === 0\) \{\n\s*State\.live = true;/,
+    'the old "any http page is live" shortcut is gone -- that is what made a static-served snapshot claim to be live',
+  );
+});
+
+// --------------------------------------------------------------------------
+// T-0017: item mentions on the Overview and Board views were plain spans
+// with no role and no keyboard reach, despite opening the full edit drawer
+// on click. They are now buttons in the accessibility tree: focusable,
+// named after the item they open, activated by Enter and Space. Table rows
+// keep their native row semantics and gain a real button on the id cell.
+
+const CARD_HELPERS = [
+  'escapeHtml', 'stageList', 'nextStageId', 'glossaryFor', 'describeTerm', 'termTitle',
+  'ageLabel', 'runLabel', 'evidenceGateUnmet', 'runFor', 'isDispatched', 'isTerminalItem', 'actionFor',
+].map(liftHelper).join('\n');
+const CARD_ZERO_ARG = ['terminalStageIds', 'schedulerIsOff', 'playLabel', 'playTitle', 'defaultOwner']
+  .map(liftFunction).join('\n');
+
+function renderCardWith(State, it) {
+  return new Function('State', 'it', `
+    ${CARD_ZERO_ARG}
+    ${CARD_HELPERS}
+    ${liftHelper('cardMarkup')}
+    return cardMarkup(it, false);
+  `)(State, it);
+}
+
+const CARD_STATE = () => ({
+  items: [{ id: 'T-0001', title: 'Build the thing', stage: 'backlog', updated: '2024-01-01' }],
+  events: [], runs: [], scheduler: { status: 'disabled' }, config: {},
+  stages: { stages: [{ id: 'backlog' }, { id: 'built', role: 'done' }], extra: [] },
+  transitions: {},
+});
+
+test('a board card is a focusable button named after the item it opens', () => {
+  const snapshot = renderCardWith({ ...CARD_STATE(), live: false }, CARD_STATE().items[0]);
+  assert.match(snapshot, /role="button" tabindex="0"/, 'the card is a button in the accessibility tree, focusable by Tab');
+  assert.match(snapshot, /aria-label="Open item T-0001: Build the thing"/, 'its name says which item it opens');
+  assert.doesNotMatch(snapshot, /class="card-actions"/, 'a snapshot card has no nested action buttons');
+
+  const live = renderCardWith({ ...CARD_STATE(), live: true }, CARD_STATE().items[0]);
+  assert.match(live, /role="button" tabindex="0"/, 'live cards are buttons too');
+  assert.match(live, /data-play="T-0001"/, 'the live card still carries its Play action');
+  assert.match(live, /draggable="true"/, 'drag and drop is not regressed');
+});
+
+test('an Overview "what next" row is a focusable button named after the item it opens', () => {
+  const briefSectionHtml = new Function('State', 'title', 'items', 'note', 'emptyText', `
+    ${liftConstLine('BRIEF_SECTION_LIMIT')}
+    ${liftHelper('escapeHtml')}
+    ${liftHelper('briefSectionHtml')}
+    return briefSectionHtml(title, items, note, emptyText);
+  `);
+  const html = briefSectionHtml({ briefExpanded: new Set() }, 'In flight', [{ id: 'T-0001', title: 'Build the thing', stage: 'building', owner: 'human:x' }], () => 'building · human:x', 'Nothing is in flight.');
+  assert.match(html, /role="button" tabindex="0"/);
+  assert.match(html, /aria-label="Open item T-0001: Build the thing"/);
+});
+
+test('a table row keeps its row semantics and gains a real open button on its id', () => {
+  const container = { innerHTML: '' };
+  new Function('State', 'container', `
+    ${liftConstLine('STAGE_LABEL_FALLBACK')}
+    ${CARD_ZERO_ARG}
+    ${CARD_HELPERS}
+    ${liftHelper('fmtDate')}
+    ${liftHelper('dropAllowed')}
+    ${liftHelper('pipelineIndex')}
+    ${liftHelper('isBackwardTarget')}
+    ${liftHelper('moveSelectOptionsHtml')}
+    ${liftHelper('moveSelectHtml')}
+    ${liftHelper('rowActionsHtml')}
+    ${liftHelper('filteredItems')}
+    ${liftHelper('stageLabel')}
+    ${liftHelper('renderTable')}
+    renderTable(container);
+    return container.innerHTML;
+  `)({ ...CARD_STATE(), live: true, filters: { phase: '', type: '', stage: '', flag: '', search: '' }, sort: { key: 'updated', dir: 'desc' } }, container);
+
+  assert.match(container.innerHTML, /<tr data-id="T-0001">/, 'the row keeps its data-id and native row semantics');
+  assert.match(
+    container.innerHTML,
+    /<button class="id-open" aria-label="Open item T-0001: Build the thing">T-0001<\/button>/,
+    'the id cell is a real button whose name says which item it opens',
+  );
+  assert.match(container.innerHTML, /aria-label="Move T-0001 to another stage\."/);
+});
+
+// --------------------------------------------------------------------------
+// T-0021: a title that is one very long word (newlines are sanitised away
+// now, but a single unbroken 118-character word is not) has no break points,
+// so it stretched its column and pushed the Board and Table views into
+// horizontal overflow -- a real cost on the phone the owner reads this on.
+// Titles wrap now, everywhere they render, so nothing is truncated and the
+// full title needs no title attribute.
+
+test('long unbroken titles wrap inside their column instead of stretching the page', () => {
+  // CSS cannot be executed from Node, so these are presence pins on the rules;
+  // the wrapping itself was verified by hand in a browser at three widths.
+  assert.match(
+    SHELL,
+    /\.card \.card-title \{[^}]*overflow-wrap: anywhere;/,
+    'a board card title breaks an unbroken word instead of painting past the 260px column',
+  );
+  assert.match(
+    SHELL,
+    /table\.gw-table td\.cell-title \{ overflow-wrap: anywhere; \}/,
+    'a table title cell breaks an unbroken word instead of forcing the table wider than the viewport -- T-0027 (reopened) scoped the rule to the title column, where the T-0021 comment always said it belonged; on every td it is what let short columns break words mid-word and crush',
+  );
+  assert.match(
+    SHELL,
+    /table\.gw-table th\.cell-title, table\.gw-table td\.cell-title \{ min-width: 13rem; \}/,
+    'and the same cell keeps a word-wide floor so breaking never becomes crushing',
+  );
+  assert.match(
+    SHELL,
+    /\.brief-row span:first-child \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/,
+    'an overview brief row keeps its ellipsis, and min-width: 0 is what lets the flex item actually shrink to apply it',
+  );
+  assert.match(
+    SHELL,
+    /#gw-panel \{[^}]*overflow-wrap: anywhere;/,
+    'the panel (fixed width) breaks long words in the title, field values and evidence chips too',
+  );
+});
+
+test('keyboard activation and the missing labels and names are wired', () => {
+  // Enter and Space activate the role="button" mentions, through the same
+  // delegated handler the clicks already use -- and only when the FOCUSED
+  // element is the control itself, so Space on a card's own Play button
+  // cannot also open the drawer.
+  assert.match(
+    SHELL,
+    /addEventListener\('keydown', \(e\) => \{\n\s*if \(e\.key !== 'Enter' && e\.key !== ' '\) return;\n\s*if \(!e\.target\.closest\) return;\n\s*const control = e\.target\.closest\('\[data-id\]\[role="button"\]'\);\n\s*if \(!control \|\| control !== e\.target\) return;\n\s*e\.preventDefault\(\);\n\s*openPanel\(control\.dataset\.id\);\n\s*\}\);/,
+  );
+  // Panel fields: id + name, and the dt's text is a real associated label.
+  // T-0057: the label text is the human name (fieldLabel), not the raw key.
+  assert.match(SHELL, /<dt><label for="panel-field-' \+ f \+ '">' \+ fieldLabel\(f\) \+ '<\/label><\/dt>/);
+  assert.match(SHELL, /id="panel-field-' \+ f \+ '" name="' \+ f \+ '" data-field="' \+ f \+ '"/);
+  // Evidence and note inputs, and the filter bar, are labelled.
+  assert.match(SHELL, /<label class="sr-only" for="evidence-input">Add evidence<\/label>/);
+  assert.match(SHELL, /<label class="sr-only" for="note-input">Add a note<\/label>/);
+  for (const [id, label] of [
+    ['f-phase', 'Filter by phase'], ['f-type', 'Filter by type'],
+    ['f-stage', 'Filter by stage'], ['f-flag', 'Filter by flag'], ['f-search', 'Search items'],
+  ]) {
+    assert.match(SHELL, new RegExp('<label class="sr-only" for="' + id + '">' + label + '</label>'));
+  }
+  // Every close control is an × glyph; all of them must name themselves.
+  assert.equal((SHELL.match(/aria-label="Close"/g) || []).length, 3, 'the item panel and both create-panel branches close via a named button');
+  // Focus moves into the drawer on open, and only then -- a poll re-render
+  // of an open panel must never steal focus from whoever is typing in it.
+  const openPanel = SHELL.match(/function openPanel\(id\) \{[\s\S]*?\n  \}/);
+  assert.ok(openPanel);
+  assert.ok(
+    openPanel[0].indexOf("overlay.classList.contains('open')") > -1 &&
+    openPanel[0].indexOf("overlay.classList.contains('open')") < openPanel[0].indexOf('renderPanel(it);'),
+    'openPanel decides whether it is opening fresh before it renders',
+  );
+  assert.match(openPanel[0], /if \(opening\) \{\n\s*const closeBtn = panelCloseButton\(\);\n\s*if \(closeBtn\) closeBtn\.focus\(\);\n\s*\}/);
+  const closePanel = SHELL.match(/function closePanel\(\) \{[\s\S]*?\n  \}/);
+  assert.match(closePanel[0], /if \(returnFocus && typeof returnFocus\.focus === 'function' && document\.contains\(returnFocus\)\) returnFocus\.focus\(\);/, 'closing hands focus back to the control that opened the drawer');
+  assert.match(SHELL, /\.sr-only \{/, 'the visually-hidden label class exists');
+  assert.match(SHELL, /\.card:focus-visible, \.brief-row:focus-visible \{/, 'keyboard focus is visible on the two role="button" mentions');
+  // A re-render of the drawer (poll, transition verdict) must not drop the
+  // keyboard focus on the floor: the focused control is found again by id or
+  // data-field and focus is handed to its replacement.
+  const renderPanel = SHELL.match(/function renderPanel\(it\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderPanel);
+  assert.match(renderPanel[0], /panel\.contains\(document\.activeElement\) \? document\.activeElement : null/, 'renderPanel notices when focus is inside the drawer');
+  assert.match(renderPanel[0], /input\[data-field="' \+ CSS\.escape\(active\.dataset\.field\) \+ '"\]/, 'an editable field is found again by its data-field');
+  assert.match(renderPanel[0], /if \(focusSel\) \{\n\s*const again = panel\.querySelector\(focusSel\);\n\s*if \(again\) again\.focus\(\);\n\s*\}/, 'focus is restored after the re-render');
+});
+
+// --------------------------------------------------------------------------
+// Round-two defects (T-0054..T-0064). Same constraint as ever: nothing in
+// viewer/board.html can be imported, so pure helpers are lifted and run, and
+// the panel -- the surface where T-0062 and T-0057 were reported -- is driven
+// through a stub DOM so the RENDERED HTML is what the assertions see.
+
+function liftObjectConst(name) {
+  const source = SHELL.match(new RegExp(`\\n  const ${name} = \\{[\\s\\S]*?\\n  \\};`));
+  assert.ok(source, `expected a const ${name} = {...} in viewer/board.html`);
+  return source[0];
+}
+
+// Renders the item panel's HTML against a stub document, the way the shipped
+// renderPanel() really builds it. This is the only honest way to assert on
+// the panel from Node -- and T-0062 was exactly the kind of bug a grep for
+// "evidence" misses: the code looked right, the RENDER said [object Object].
+function renderPanelHtml(State, it) {
+  const panel = {
+    innerHTML: '',
+    contains: () => false,
+    querySelector: () => ({ addEventListener() {} }),
+    querySelectorAll: () => [],
+  };
+  const doc = { getElementById: (id) => (id === 'gw-panel' ? panel : null), activeElement: null };
+  new Function('State', 'document', 'it', `
+    function closePanel() {}
+    ${liftConstLine('STAGE_LABEL_FALLBACK')}
+    ${liftConstLine('GLOSSARY_FIELDS')}
+    ${liftObjectConst('FIELD_LABELS')}
+    ${liftFunction('terminalStageIds')}
+    ${['escapeHtml', 'evidenceText', 'evidenceStage', 'stageList', 'nextStageId', 'fmtDate',
+      'isDispatched', 'runFor', 'isTerminalItem', 'actionFor', 'activeRunFor', 'schedulerIsOff',
+      'playTitle', 'playLabel', 'gateFor', 'sentenceList', 'machineRule', 'pipelineIndex',
+      'isBackwardTarget', 'ownerGateUnmet', 'claimActionHtml', 'stageLabel', 'glossaryFor',
+      'describeTerm', 'termTitle', 'fieldLabel', 'capturePanelBaseline', 'wirePanelActions',
+    ].map(liftHelper).join('\n')}
+    ${liftHelper('renderPanel')}
+    renderPanel(it);
+    return document.getElementById('gw-panel').innerHTML;
+  `)(State, doc, it);
+  return panel.innerHTML;
+}
+
+const PANEL_STATE = () => ({
+  live: true,
+  items: [],
+  events: [],
+  stages: {
+    stages: [
+      { id: 'backlog', label: 'Backlog' },
+      { id: 'building', label: 'Building', requires: { owner: true } },
+      { id: 'built', label: 'Built', role: 'done' },
+    ],
+    extra: [{ id: 'dropped', label: 'Dropped', role: 'dropped' }],
+    terminal: [],
+  },
+  config: {},
+  runs: [],
+  scheduler: { status: 'disabled' },
+  transitions: {}, transitionErrors: {}, transitionLoading: {},
+  runLogs: {}, runLogLoading: {}, runLogErrors: {},
+  pendingEvidence: {},
+  activePanelId: null,
+  panelBaseline: null,
+});
+
+test('a panel refusal is retained in state and rendered again after a panel refresh', () => {
+  const State = { activePanelId: 'P1-01', creatingItem: false, panelError: null };
+  const errorSlot = { innerHTML: '' };
+  new Function('State', 'document', 'escapeHtml', `
+    ${liftHelper('showPanelError')}
+    showPanelError('another reviewer must approve this item');
+    return State.panelError;
+  `)(State, { getElementById: (id) => (id === 'panel-error' ? errorSlot : null) }, (value) => String(value));
+  assert.deepEqual(State.panelError, { panelId: 'P1-01', message: 'another reviewer must approve this item' });
+
+  const html = renderPanelHtml({ ...PANEL_STATE(), panelError: State.panelError }, { id: 'P1-01', title: 'Held item', stage: 'backlog', evidence: [], flag: 'needs-triage' });
+  assert.match(html, /another reviewer must approve this item/, 'a poll re-render preserves the refused-write explanation');
+  assert.match(html, /panel-error-dismiss/, 'the reader has an explicit way to dismiss the retained error');
+});
+
+// T-0062: lib/store.js changed on-disk evidence to {text, stage} objects, and
+// escapeHtml(String(entry)) turned every panel entry into "[object Object]".
+// Both shapes reach the viewer -- the store normalises old boards on read, and
+// import still accepts strings -- so both must render their text, and the
+// panel must show WHICH GATE an entry paid for.
+test('the panel renders evidence text and its gate, never [object Object], for both entry shapes', () => {
+  const it = {
+    id: 'T-0001',
+    title: 'Carry evidence',
+    stage: 'building',
+    owner: null,
+    evidence: [
+      { text: 'abc1234', stage: 'building' },
+      'legacy-plain-sha',
+      { text: 'https://github.com/x/y/pull/9', stage: 'built' },
+    ],
+  };
+  const html = renderPanelHtml(PANEL_STATE(), it);
+
+  assert.doesNotMatch(html, /object Object/, 'no entry renders as [object Object]');
+  assert.match(html, /<li class="evidence-chip">abc1234/, 'an object entry renders its text');
+  assert.match(html, /<li class="evidence-chip">legacy-plain-sha/, 'a legacy string entry renders too');
+  assert.match(html, /<li class="evidence-chip">https:\/\/github\.com\/x\/y\/pull\/9/);
+
+  // The gate an entry paid for, alongside the text -- the point of the new shape.
+  const gates = html.match(/<span class="tag evidence-gate"[^>]*>([^<]*)<\/span>/g) || [];
+  assert.equal(gates.length, 2, 'only entries that carry a stage get a gate tag; legacy strings do not pretend to');
+  assert.match(gates[0], />Building<\/span>/, 'the gate tag is the stage\'s human label');
+  assert.match(html, /evidence-gate" title="Evidence supplied for the move to Built/, 'and its tooltip names the move the entry was recorded for');
+
+  // Pending evidence (strings typed into the box) still renders and is still
+  // not attributed to a gate it has not paid for yet.
+  const pendingState = PANEL_STATE();
+  pendingState.pendingEvidence['T-0001'] = ['typed-but-not-moved'];
+  const pendingHtml = renderPanelHtml(pendingState, it);
+  assert.match(pendingHtml, /typed-but-not-moved/, 'pending entries render');
+  assert.doesNotMatch(pendingHtml, /object Object/);
+  assert.equal((pendingHtml.match(/evidence-gate/g) || []).length, 2, 'pending entries get no gate tag');
+});
+
+test('every reader of an evidence entry goes through evidenceText', () => {
+  // The panel list was the reported surface; evidenceGateUnmet's regex match
+  // had the same String(entry) assumption. This pins both, plus the helpers
+  // themselves.
+  const evidenceText = new Function('e', `${liftHelper('evidenceText')}\nreturn evidenceText(e);`);
+  const evidenceStage = new Function('e', `${liftHelper('evidenceStage')}\nreturn evidenceStage(e);`);
+
+  assert.equal(evidenceText({ text: 'abc1234', stage: 'built' }), 'abc1234');
+  assert.equal(evidenceText('legacy string'), 'legacy string');
+  assert.equal(evidenceText(undefined), '', 'a missing entry renders as nothing, not "undefined"');
+  assert.equal(evidenceText(null), '');
+  assert.equal(evidenceText({ text: 42 }), '', 'a malformed object entry renders as nothing rather than [object Object]');
+
+  assert.equal(evidenceStage({ text: 'x', stage: 'built' }), 'built');
+  assert.equal(evidenceStage({ text: 'x', stage: null }), null, 'a legacy-normalised entry carries no gate');
+  assert.equal(evidenceStage('legacy string'), null);
+  assert.equal(evidenceStage(undefined), null);
+  // The whole file must not render an entry object directly anywhere else.
+  const direct = SHELL.match(/escapeHtml\(e(vidence)?\)/g) || [];
+  assert.deepEqual(direct, [], 'evidence entries are never passed to escapeHtml raw');
+});
+
+// T-0063: a drop on a column with an unmet gate snapped back in silence.
+// The reason already existed one hover away (the column tooltip, and the
+// panel move strip); the refused drop must say the same sentence.
+// T-0079: deciding now happens in decideDrop(), after the transitions fetch
+// is awaited -- so the refusal a drop shows is always a real verdict, never
+// the "Checking this gate…" placeholder a fast drag used to be punished with.
+test('a refused drag names the gate in the same words the column tooltip uses', () => {
+  const showDragRefusal = SHELL.match(/function showDragRefusal\(drag, stageId\) \{[\s\S]*?\n  \}/);
+  assert.ok(showDragRefusal, 'the refused-drag explainer exists');
+  // Same source: dropRefusal() builds the column tooltip in markDropTargets
+  // and the notice here, so the wording cannot drift between them.
+  assert.match(showDragRefusal[0], /dropRefusal\(drag\.id, stageId\)/, 'the notice reads the same dropRefusal() sentence the tooltip does');
+  assert.match(showDragRefusal[0], /showBoardRefusal\(drag\.id, stageId, \[why\]\)/, 'and shows it in the corner notice a refused drop already owns');
+
+  const dragover = SHELL.match(/view\.addEventListener\('dragover', \(e\) => \{[\s\S]*?\n    \}\);/);
+  assert.ok(dragover);
+  assert.match(dragover[0], /showDragRefusal\(drag, column\.dataset\.stage\)/, 'hovering an invalid column raises the reason');
+
+  const decideDrop = SHELL.match(/async function decideDrop\(drag, column\) \{[\s\S]*?\n  \}/);
+  assert.ok(decideDrop);
+  assert.match(decideDrop[0], /showDragRefusal\(drag, to\)/, 'a drop that still arrives refused says why too');
+  assert.match(decideDrop[0], /hideBoardRefusal\(\)/, 'an ACCEPTED drop clears any stale refusal notice');
+});
+
+// T-0079: a drop that beats the lazy transitions fetch used to be refused
+// with "Checking this gate…" -- a placeholder standing in for a verdict that
+// had not landed yet, on a move the CLI calls ready. The verdict is now
+// awaited before deciding, and while it is unknown the dragover neither
+// refuses nor promises: refusing the dragover would also stop the browser
+// from ever firing the drop a fast flick needs.
+test('a drop that beats the transitions fetch awaits the verdict instead of refusing on unknown', () => {
+  const decideDrop = SHELL.match(/async function decideDrop\(drag, column\) \{[\s\S]*?\n  \}/);
+  assert.ok(decideDrop, 'the drop decision is its own awaited step');
+  const awaiting = decideDrop[0].indexOf('await refreshTransitions');
+  const deciding = decideDrop[0].indexOf('if (!dropAllowed(');
+  assert.ok(awaiting !== -1, 'the pending fetch is awaited');
+  assert.ok(deciding !== -1, 'the verdict is consulted');
+  assert.ok(awaiting < deciding, 'the await happens BEFORE the refusal decision, so the refusal always quotes a landed verdict');
+  assert.match(decideDrop[0], /!State\.transitions\[drag\.id\] && !State\.transitionErrors\[drag\.id\]/, 'only an actually-unknown verdict is waited for; a landed one is never re-fetched');
+
+  const dragover = SHELL.match(/view\.addEventListener\('dragover', \(e\) => \{[\s\S]*?\n    \}\);/);
+  assert.ok(dragover);
+  const unknown = dragover[0].indexOf('!State.transitions[drag.id]');
+  const refusal = dragover[0].indexOf('showDragRefusal(drag');
+  assert.ok(unknown !== -1 && refusal !== -1 && unknown < refusal, 'the unknown branch returns before any refusal while the verdict is in flight');
+
+  // The "Checking this gate…" text may survive only as a status the panel
+  // buttons already show -- it must never be what a refusal says.
+  const dropRefusal = SHELL.match(/function dropRefusal\(id, stageId\) \{[\s\S]*?\n  \}/);
+  assert.ok(dropRefusal);
+  assert.ok(dropRefusal[0].includes('Checking this gate'), 'the placeholder remains only as the unknown-verdict status');
+});
+
+test('the drop listener hands every outcome to decideDrop and never lets the browser drop', () => {
+  const drop = SHELL.match(/view\.addEventListener\('drop', \(e\) => \{[\s\S]*?\n    \}\);/);
+  assert.ok(drop);
+  assert.match(drop[0], /e\.preventDefault\(\)/, 'the listener owns the drop for accepted and refused outcomes alike');
+  assert.match(drop[0], /decideDrop\(drag, column\)/, 'the decision is awaited, so it cannot stay inline in a sync listener');
+});
+
+// T-0054: the Overview's "+N more" was a bare <p> under rows that are all
+// focusable buttons. It is a control now: one click reveals the rest of the
+// section, one more folds it back, and the choice survives the poll.
+test('the Overview "+N more" is a control that reveals the rest of its section', () => {
+  const briefSectionHtml = new Function('State', 'title', 'items', 'note', 'emptyText', `
+    ${liftConstLine('BRIEF_SECTION_LIMIT')}
+    ${liftHelper('escapeHtml')}
+    ${liftHelper('briefSectionHtml')}
+    return briefSectionHtml(title, items, note, emptyText);
+  `);
+  const items = Array.from({ length: 12 }, (_, i) => ({ id: 'T-' + String(i).padStart(4, '0'), title: 'item ' + i, stage: 'building', owner: 'human:x' }));
+  const collapsed = briefSectionHtml({ briefExpanded: new Set() }, 'In flight', items, () => 'note', 'Nothing is in flight.');
+
+  assert.match(collapsed, /<button class="brief-more" data-brief-more="In flight"/, 'a real button now, not a bare <p>');
+  assert.match(collapsed, /\+4 more<\/button>/);
+  assert.equal((collapsed.match(/class="count-row brief-row"/g) || []).length, 8, 'collapsed still shows the limit');
+  assert.match(collapsed, /aria-label="Show the remaining 4 items in In flight\."/);
+
+  const expanded = briefSectionHtml({ briefExpanded: new Set(['In flight']) }, 'In flight', items, () => 'note', 'Nothing is in flight.');
+  assert.equal((expanded.match(/class="count-row brief-row"/g) || []).length, 12, 'expanding shows every row, in place');
+  assert.match(expanded, /show less<\/button>/, 'and it folds back');
+
+  assert.match(
+    SHELL,
+    /const moreBtn = e\.target\.closest\('\[data-brief-more\]'\);[\s\S]*?State\.briefExpanded\.add\(section\);/,
+    'the expander is wired through the one delegated click handler, onto State',
+  );
+  assert.match(SHELL, /briefExpanded: new Set\(\),/, 'the choice lives on State, so the 2-second poll cannot reset it');
+});
+
+// T-0055: the sticky header is ~54px and nothing reserved its height, so a
+// deep card scrolled into view landed with its id and title underneath it.
+test('scrolled-to targets reserve the sticky header height', () => {
+  assert.match(SHELL, /html \{ scroll-padding-top: 3\.5rem; \}/, 'the scroller reserves the header height for every target');
+  assert.match(SHELL, /\.card, \.brief-row, table\.gw-table tbody tr \{ scroll-margin-top: 3\.5rem; \}/, 'and the repeated scroll targets reserve it locally too');
+});
+
+// T-0056: every untyped card showed a bare "?" pill. A fresh board is mostly
+// untyped items; the pill said nothing, and the tooltip it was said to have
+// never existed for a null type (termTitle returns nothing for null).
+test('an untyped card shows no type pill, and a typed card still does', () => {
+  const state = CARD_STATE();
+  const untyped = renderCardWith(state, { id: 'T-0002', title: 'Untyped', stage: 'backlog', type: null });
+  assert.doesNotMatch(untyped, /class="tag"[^>]*>\?<\/span>/, 'no bare ? pill');
+  const typed = renderCardWith(state, { id: 'T-0003', title: 'Typed', stage: 'backlog', type: 'defect' });
+  assert.match(typed, /<span class="tag">defect<\/span>/, 'a set type still renders, tooltip and all');
+});
+
+// T-0057: the panel listed raw on-disk field names ("deps", "created_by")
+// where the rest of the board spells them for a reader.
+test('the item panel uses the human field names the rest of the board uses', () => {
+  const it = { id: 'T-0001', title: 't', stage: 'building', owner: null, deps: ['T-0009'], created_by: 'human:rahil' };
+  const html = renderPanelHtml(PANEL_STATE(), it);
+
+  assert.match(html, /<dt><label for="panel-field-deps">Dependencies<\/label>/, 'editable fields get their human label');
+  assert.doesNotMatch(html, /<dt><label for="panel-field-deps">deps<\/label>/);
+  assert.match(html, /<dt>Created by<\/dt>/, 'read-only fields get their human label too');
+  assert.match(html, /<dt>GitHub<\/dt>/);
+  assert.doesNotMatch(html, /<dt>created_by<\/dt>/);
+  assert.doesNotMatch(html, /<dt>deps<\/dt>/);
+  // The fieldLabels table is the one place these names live; a field it does
+  // not know falls back to its key rather than disappearing.
+  const fieldLabel = new Function('f', `${liftObjectConst('FIELD_LABELS')}\n${liftHelper('fieldLabel')}\nreturn fieldLabel(f);`);
+  assert.equal(fieldLabel('deps'), 'Dependencies');
+  assert.equal(fieldLabel('some_future_field'), 'some_future_field');
+});
+
+// T-0058: the Table view offered Claim on a terminal item, and the claim
+// route happily accepted it. Decision: the viewer HIDES the offer -- the
+// offer itself is the defect, and a control whose only possible outcome is
+// an error toast is a trap, not a safety. The server half (lib/serve) is
+// deliberately not this file's change.
+test('claim is not offered on finished work', () => {
+  const rowActionsHtml = new Function('State', 'it', `
+    ${liftHelper('escapeHtml')}
+    ${liftHelper('isTerminalItem')}
+    ${liftFunction('terminalStageIds')}
+    ${liftHelper('rowActionsHtml')}
+    return rowActionsHtml(it);
+  `);
+  const stages = { stages: [{ id: 'backlog' }, { id: 'built', role: 'done' }], extra: [{ id: 'dropped', role: 'dropped' }], terminal: [] };
+  const live = { ...PANEL_STATE(), live: true, stages };
+
+  assert.equal(
+    rowActionsHtml(live, { id: 'T-0001', owner: null, stage: 'dropped' }),
+    '',
+    'an unowned terminal item gets no Claim button',
+  );
+  assert.match(
+    rowActionsHtml(live, { id: 'T-0002', owner: 'human:x', can_release: true, stage: 'built' }),
+    /data-release-row/,
+    'an owned terminal item still gets Release',
+  );
+  assert.doesNotMatch(
+    rowActionsHtml(live, { id: 'T-0002', owner: 'human:x', can_release: true, stage: 'built' }),
+    /data-claim-row/,
+  );
+  assert.match(
+    rowActionsHtml(live, { id: 'T-0003', owner: null, stage: 'backlog' }),
+    /data-claim-row/,
+    'an unfinished unowned item still gets Claim',
+  );
+  assert.doesNotMatch(
+    rowActionsHtml(live, { id: 'T-0004', owner: 'human:x', can_release: false, stage: 'backlog' }),
+    /data-release-row/,
+    'a non-owner is not offered a Release button the server will refuse',
+  );
+});
+
+// T-0059: one long column used to make the board a single endless strip
+// (~16000px beside empty lanes on the board this was verified against).
+// Decision: the board is scoped to the viewport and each column scrolls
+// inside its own lane -- wrapping would break the left-to-right pipeline
+// reading, and auto-scrolling to populated columns is motion the reader
+// never asked for.
+test('a long column scrolls inside its lane instead of growing the board past the viewport', () => {
+  assert.match(SHELL, /#board \{[\s\S]*?align-items: stretch;[\s\S]*?max-height: calc\(100vh - 11rem\);/, 'the board is scoped to the visible screen');
+  assert.match(SHELL, /\.column \{[\s\S]*?display: flex;\n\s*flex-direction: column;\n\s*min-height: 0;/, 'each column is a lane');
+  assert.match(SHELL, /\.column-body \{[^}]*overflow-y: auto;/, 'the lane body is what scrolls');
+});
+
+// T-0027: at 390px the nowrap action columns forced the whole page sideways.
+test('the table scrolls in its own lane so the page never overflows at 390px', () => {
+  assert.match(SHELL, /\.table-scroll \{ overflow-x: auto;/, 'the table gets its own horizontal scroll container');
+  const renderTable = SHELL.match(/function renderTable\(container\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderTable);
+  assert.match(renderTable[0], /'<div class="table-scroll"><table class="gw-table">/, 'the table renders inside it');
+  assert.match(renderTable[0], /<\/tbody><\/table><\/div>/);
+  assert.match(
+    SHELL,
+    /@media \(max-width: 480px\) \{[\s\S]*?table\.gw-table td\.row-actions-cell \{ white-space: normal; \}/,
+    'on a phone the action cells wrap instead of holding the table wide',
+  );
+});
+
+// T-0064: the tab bar scrolled at 390px but nothing said so.
+test('the tab bar shows that it scrolls', () => {
+  assert.match(SHELL, /nav#gw-tabs \{ scrollbar-width: thin; scrollbar-color: var\(--text-faint\) transparent; \}/);
+  assert.match(SHELL, /nav#gw-tabs::-webkit-scrollbar \{ height: 6px; \}/, 'the affordance is a scrollbar that is actually drawn');
+  assert.match(SHELL, /@media \(max-width: 480px\) \{\n\s*nav#gw-tabs \{ padding: 0\.4rem 0\.5rem 0; \}/, 'and a phone loses the padding that pushed the last tab off the edge');
+});
+
+// T-0027 (reopened): the scroll container alone was never the fix. The table
+// itself kept its width:100% and overflow-wrap:anywhere, so at 390px it
+// compressed instead of scrolling -- the document scrollWidth stayed 390 and
+// the Title column crushed to one character per line. Two floors hold now:
+// the table cannot shrink below a readable width (the container scrolls past
+// it), and the Title column cannot shrink below word width.
+test('the table keeps readable floors: it scrolls as a whole and the Title column stays wide enough for words', () => {
+  assert.match(SHELL, /table\.gw-table \{ min-width: 640px; \}/, 'the table has a width floor of its own -- compression is not an option');
+  assert.match(SHELL, /table\.gw-table th\.cell-title, table\.gw-table td\.cell-title \{ min-width: 13rem; \}/, 'the Title column keeps word width, not letter width');
+  const renderTable = SHELL.match(/function renderTable\(container\) \{[\s\S]*?\n  \}/);
+  assert.ok(renderTable);
+  assert.match(renderTable[0], /'<th data-key="' \+ k \+ '" class="' \+ \(k === 'title' \? 'cell-title' : ''\)/, 'the header carries the title class');
+  assert.match(renderTable[0], /'<td class="cell-title">' \+ escapeHtml\(it\.title\)/, 'the body cell carries the title class');
+});
+
+// T-0078: a disabled button's reason must never be readable as the
+// neighbouring button's refusal. In the bare wrap the reason could sit under
+// another button's slot and the faint disabled button read as nothing, so
+// the eye attached the reason to the last prominent button above it. Each
+// button + its reasons are now one bounded unit.
+test('a stage button and its reasons are one bounded unit, so a reason cannot attach to a neighbouring button', () => {
+  const wrap = SHELL.match(/#gw-panel \.stage-button-wrap \{[\s\S]*?\n  \}/);
+  assert.ok(wrap, 'the stage-button-wrap rule exists');
+  assert.match(wrap[0], /border: 1px solid/, 'the pair has a visible boundary');
+  assert.match(wrap[0], /padding:/, 'the boundary is not cosmetic-tight');
+  assert.match(wrap[0], /flex-direction: column/, 'button then reasons, always vertical within the unit');
+});
+
+// T-0081: creating an unclassified item from the board silently held it for
+// triage -- the dialog never said so, and self-approval is refused. The
+// holding is deliberate; the silence was the bug.
+test('the create dialog says what an unclassified creation costs before the submit', () => {
+  const openCreatePanel = SHELL.match(/function openCreatePanel\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(openCreatePanel);
+  assert.match(openCreatePanel[0], /create-hold-note/, 'the notice is part of the form itself');
+  const notice = openCreatePanel[0].match(/class="create-hold-note">([^<]+)</);
+  assert.ok(notice, 'the notice renders text');
+  assert.match(notice[1], /held for triage/, 'it names the hold');
+  assert.match(notice[1], /someone other than you approves/, 'and the fact that its creator cannot lift it');
+});
+
+// T-0082: the favicon was the only console error in an otherwise clean
+// session -- a 404 on every view. A data URI works everywhere, including the
+// file:// snapshot, which can never fetch a sibling favicon.
+test('the board carries an inline favicon so no view 404s and the snapshot still works', () => {
+  assert.match(SHELL, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,/, 'an inline SVG icon, no request');
+  assert.doesNotMatch(SHELL, /<link rel="icon"[^>]*href="(?!data:)/, 'no icon href that a file:// page would have to fetch');
 });

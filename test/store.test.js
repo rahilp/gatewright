@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, chmodSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
+import { IOError } from '../lib/cli/errors.js';
 
 function freshStore() {
   const root = mkdtempSync(join(tmpdir(), 'gw-'));
@@ -126,6 +128,57 @@ test('a missing digest is unknown, not an accusation', () => {
   assert.deepEqual(store.verifyDigest(), { status: 'unknown' });
 });
 
+// stages.json and config.json define the gates, so a hand edit to either is
+// exactly the tampering the digest exists to catch (T-0002).
+test('a hand edit to stages.json is detected and named, not just items.jsonl', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }], terminal: [], extra: [] }));
+  const result = store.verifyDigest();
+  assert.equal(result.status, 'modified');
+  assert.deepEqual(result.files, ['stages.json']);
+});
+
+test('a hand edit to config.json is detected and named', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  writeFileSync(store.paths.config, JSON.stringify({ version: 1 }));
+  const result = store.verifyDigest();
+  assert.equal(result.status, 'modified');
+  assert.deepEqual(result.files, ['config.json']);
+});
+
+test('a hand edit to both files is reported one line per file', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }], terminal: [], extra: [] }));
+  writeFileSync(store.paths.config, JSON.stringify({ version: 1 }));
+  const result = store.verifyDigest();
+  assert.deepEqual(result.files, ['stages.json', 'config.json']);
+});
+
+// events.jsonl is append-only: adding a line is normal operation, never
+// tampering, so it is deliberately not digested.
+test('appending to events.jsonl is not reported', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  store.appendEvent({ type: 'note', item: 'P1-01', by: 'human:rahil' });
+  assert.deepEqual(store.verifyDigest(), { status: 'clean' });
+});
+
+// A .digest written before stages.json and config.json were protected has only
+// the `items` key. Missing hashes mean unknown, baseline silently — otherwise
+// every upgraded board screams on its first check.
+test('an old-format digest (items key only) is unknown and baselines silently', () => {
+  const store = freshStore();
+  store.writeItems([item()]);
+  const itemsHash = createHash('sha256').update(readFileSync(store.paths.items)).digest('hex');
+  writeFileSync(store.paths.digest, JSON.stringify({ items: itemsHash, ts: '2026-09-01T00:00:00.000Z' }) + '\n');
+  assert.deepEqual(store.verifyDigest(), { status: 'unknown' });
+  store.rebaselineDigest();
+  assert.deepEqual(store.verifyDigest(), { status: 'clean' });
+});
+
 // --- locking: two agent runs and a human at a terminal can all write at once
 
 test('withLock returns the body result and releases the lock', () => {
@@ -181,9 +234,72 @@ test('writeConfig atomically round-trips valid JSON without leaving a temp file'
   const store = freshStore();
   const config = { version: 1, github: { last_sync: '2026-09-14T12:00:00Z' } };
   store.writeItems([item()]);
-  const digestBefore = readFileSync(store.paths.digest, 'utf8');
   store.writeConfig(config);
   assert.deepEqual(JSON.parse(readFileSync(store.paths.config, 'utf8')), config);
-  assert.equal(readFileSync(store.paths.digest, 'utf8'), digestBefore, 'config writes must not rebaseline the items digest');
+  // config.json is digested too, so a legitimate write must re-baseline it:
+  // a `gw config` that made the next check cry tampering would make the
+  // report useless.
+  assert.equal(store.verifyDigest().status, 'clean');
   assert.deepEqual(readdirSync(store.dir).filter((file) => file.includes('.tmp')), []);
+});
+
+// T-0029 — the on-disk evidence shape changed: each entry carries the stage
+// whose move supplied it. Existing boards carry flat strings. Reads normalise
+// in memory (an old board works at once); the next gw write persists the new
+// shape and re-baselines the digest with it, so an upgrade is never reported
+// as an out-of-band write by the tool that just performed it.
+test('legacy flat-string evidence reads as stage-null entries and migrates on the next write', () => {
+  const store = freshStore();
+  writeFileSync(store.paths.items, JSON.stringify(item({ stage: 'built', evidence: ['abc123', 'https://github.com/a/b/pull/1'] })) + '\n');
+  store.rebaselineDigest();
+  assert.equal(store.verifyDigest().status, 'clean', 'reading the old shape changes nothing on disk');
+
+  const read = store.readItems()[0];
+  assert.deepEqual(read.evidence, [
+    { text: 'abc123', stage: null },
+    { text: 'https://github.com/a/b/pull/1', stage: null },
+  ]);
+
+  store.writeItems([read]);
+  const persisted = JSON.parse(readFileSync(store.paths.items, 'utf8').trim());
+  assert.deepEqual(persisted.evidence, read.evidence, 'the first write persists the migrated shape');
+  assert.equal(store.verifyDigest().status, 'clean', 'the migrated write re-baselines its own digest');
+  // invalid entries (neither a string nor a {text, stage} object) are dropped
+  // rather than crashing a read
+  writeFileSync(store.paths.items, JSON.stringify(item({ evidence: ['ok', 42, { text: 'kept' }, { text: 7 }], stage: 'built' })) + '\n');
+  assert.deepEqual(store.readItems()[0].evidence, [{ text: 'ok', stage: null }, { text: 'kept', stage: null }]);
+});
+
+test('an upgraded board never reports its own migration as an out-of-band write', async () => {
+  const store = freshStore();
+  writeFileSync(store.paths.items, JSON.stringify(item({ stage: 'backlog', evidence: ['abc123'] })) + '\n');
+  store.rebaselineDigest();
+  const bin = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
+  const run = (args) => new Promise((resolve) => execFile(process.execPath, [bin, ...args], { cwd: store.root, encoding: 'utf8' }, (err, stdout) => resolve({ err, stdout })));
+  for (const args of [['check'], ['config', 'id_scheme']]) {
+    const { err, stdout } = await run(args);
+    assert.equal(err?.code ?? 0, 0, `${args.join(' ')} exits clean`);
+    assert.doesNotMatch(stdout, /modified outside gw/, `gw ${args[0]} must not accuse the migration of tampering`);
+  }
+});
+
+// T-0049 — a read-only board directory used to surface
+// "EACCES: permission denied, open '.../.lock.<pid>.tmp'": exit code 3 was
+// right, but the message named a temp file the user never created and never
+// said the directory was the problem.
+test('a read-only board directory explains itself instead of naming a temp file', { skip: process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0) ? 'chmod cannot block a root user and is a no-op on Windows' : false }, () => {
+  const store = freshStore();
+  chmodSync(store.dir, 0o555);
+  try {
+    assert.throws(
+      () => store.withLock(() => 'never runs'),
+      (error) => error instanceof IOError
+        && error.exitCode === 3
+        && /is not writable \(permission denied\)/.test(error.message)
+        && !/\.lock\.\d+\.tmp/.test(error.message),
+      'the message must say the directory is not writable, not name a temp file',
+    );
+  } finally {
+    chmodSync(store.dir, 0o755);
+  }
 });

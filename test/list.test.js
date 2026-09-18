@@ -25,3 +25,32 @@ test('list is read-only byte-for-byte', () => {
   execFileSync(process.execPath, [BIN, 'list'], { cwd: root });
   assert.deepEqual([store.paths.items, store.paths.events, store.paths.digest].map((p) => readFileSync(p)), before);
 });
+
+// T-0044 — `--stage bogus` used to filter to zero rows and exit 0,
+// indistinguishable from an empty stage. `move` refuses an unknown stage at
+// exit 2; list gives the same answer, naming the stages that do exist.
+test('an unknown stage is refused with the valid stages named', () => {
+  const { root } = board();
+  assert.throws(
+    () => execFileSync(process.execPath, [BIN, 'list', '--stage', 'bogus'], { cwd: root, encoding: 'utf8' }),
+    (error) => error.status === 2
+      && /unknown stage: bogus; valid stages: .*backlog.*building.*dropped/.test(error.stderr),
+  );
+  assert.match(execFileSync(process.execPath, [BIN, 'list', '--stage', 'dropped'], { cwd: root, encoding: 'utf8' }), /^$/);
+});
+
+// T-0009 — a newline title once rendered as two rows, the second with no id
+// or stage, reading as a separate item. `gw add` now refuses such titles, and
+// rendering collapses control whitespace so data written before that guard
+// still renders one row per item.
+test('a stored newline title renders as one row, not two', () => {
+  const { root, store } = board();
+  store.writeItems([...items, { id: 'P9-01', title: 'a\nb', phase: null, stage: 'backlog', flag: null }]);
+  const out = execFileSync(process.execPath, [BIN, 'list'], { cwd: root, encoding: 'utf8' });
+  const rows = out.split('\n').filter((line) => line.startsWith('P'));
+  assert.deepEqual(rows, [
+    'P1-01  backlog  First',
+    'P2-02  building  Second',
+    'P9-01  backlog  a b',
+  ]);
+});

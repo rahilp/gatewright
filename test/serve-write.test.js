@@ -15,6 +15,8 @@ async function withServer(fn, options = {}) {
   const store = createStore(root); store.ensure(); store.writeItems([item]);
   writeFileSync(store.paths.config, JSON.stringify({ version: 1, vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'], gate: ['G0'] }, runner: { paused: false } }));
   writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }, { id: 'specified' }, { id: 'building' }, { id: 'built', requires: { evidence_min: 1 } }], terminal: [], extra: [] }));
+  // The fixture writes config.json and stages.json by hand to stand up the board; baseline the digest so only deliberate tampering in a test is ever reported.
+  store.rebaselineDigest();
   const server = createServeServer({ store, ...options }); const address = await listen(server, { port: 0 });
   try { await fn({ root, store, url: `http://127.0.0.1:${address.port}` }); } finally { await new Promise((resolve) => server.close(resolve)); }
 }
@@ -51,7 +53,9 @@ test('write endpoints use command behaviour and append one event each', async ()
     const added = store.readItems().find((candidate) => candidate.title === 'New item');
     assert.ok(added);
     assert.equal((await write(url, `/api/items/${added.id}`, { scope: 'finished when tested' })).status, 200);
-    assert.equal((await write(url, '/api/items/P1-01/move', { to: 'building', evidence: [] })).status, 200);
+    // T-0072 — the claim is a lock at move too, so the board moves the item as
+    // its owner; these posts carry the acting actor explicitly.
+    assert.equal((await write(url, '/api/items/P1-01/move', { to: 'building', evidence: [], by: 'human:tester' })).status, 200);
     assert.equal((await write(url, '/api/items/P1-01/note', { text: 'A note' })).status, 200);
     assert.equal((await write(url, '/api/items/P1-01/dispatch', { actor: 'sam' })).status, 200);
     assert.equal((await write(url, '/api/items/P1-01/cancel', {})).status, 200);
@@ -105,6 +109,26 @@ test('pause and resume persist runner.paused and log one event each', async () =
     assert.equal((await write(url, '/api/resume', {})).status, 200);
     assert.equal(JSON.parse(readFileSync(store.paths.config, 'utf8')).runner.paused, false);
     assert.deepEqual(store.readEvents().map((event) => event.type), ['pause_all', 'resume_all']);
+  });
+});
+
+// Every board write that rewrites the rules — pause, resume, settings, the
+// pipeline — is a write gw performed, so it must re-baseline the digest and
+// leave `gw check` clean. A tamper report on gw's own writes would bury the
+// real one.
+test('pause, resume, config and stages writes from the board all keep gw check clean', async () => {
+  await withServer(async ({ store, url }) => {
+    assert.equal((await write(url, '/api/pause', {})).status, 200);
+    assert.equal((await write(url, '/api/resume', {})).status, 200);
+    assert.equal((await write(url, '/api/config', { key: 'runner.max_concurrent', value: 3 })).status, 200);
+    assert.equal((await write(url, '/api/stages', NEXT_STAGES, {}, 'PUT')).status, 200);
+    // A note records activity, so the fixture item's old timestamp cannot
+    // surface as an unrelated stale-owner finding in the check below.
+    assert.equal((await write(url, '/api/items/P1-01/note', { text: 'activity' })).status, 200);
+    let stdout = ''; let stderr = '';
+    assert.equal(await runRouter(['check'], { cwd: store.root, env: {}, stdout: { write: (text) => { stdout += text; } }, stderr: { write: (text) => { stderr += text; } } }), 0);
+    assert.equal(stdout, 'Board is clean.\n');
+    assert.equal(store.verifyDigest().status, 'clean');
   });
 });
 
@@ -393,6 +417,68 @@ test('an out-of-range config value is refused with the CLI message and writes no
   });
 });
 
+// T-0050 — the bracketed JSON list form `gw config` accepts (T-0043) used to
+// be comma-split by POST /api/config's own copy of the coercion, storing the
+// printed form as quoted garbage so `gw add --type doc` was then refused while
+// the same help listed `doc` as allowed. The endpoint now goes through the
+// same list coercion in lib/settings.js the CLI command uses, so the two
+// cannot drift apart again.
+test('T-0050: POST /api/config stores the bracketed list form as a real array and the vocabulary works afterwards', async () => {
+  await withServer(async ({ store, url }) => {
+    const value = JSON.stringify(['decision', 'defect', 'feature', 'test', 'doc', 'spike']);
+    const response = await write(url, '/api/config', { key: 'vocab.type', value });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).config, { 'vocab.type': ['decision', 'defect', 'feature', 'test', 'doc', 'spike'] });
+    const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+    assert.deepEqual(saved.vocab.type, ['decision', 'defect', 'feature', 'test', 'doc', 'spike'], 'the stored value must be a real array, not a comma-split of the printed form');
+    // The saved vocabulary must actually work afterwards, driven through the
+    // same command modules the binary runs.
+    let stderr = '';
+    const code = await runRouter(['add', 'typed work', '--phase', 'P1', '--type', 'doc'], { cwd: store.root, env: {}, stdout: { write() {} }, stderr: { write: (text) => { stderr += text; } } });
+    assert.equal(code, 0, `gw add --type doc must succeed against the saved vocabulary, got: ${stderr}`);
+    assert.equal(store.readItems().find((item) => item.title === 'typed work').type, 'doc');
+  });
+});
+
+test('T-0050: POST /api/config refuses a malformed bracketed list with the CLI wording and writes nothing', async () => {
+  await withServer(async ({ store, url }) => {
+    const before = readFileSync(store.paths.config);
+    const response = await write(url, '/api/config', { key: 'vocab.type', value: '["a", "b"' });
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /that bracketed value is not valid JSON/);
+    assert.deepEqual(readFileSync(store.paths.config), before, 'a refused value leaves config.json byte-identical');
+  });
+});
+
+// T-0051 — the serve write path resolved its own actor, so the CLI's bare
+// `agent` refusal (a kind with no name) and its bare-name qualification
+// (`human:<name>`) did not apply to writes made through the board. It now
+// uses the exported actor() from lib/cli/root.js -- the same resolver every
+// command passes through -- so there is one actor space, consistent with
+// sameOwner().
+test('T-0051: a bare agent actor on a board write is refused with the CLI convention named', async () => {
+  await withServer(async ({ store, url }) => {
+    const before = readFileSync(store.paths.items);
+    const response = await write(url, '/api/items', { title: 'Ghost writer', phase: 'P1', by: 'agent' });
+    assert.equal(response.status, 400, 'the board must refuse what the CLI refuses, not record it as human:agent');
+    const body = await response.json();
+    assert.match(body.error, /the actor names no agent: use --by agent:<name>/);
+    assert.deepEqual(readFileSync(store.paths.items), before, 'a refused write must not create an item');
+    assert.deepEqual(store.readEvents(), [], 'a refused write appends no event');
+  });
+});
+
+test('T-0051: a bare name actor is recorded as human:<name> and a qualified actor is kept as given', async () => {
+  await withServer(async ({ store, url }) => {
+    assert.equal((await write(url, '/api/items', { title: 'Named write', phase: 'P1', by: 'rahil' })).status, 200);
+    const added = store.readItems().find((item) => item.title === 'Named write');
+    assert.equal(added.created_by, 'human:rahil');
+    assert.equal(store.readEvents().find((event) => event.type === 'add').by, 'human:rahil');
+    assert.equal((await write(url, `/api/items/${added.id}/claim`, { by: 'agent:codex' })).status, 200);
+    assert.equal(store.readItems().find((item) => item.id === added.id).owner, 'agent:codex');
+  });
+});
+
 // THE SECURITY PROPERTY. `gw serve --host 0.0.0.0` exists so a colleague can
 // move a card. It must not hand that colleague -- or anyone else who can reach
 // the port -- the power to delete stages, disable a gate or start the runner.
@@ -415,7 +501,7 @@ test('stage and settings writes are refused from a non-loopback host even when i
 test('an item move from that same allowed non-loopback host still succeeds', async () => {
   await withServer(async ({ store, url }) => {
     const headers = { Host: 'board.local', Origin: 'http://board.local', 'Content-Type': 'application/json' };
-    const moved = await raw(url, '/api/items/P1-01/move', { body: JSON.stringify({ to: 'building', evidence: [] }), headers });
+    const moved = await raw(url, '/api/items/P1-01/move', { body: JSON.stringify({ to: 'building', evidence: [], by: 'human:tester' }), headers });
     assert.equal(moved.status, 200, 'the colleague on the LAN is the feature; only the rules are loopback-only');
     assert.equal(store.readItems().find((candidate) => candidate.id === 'P1-01').stage, 'building');
   }, { allowedHosts: ['board.local'] });
@@ -437,15 +523,15 @@ test('/api/state reports whether this caller may change stages and settings', as
 // move was refused despite the UI having offered it.
 test('a backward move from the board is accepted when it asks for force, and refused when it does not', async () => {
   await withServer(async ({ url, store }) => {
-    await write(url, '/api/items/P1-01/move', { to: 'building' });
+    await write(url, '/api/items/P1-01/move', { to: 'building', by: 'human:tester' });
     assert.equal(store.readItems()[0].stage, 'building');
 
-    const withoutForce = await write(url, '/api/items/P1-01/move', { to: 'backlog' });
+    const withoutForce = await write(url, '/api/items/P1-01/move', { to: 'backlog', by: 'human:tester' });
     // 409, the status this API uses for a rule violation, not 400.
     assert.equal(withoutForce.status, 409, 'a backward move is force-only by definition');
     assert.equal(store.readItems()[0].stage, 'building', 'and nothing moved');
 
-    const forced = await write(url, '/api/items/P1-01/move', { to: 'backlog', force: true });
+    const forced = await write(url, '/api/items/P1-01/move', { to: 'backlog', force: true, by: 'human:tester' });
     assert.equal(forced.status, 200);
     assert.equal(store.readItems()[0].stage, 'backlog', 'the human corrected their own mistake from the board');
   });
@@ -460,11 +546,11 @@ test('claim and release are reachable from the board', async () => {
     const reclaim = await write(url, '/api/items/P1-01/claim', {});
     assert.equal(reclaim.status, 409, 'an already-owned item cannot be silently taken');
 
-    const released = await write(url, '/api/items/P1-01/release', {});
+    const released = await write(url, '/api/items/P1-01/release', { actor: 'tester' });
     assert.equal(released.status, 200);
     assert.equal(store.readItems()[0].owner, null);
 
-    const claimed = await write(url, '/api/items/P1-01/claim', {});
+    const claimed = await write(url, '/api/items/P1-01/claim', { actor: 'tester' });
     assert.equal(claimed.status, 200);
     assert.match(store.readItems()[0].owner, /^human:/, 'the board records a real actor, not an anonymous write');
   });

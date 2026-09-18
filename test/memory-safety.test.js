@@ -47,7 +47,7 @@ test('P5-10: a hanging memory transport times out in 25ms; dispatch still starts
   const hanging = { recall: () => new Promise(() => {}), remember: () => new Promise(() => {}) };
   const registry = createRunRegistry({ store: fixture.store }); registry.record({ run: 'r-hang', item: item.id, pid: process.pid, worktree: fixture.worktree });
   createRunLifecycle({ store: fixture.store, registry, memoryTransport: hanging }).finish({ run: 'r-hang' }, { code: 0 });
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: hanging });
+  move({ store: fixture.store, root: fixture.root, actor: 'agent:r-ok', flags: { evidence: ['cafebabe'] }, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: hanging });
   let output = '';
   await brief({ store: fixture.store, root: fixture.root, flags: {}, stdout: { write(value) { output += value; } }, memoryTransport: { recall: () => new Promise(() => {}) } });
   assert.match(output, /gw · 0 open/);
@@ -62,7 +62,7 @@ test('P5-10: a throwing transport does not block dispatch, completion, close, or
   registry.record({ run: 'r-ok', item: item.id, pid: process.pid, worktree: fixture.worktree });
   createRunLifecycle({ store: fixture.store, registry, gitHead: () => 'deadbeef', memoryTransport: { remember: (...args) => { calls.push(args); throw new Error('offline'); } } }).finish({ run: 'r-ok' }, { code: 0 });
   await flush();
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: { remember: (...args) => { calls.push(args); throw new Error('offline'); } } });
+  move({ store: fixture.store, root: fixture.root, actor: 'agent:r-ok', flags: { evidence: ['cafebabe'] }, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: { remember: (...args) => { calls.push(args); throw new Error('offline'); } } });
   await flush();
   let output = '';
   await brief({ store: fixture.store, root: fixture.root, flags: {}, stdout: { write(value) { output += value; } }, memoryTransport: { recall: () => { throw new Error('offline'); } } });
@@ -88,7 +88,7 @@ test('P5-10: disabled memory makes zero transport calls across dispatch, run, co
   assert.equal(started.prompt, 'Prior: \n');
   const registry = createRunRegistry({ store: fixture.store }); registry.record({ run: 'r-off', item: item.id, pid: process.pid, worktree: fixture.worktree });
   createRunLifecycle({ store: fixture.store, registry, memoryTransport: transport }).finish({ run: 'r-off' }, { code: 0 });
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: transport });
+  move({ store: fixture.store, root: fixture.root, actor: 'agent:r-ok', flags: { evidence: ['cafebabe'] }, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: transport });
   await brief({ store: fixture.store, root: fixture.root, flags: { recall: true }, stdout: { write() {} }, memoryTransport: transport });
   assert.equal(calls, 0);
 });
@@ -102,20 +102,20 @@ test('P5-11: completion and close each remember exactly once with the §14 conte
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'owner/widget · P5-10 Memory safety · building→building · changed: Add safe memory backend · why: prove the backend cannot block · evidence: deadbeef');
   assert.deepEqual(calls[0][1], ['gatewright', 'owner/widget', 'work', 'unknown']);
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: transport }); await flush();
+  move({ store: fixture.store, root: fixture.root, actor: 'agent:r-ok', flags: { evidence: ['cafebabe'] }, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: transport }); await flush();
   assert.equal(calls.length, 2);
-  assert.equal(calls[1][0], 'owner/widget · P5-10 Memory safety · building→verified · changed:  · why: prove the backend cannot block · evidence: deadbeef');
+  assert.equal(calls[1][0], 'owner/widget · P5-10 Memory safety · building→verified · changed:  · why: prove the backend cannot block · evidence: deadbeef, cafebabe');
   assert.deepEqual(calls[1][1], ['gatewright', 'owner/widget', 'work', 'unknown', 'verified']);
   lifecycle.finish({ run: 'r-ok' }, { code: 0 });
-  assert.throws(() => move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: transport }));
+  assert.throws(() => move({ store: fixture.store, root: fixture.root, actor: 'agent:r-ok', flags: { evidence: ['cafebabe'] }, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: transport }));
   await flush();
   assert.equal(calls.length, 2);
 });
 
 test('P5-11: reaching close_on without a completed run remembers exactly once with the close template', async () => {
   const fixture = board(); const calls = [];
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: { remember: (...args) => { calls.push(args); } } }); await flush();
+  move({ store: fixture.store, root: fixture.root, actor: 'agent:r-ok', flags: { evidence: ['cafebabe'] }, positionals: [item.id, 'verified'], stdout: { write() {} }, memoryTransport: { remember: (...args) => { calls.push(args); } } }); await flush();
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], 'owner/widget · P5-10 Memory safety · building→verified · changed:  · why: prove the backend cannot block · evidence: deadbeef');
+  assert.equal(calls[0][0], 'owner/widget · P5-10 Memory safety · building→verified · changed:  · why: prove the backend cannot block · evidence: deadbeef, cafebabe');
   assert.deepEqual(calls[0][1], ['gatewright', 'owner/widget', 'work', 'unknown', 'verified']);
 });

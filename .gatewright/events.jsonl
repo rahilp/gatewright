@@ -802,3 +802,458 @@
 {"ts":"2026-09-17T23:40:17.933Z","type":"move","item":"P0-17","from":"backlog","to":"specified","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:40:17.990Z","type":"move","item":"P0-17","from":"specified","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-17T23:40:25.769Z","type":"move","item":"P0-17","from":"building","to":"built","by":"human:rahil","evidence":["7c8d513","verified: net zero growth across runs; /tmp inodes 97% -> 1%"]}
+{"ts":"2026-09-17T23:58:19.178Z","type":"add","item":"T-0001","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T23:58:23.888Z","type":"move","item":"T-0001","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-17T23:59:48.169Z","type":"add","item":"T-0002","by":"human:rahil","parent":null}
+{"ts":"2026-09-17T23:59:48.225Z","type":"edit","item":"T-0002","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.378Z","type":"add","item":"T-0003","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.435Z","type":"edit","item":"T-0003","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.494Z","type":"add","item":"T-0004","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.547Z","type":"edit","item":"T-0004","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.596Z","type":"add","item":"T-0005","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.650Z","type":"edit","item":"T-0005","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.701Z","type":"add","item":"T-0006","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.760Z","type":"edit","item":"T-0006","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.811Z","type":"add","item":"T-0007","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.864Z","type":"edit","item":"T-0007","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:40.918Z","type":"add","item":"T-0008","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:40.973Z","type":"edit","item":"T-0008","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.025Z","type":"add","item":"T-0009","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.079Z","type":"edit","item":"T-0009","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.135Z","type":"add","item":"T-0010","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.188Z","type":"edit","item":"T-0010","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.244Z","type":"add","item":"T-0011","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.300Z","type":"edit","item":"T-0011","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.356Z","type":"add","item":"T-0012","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.411Z","type":"edit","item":"T-0012","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:04:41.467Z","type":"add","item":"T-0013","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:04:41.524Z","type":"edit","item":"T-0013","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.372Z","type":"add","item":"T-0014","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.425Z","type":"edit","item":"T-0014","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.484Z","type":"add","item":"T-0015","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.541Z","type":"edit","item":"T-0015","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.594Z","type":"add","item":"T-0016","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.648Z","type":"edit","item":"T-0016","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.707Z","type":"add","item":"T-0017","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.758Z","type":"edit","item":"T-0017","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.810Z","type":"add","item":"T-0018","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.862Z","type":"edit","item":"T-0018","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:30.921Z","type":"add","item":"T-0019","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:30.980Z","type":"edit","item":"T-0019","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:31.037Z","type":"add","item":"T-0020","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:31.094Z","type":"edit","item":"T-0020","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:16:31.147Z","type":"add","item":"T-0021","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:16:31.204Z","type":"edit","item":"T-0021","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T00:33:32.822Z","type":"claim","item":"T-0002","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:32.880Z","type":"move","item":"T-0002","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:33:32.931Z","type":"claim","item":"T-0003","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:32.987Z","type":"move","item":"T-0003","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:33:33.039Z","type":"claim","item":"T-0014","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:33.093Z","type":"move","item":"T-0014","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:33:33.143Z","type":"claim","item":"T-0015","by":"human:rahil"}
+{"ts":"2026-09-18T00:33:33.199Z","type":"move","item":"T-0015","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:34:52.008Z","type":"add","item":"T-0022","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:52.073Z","type":"add","item":"T-0023","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:52.138Z","type":"add","item":"T-0024","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:52.201Z","type":"add","item":"T-0025","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T00:34:54.311Z","type":"claim","item":"T-0022","by":"human:rahil"}
+{"ts":"2026-09-18T00:34:54.372Z","type":"claim","item":"T-0023","by":"human:rahil"}
+{"ts":"2026-09-18T00:34:54.431Z","type":"claim","item":"T-0024","by":"human:rahil"}
+{"ts":"2026-09-18T00:34:54.493Z","type":"claim","item":"T-0025","by":"human:rahil"}
+{"ts":"2026-09-18T00:37:12.257Z","type":"note","item":"T-0002","by":"human:rahil","note":"Plan: digest items+stages+config in store.js (events.jsonl stays undigested, append-only); verifyDigest reports per-file out-of-band writes; old digests without per-file keys baseline silently; writeConfig and serve's replaceStages rebaseline; tests in store/check tests."}
+{"ts":"2026-09-18T00:37:12.311Z","type":"note","item":"T-0003","by":"human:rahil","note":"Plan: resume() requires exactly what stop produces (flag 'paused' + prev_stage), refuses otherwise in house style via UsageError, never touches owner; tests in run-lifecycle tests."}
+{"ts":"2026-09-18T00:41:11.870Z","type":"note","item":"T-0022","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:11.927Z","type":"move","item":"T-0022","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:41:11.976Z","type":"note","item":"T-0023","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:12.035Z","type":"move","item":"T-0023","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:41:12.103Z","type":"note","item":"T-0024","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:12.161Z","type":"move","item":"T-0024","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:41:12.217Z","type":"note","item":"T-0025","by":"human:rahil","note":"Not filed by Rahil. An agent working T-0014/T-0015 wrote its own plan steps to the live board, breaching its brief. Dropped as litter."}
+{"ts":"2026-09-18T00:41:12.277Z","type":"move","item":"T-0025","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:42:10.966Z","type":"move","item":"T-0002","from":"building","to":"built","by":"human:rahil","evidence":["test/store.test.js","test/check.test.js"]}
+{"ts":"2026-09-18T00:42:11.028Z","type":"move","item":"T-0003","from":"building","to":"built","by":"human:rahil","evidence":["test/run-lifecycle.test.js"]}
+{"ts":"2026-09-18T00:42:56.741Z","type":"move","item":"T-0015","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: typed text survived two poll cycles intact"]}
+{"ts":"2026-09-18T00:42:56.794Z","type":"move","item":"T-0014","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: confirm asked \"Remove stage Merged (merged)... Deleting it loses its gate rules\", declining left the stage in place"]}
+{"ts":"2026-09-18T00:45:10.355Z","type":"move","item":"T-0002","from":"built","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:45:10.409Z","type":"note","item":"T-0002","by":"human:rahil","note":"Agent marked this built prematurely. Verification found a regression: gw config now trips its own tamper alarm because it persists outside store.writeConfig. Returned to the agent with a per-write-path audit required."}
+{"ts":"2026-09-18T00:52:27.070Z","type":"move","item":"T-0002","from":"building","to":"built","by":"human:rahil","evidence":["lib/store.js","test/store.test.js","verified: 6 gw write paths + 2 serve endpoints leave check clean; stages tamper exits 1; events append ignored; 537 tests x3"]}
+{"ts":"2026-09-18T00:52:27.129Z","type":"claim","item":"T-0004","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.185Z","type":"move","item":"T-0004","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.244Z","type":"claim","item":"T-0005","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.298Z","type":"move","item":"T-0005","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.354Z","type":"claim","item":"T-0006","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.413Z","type":"move","item":"T-0006","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.463Z","type":"claim","item":"T-0008","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.521Z","type":"move","item":"T-0008","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.576Z","type":"claim","item":"T-0016","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.632Z","type":"move","item":"T-0016","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T00:52:27.694Z","type":"claim","item":"T-0017","by":"human:rahil"}
+{"ts":"2026-09-18T00:52:27.762Z","type":"move","item":"T-0017","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:05:48.109Z","type":"move","item":"T-0004","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/show.js","verified: 'gw show — show one item and its events'"]}
+{"ts":"2026-09-18T01:05:48.167Z","type":"move","item":"T-0005","from":"building","to":"built","by":"human:rahil","evidence":["lib/settings.js","verified: guard.mode, check.stale_days, brief.max_lines, github.dispatch_label, memory.provider all reachable; mirror deep-equal intact"]}
+{"ts":"2026-09-18T01:05:48.226Z","type":"move","item":"T-0006","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: brief.{dispatched,in_flight,blocked,needs_triage,next_unblocked}"]}
+{"ts":"2026-09-18T01:05:48.285Z","type":"move","item":"T-0008","from":"building","to":"built","by":"human:rahil","evidence":["lib/import/json.js","verified: csv and json both exit 2 when every row lacks an id"]}
+{"ts":"2026-09-18T01:10:23.155Z","type":"claim","item":"T-0007","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.211Z","type":"move","item":"T-0007","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.266Z","type":"claim","item":"T-0009","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.321Z","type":"move","item":"T-0009","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.376Z","type":"claim","item":"T-0010","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.432Z","type":"move","item":"T-0010","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.491Z","type":"claim","item":"T-0011","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.551Z","type":"move","item":"T-0011","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.607Z","type":"claim","item":"T-0012","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.667Z","type":"move","item":"T-0012","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.723Z","type":"claim","item":"T-0013","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.781Z","type":"move","item":"T-0013","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.833Z","type":"claim","item":"T-0018","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:23.896Z","type":"move","item":"T-0018","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:23.954Z","type":"claim","item":"T-0019","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:24.008Z","type":"move","item":"T-0019","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:24.064Z","type":"claim","item":"T-0020","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:24.124Z","type":"move","item":"T-0020","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:10:24.177Z","type":"claim","item":"T-0021","by":"human:rahil"}
+{"ts":"2026-09-18T01:10:24.236Z","type":"move","item":"T-0021","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T01:24:49.507Z","type":"move","item":"T-0007","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/import.js","verified: skips a bad-vocab row with line and reason, all-bad exits 2"]}
+{"ts":"2026-09-18T01:24:49.567Z","type":"move","item":"T-0009","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/add.js","verified: newline and empty titles refused at exit 2, list sanitises legacy rows"]}
+{"ts":"2026-09-18T01:24:49.632Z","type":"move","item":"T-0010","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/move.js","verified: terminal-stage refusal now exits 1 like its siblings"]}
+{"ts":"2026-09-18T01:24:49.688Z","type":"move","item":"T-0011","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/gc.js","verified: names the problem and the fix instead of dumping git stderr"]}
+{"ts":"2026-09-18T01:24:49.741Z","type":"move","item":"T-0012","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: All 1 item(s) are finished"]}
+{"ts":"2026-09-18T01:24:49.794Z","type":"move","item":"T-0013","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/note.js","verified: note text must not be empty"]}
+{"ts":"2026-09-18T01:24:49.851Z","type":"move","item":"T-0019","from":"building","to":"built","by":"human:rahil","evidence":["lib/commands/check.js","verified: QUEUED DISPATCH reported when the runner is disabled"]}
+{"ts":"2026-09-18T01:24:49.910Z","type":"move","item":"T-0020","from":"building","to":"built","by":"human:rahil","evidence":["lib/brief.js","verified: isFlagged/flaggedItems exported so viewer and CLI share one definition"]}
+{"ts":"2026-09-18T01:29:14.032Z","type":"move","item":"T-0016","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: snapshot hides + new item; root cause was boot() forcing live on any http origin"]}
+{"ts":"2026-09-18T01:29:14.090Z","type":"move","item":"T-0017","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: role=button tabindex=0 aria-label 'Open item T-0002', Enter and Space both open, Esc returns focus"]}
+{"ts":"2026-09-18T01:45:40.028Z","type":"add","item":"T-0026","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:45:40.082Z","type":"edit","item":"T-0026","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T01:45:40.140Z","type":"move","item":"T-0018","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified: 'The board does not skip gates — a forced skip is a CLI decision.'; no gw move --force string left in the viewer"]}
+{"ts":"2026-09-18T01:46:31.901Z","type":"move","item":"T-0021","from":"building","to":"built","by":"human:rahil","evidence":["viewer/board.html","verified in Chrome: 118-char title wraps to 4 lines in a 221px card, no board or overview overflow"]}
+{"ts":"2026-09-18T01:46:31.958Z","type":"add","item":"T-0027","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:46:32.014Z","type":"edit","item":"T-0027","by":"human:rahil","fields":["scope"]}
+{"ts":"2026-09-18T01:55:06.738Z","type":"add","item":"T-0028","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.770Z","type":"add","item":"T-0029","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.824Z","type":"add","item":"T-0030","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.883Z","type":"add","item":"T-0031","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:30.940Z","type":"add","item":"T-0032","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.001Z","type":"add","item":"T-0033","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.060Z","type":"add","item":"T-0034","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.125Z","type":"add","item":"T-0035","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.189Z","type":"add","item":"T-0036","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:56:31.249Z","type":"add","item":"T-0037","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T01:58:32.829Z","type":"note","item":"T-0029","by":"human:rahil","note":"ESCALATED after driving it myself. The duplicate-counting is a symptom; the structural defect is that evidence_min counts the item's LIFETIME evidence array (lib/rules.js:34), not evidence supplied for this move. In the shipped templates/stages.json: built requires evidence_min 1, in_review requires a PR link (adding a 2nd entry), verified requires evidence_min 2. So by the time an item reaches verified it ALWAYS has >=2 entries. Verified accepted the move with NO new evidence, rc=0. The final gate of the default pipeline cannot fail in any normal walk - it is dead code as shipped. evidence_match has the same shape (rules.js:44 .some() over lifetime evidence), so a PR link supplied once satisfies every later evidence_match stage forever. Fix must decide per-move vs cumulative semantics, not just de-duplicate."}
+{"ts":"2026-09-18T01:58:37.151Z","type":"edit","item":"T-0029","by":"human:rahil","fields":["title"]}
+{"ts":"2026-09-18T01:59:47.374Z","type":"note","item":"T-0029","by":"human:rahil","note":"DECISION (product owner): evidence_min and evidence_match take PER-MOVE semantics, not lifetime.\n\nWhy not the cheaper fix. De-duplicating the lifetime array fixes the symptom and leaves the defect: built(1) + in_review(PR link) already puts 2 DISTINCT entries on the item, so verified's evidence_min 2 stays pre-satisfied. Any fix that still counts lifetime evidence leaves the last gate dead.\n\nWhat a gate means. Standing in stage N asserts 'the evidence for N exists'. Verification evidence is categorically not the commit that satisfied built - it is a test run, a deploy check, a reviewer's sign-off. A threshold that an earlier stage already met is not a gate, it is decoration.\n\nSemantics: evidence_min N = at least N distinct entries supplied WITH THIS MOVE. evidence_match = at least one entry supplied WITH THIS MOVE matches the pattern. Distinct means after trimming and exact de-duplication against both the other entries in this move and the entries already on the item.\n\nData shape: item.evidence becomes entries carrying the stage they were supplied for, so the board can show what justified each gate and so this rule is checkable after the fact. Existing flat strings migrate with stage null. Breaking change, and migrations are in scope.\n\nConsequence accepted: forcing an item backward and re-moving it forward will demand fresh evidence. That is correct - if the work was redone, the old evidence no longer describes it.\n\nStages with an empty requires block (reviewed, merged in the shipped template) are unaffected and still advance by hand; that is a separate question about whether the default pipeline asks for enough, filed separately."}
+{"ts":"2026-09-18T01:59:47.434Z","type":"add","item":"T-0038","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.577Z","type":"add","item":"T-0039","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.628Z","type":"add","item":"T-0040","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.683Z","type":"add","item":"T-0041","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.742Z","type":"add","item":"T-0042","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.795Z","type":"add","item":"T-0043","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.852Z","type":"add","item":"T-0044","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.912Z","type":"add","item":"T-0045","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:07.968Z","type":"add","item":"T-0046","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:08.030Z","type":"add","item":"T-0047","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:08.089Z","type":"add","item":"T-0048","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:04:08.145Z","type":"add","item":"T-0049","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:05:35.207Z","type":"claim","item":"T-0029","by":"agent:evidence"}
+{"ts":"2026-09-18T02:05:35.266Z","type":"move","item":"T-0029","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.318Z","type":"claim","item":"T-0038","by":"agent:evidence"}
+{"ts":"2026-09-18T02:05:35.376Z","type":"move","item":"T-0038","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.431Z","type":"claim","item":"T-0039","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:35.487Z","type":"move","item":"T-0039","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.541Z","type":"claim","item":"T-0041","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:35.597Z","type":"move","item":"T-0041","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.651Z","type":"claim","item":"T-0042","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:35.709Z","type":"move","item":"T-0042","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.766Z","type":"claim","item":"T-0044","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:35.822Z","type":"move","item":"T-0044","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.876Z","type":"claim","item":"T-0045","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:35.930Z","type":"move","item":"T-0045","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:35.986Z","type":"claim","item":"T-0046","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:36.037Z","type":"move","item":"T-0046","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:36.092Z","type":"claim","item":"T-0047","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:36.142Z","type":"move","item":"T-0047","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:36.193Z","type":"claim","item":"T-0049","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:36.248Z","type":"move","item":"T-0049","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:36.298Z","type":"claim","item":"T-0033","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:36.353Z","type":"move","item":"T-0033","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:36.407Z","type":"claim","item":"T-0034","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:36.468Z","type":"move","item":"T-0034","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:05:36.520Z","type":"claim","item":"T-0037","by":"agent:messages"}
+{"ts":"2026-09-18T02:05:36.576Z","type":"move","item":"T-0037","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:15:20.216Z","type":"claim","item":"T-0030","by":"agent:identity"}
+{"ts":"2026-09-18T02:15:20.337Z","type":"move","item":"T-0030","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:15:20.463Z","type":"claim","item":"T-0031","by":"agent:identity"}
+{"ts":"2026-09-18T02:15:20.596Z","type":"move","item":"T-0031","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:15:20.723Z","type":"claim","item":"T-0032","by":"agent:identity"}
+{"ts":"2026-09-18T02:15:20.908Z","type":"move","item":"T-0032","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:15:21.095Z","type":"claim","item":"T-0035","by":"agent:identity"}
+{"ts":"2026-09-18T02:15:21.211Z","type":"move","item":"T-0035","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:15:21.332Z","type":"claim","item":"T-0040","by":"agent:identity"}
+{"ts":"2026-09-18T02:15:21.455Z","type":"move","item":"T-0040","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:15:21.572Z","type":"claim","item":"T-0043","by":"agent:identity"}
+{"ts":"2026-09-18T02:15:21.711Z","type":"move","item":"T-0043","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:21:23.065Z","type":"move","item":"T-0030","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI on a scratch board, 2026-09-18"]}
+{"ts":"2026-09-18T02:21:23.126Z","type":"move","item":"T-0031","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI on a scratch board, 2026-09-18"]}
+{"ts":"2026-09-18T02:21:23.187Z","type":"move","item":"T-0032","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI on a scratch board, 2026-09-18"]}
+{"ts":"2026-09-18T02:21:23.247Z","type":"move","item":"T-0035","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI on a scratch board, 2026-09-18"]}
+{"ts":"2026-09-18T02:21:23.313Z","type":"move","item":"T-0040","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI on a scratch board, 2026-09-18"]}
+{"ts":"2026-09-18T02:21:23.376Z","type":"move","item":"T-0043","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI on a scratch board, 2026-09-18"]}
+{"ts":"2026-09-18T02:21:44.503Z","type":"add","item":"T-0050","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:21:44.563Z","type":"add","item":"T-0051","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:22:01.308Z","type":"add","item":"T-0052","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:31:44.997Z","type":"move","item":"T-0034","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.055Z","type":"move","item":"T-0037","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.116Z","type":"move","item":"T-0039","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.173Z","type":"move","item":"T-0041","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.232Z","type":"move","item":"T-0042","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.293Z","type":"move","item":"T-0044","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.356Z","type":"move","item":"T-0045","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.416Z","type":"move","item":"T-0046","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.478Z","type":"move","item":"T-0047","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:31:45.544Z","type":"move","item":"T-0049","from":"building","to":"built","by":"human:rahil","evidence":["re-verified by driving the CLI on scratch boards: advice run verbatim and outcome asserted, 2026-09-18"]}
+{"ts":"2026-09-18T02:32:00.846Z","type":"add","item":"T-0053","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:37:34.912Z","type":"move","item":"T-0029","from":"building","to":"built","by":"human:rahil","evidence":["acceptance matrix run by hand: bare/duplicate/repeated-flag all refuse, two fresh entries pass; migration verified clean against check, config and brief"]}
+{"ts":"2026-09-18T02:37:34.974Z","type":"move","item":"T-0033","from":"building","to":"built","by":"human:rahil","evidence":["acceptance matrix run by hand: bare/duplicate/repeated-flag all refuse, two fresh entries pass; migration verified clean against check, config and brief"]}
+{"ts":"2026-09-18T02:37:35.141Z","type":"claim","item":"T-0052","by":"agent:consistency"}
+{"ts":"2026-09-18T02:37:35.195Z","type":"move","item":"T-0052","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:37:35.254Z","type":"claim","item":"T-0053","by":"agent:consistency"}
+{"ts":"2026-09-18T02:37:35.316Z","type":"move","item":"T-0053","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:41:35.181Z","type":"add","item":"T-0038.1","by":"agent:opencode","parent":"T-0038"}
+{"ts":"2026-09-18T02:41:35.243Z","type":"add","item":"T-0052.1","by":"agent:opencode","parent":"T-0052"}
+{"ts":"2026-09-18T02:41:35.307Z","type":"add","item":"T-0053.1","by":"agent:opencode","parent":"T-0053"}
+{"ts":"2026-09-18T02:41:35.372Z","type":"add","item":"T-0053.2","by":"agent:opencode","parent":"T-0053"}
+{"ts":"2026-09-18T02:41:36.285Z","type":"add","item":"T-0054","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:41:36.342Z","type":"add","item":"T-0055","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:41:36.403Z","type":"add","item":"T-0056","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:41:36.456Z","type":"add","item":"T-0057","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:41:36.516Z","type":"add","item":"T-0058","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:41:36.574Z","type":"add","item":"T-0059","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:41:38.293Z","type":"claim","item":"T-0038.1","by":"agent:opencode"}
+{"ts":"2026-09-18T02:41:38.349Z","type":"claim","item":"T-0052.1","by":"agent:opencode"}
+{"ts":"2026-09-18T02:41:38.412Z","type":"claim","item":"T-0053.1","by":"agent:opencode"}
+{"ts":"2026-09-18T02:41:38.472Z","type":"claim","item":"T-0053.2","by":"agent:opencode"}
+{"ts":"2026-09-18T02:45:07.573Z","type":"note","item":"T-0036","by":"human:rahil","note":"DECISION (product owner): triage must refuse self-approval.\n\nThe hold exists to keep unreviewed agent-created work off the scheduler until a human looks at it. Today gw triage <id> --approve succeeds for the same actor that created the item, so the reviewed party reviews itself and the hold gates nobody.\n\nFix: refuse --approve when the approving actor matches created_by (use sameOwner from lib/owner.js so human:rahil and rahil are the same person). The refusal must name who created it and say that someone else must approve, or that --force is the deliberate override. --drop stays available to the creator: discarding your own work needs no second pair of eyes.\n\nAlso: brief shows NEEDS TRIAGE rows with no instruction attached, and the agents block never mentions triage at all. Whatever brief prints for those rows must name the command that clears them, the same way check now does."}
+{"ts":"2026-09-18T02:45:07.628Z","type":"note","item":"T-0028","by":"human:rahil","note":"DECISION (product owner): guard accepts a commit that names any real item, and warns rather than refuses when that item is already finished.\n\nGuard's question is 'is this change accounted for on the board'. An item that is built IS accounted for. Requiring it to be in flight conflates 'accounted for' with 'in progress', and leaves --no-verify - which disables the check entirely - as the only path for a rollup commit. A check whose only escape hatch is to turn it off will get turned off habitually, and then it protects nothing.\n\nFix: refuse only when nothing is named and nothing is claimed, or when the named id does not exist on the board. When the named item exists but is finished, pass with a one-line warning naming the item and its stage. Multiple ids in one message: all must exist; warn for each finished one."}
+{"ts":"2026-09-18T02:45:07.685Z","type":"note","item":"T-0048","by":"human:rahil","note":"DECISION (product owner): add gw repair, so the tool's worst failure has a supported remedy.\n\nToday a malformed items.jsonl prints 'Repair it by hand or restore it from git' while brief prints 'Never edit .gatewright/ by hand' and the agents block forbids it outright. The only remedy is the one action every other surface prohibits.\n\ngw repair must: validate every line of items.jsonl and events.jsonl; report each bad line with its number and what is wrong; move unparseable lines to .gatewright/quarantine.jsonl rather than deleting them; re-baseline the digest afterwards so the repair does not read as tampering; and print what it did. Default to a dry run, requiring --write to change anything. Then the corrupt-board message points at gw repair instead of at hand-editing."}
+{"ts":"2026-09-18T02:45:21.340Z","type":"move","item":"T-0038.1","from":"backlog","to":"building","by":"agent:opencode","evidence":[]}
+{"ts":"2026-09-18T02:45:21.402Z","type":"move","item":"T-0052.1","from":"backlog","to":"building","by":"agent:opencode","evidence":[]}
+{"ts":"2026-09-18T02:45:21.462Z","type":"move","item":"T-0053.1","from":"backlog","to":"building","by":"agent:opencode","evidence":[]}
+{"ts":"2026-09-18T02:45:21.522Z","type":"move","item":"T-0053.2","from":"backlog","to":"building","by":"agent:opencode","evidence":[]}
+{"ts":"2026-09-18T02:45:24.370Z","type":"move","item":"T-0038.1","from":"building","to":"built","by":"agent:opencode","evidence":["npm test: 626 pass; footer byte-matches specs.md §6.1 line 497"]}
+{"ts":"2026-09-18T02:45:24.432Z","type":"move","item":"T-0052.1","from":"building","to":"built","by":"agent:opencode","evidence":["npm test: 626 pass; outcome test drives binary add/show/claim, guard matches via owner"]}
+{"ts":"2026-09-18T02:45:24.492Z","type":"move","item":"T-0053.1","from":"building","to":"built","by":"agent:opencode","evidence":["npm test: 626 pass; binary import prints 'skipped line 1: non-string dependency: 7'"]}
+{"ts":"2026-09-18T02:45:24.552Z","type":"move","item":"T-0053.2","from":"building","to":"built","by":"agent:opencode","evidence":["npm test 626 pass, preflight:ci passed"]}
+{"ts":"2026-09-18T02:45:31.049Z","type":"add","item":"T-0060","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:45:31.107Z","type":"note","item":"T-0060","by":"human:rahil","note":"Constraints that must hold, from how this viewer is built:\n- viewer/board.html is a single vanilla file with NO build step and zero runtime dependencies. No Tailwind, no CSS framework, no bundler. Hand-written CSS in the existing style block.\n- backdrop-filter needs a fallback: if it is unsupported the panels must stay legible, not become unreadable washes. Use a solid-ish base colour under the translucency.\n- Contrast is not optional. Every text/background pair must stay readable against the new translucent fills - the board is read on a phone in daylight.\n- The board must keep working as a file:// snapshot (gw open), so no remote fonts, no CDN assets, no external CSS.\n- Do not change markup structure or class names that the code queries; viewer/board.html:1128 regex-matches refusal text and several handlers key off existing classes. This is a styling pass.\n- The 390px phone width must not regress; there is an open defect (T-0027) about the Table view overflowing there already."}
+{"ts":"2026-09-18T02:47:12.600Z","type":"add","item":"T-0061","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T02:47:24.844Z","type":"move","item":"T-0038","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: footer matches specs 497 byte-for-byte; --by rahil stores human:rahil and guard matches; non-string dep skips the row with its line number"]}
+{"ts":"2026-09-18T02:47:24.900Z","type":"move","item":"T-0052","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: footer matches specs 497 byte-for-byte; --by rahil stores human:rahil and guard matches; non-string dep skips the row with its line number"]}
+{"ts":"2026-09-18T02:47:24.961Z","type":"move","item":"T-0053","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: footer matches specs 497 byte-for-byte; --by rahil stores human:rahil and guard matches; non-string dep skips the row with its line number"]}
+{"ts":"2026-09-18T02:50:09.025Z","type":"claim","item":"T-0061","by":"agent:roundtrip"}
+{"ts":"2026-09-18T02:50:09.082Z","type":"move","item":"T-0061","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:50:09.137Z","type":"claim","item":"T-0026","by":"agent:roundtrip"}
+{"ts":"2026-09-18T02:50:09.197Z","type":"move","item":"T-0026","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:50:09.254Z","type":"claim","item":"T-0036","by":"agent:gates"}
+{"ts":"2026-09-18T02:50:09.310Z","type":"move","item":"T-0036","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:50:09.363Z","type":"claim","item":"T-0028","by":"agent:gates"}
+{"ts":"2026-09-18T02:50:09.418Z","type":"move","item":"T-0028","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T02:50:09.472Z","type":"claim","item":"T-0048","by":"agent:gates"}
+{"ts":"2026-09-18T02:50:09.530Z","type":"move","item":"T-0048","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:00:35.840Z","type":"add","item":"T-0062","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:00:35.900Z","type":"add","item":"T-0063","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:00:35.959Z","type":"add","item":"T-0064","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:00:36.017Z","type":"note","item":"T-0054","by":"human:rahil","note":"CONFIRMED in a real browser by the round-2b reviewer, with DOM evidence."}
+{"ts":"2026-09-18T03:00:36.073Z","type":"note","item":"T-0055","by":"human:rahil","note":"CONFIRMED in a real browser by the round-2b reviewer, with DOM evidence."}
+{"ts":"2026-09-18T03:00:36.129Z","type":"note","item":"T-0056","by":"human:rahil","note":"CONFIRMED in a real browser by the round-2b reviewer, with DOM evidence."}
+{"ts":"2026-09-18T03:00:36.184Z","type":"note","item":"T-0057","by":"human:rahil","note":"CONFIRMED in a real browser by the round-2b reviewer, with DOM evidence."}
+{"ts":"2026-09-18T03:00:36.240Z","type":"note","item":"T-0058","by":"human:rahil","note":"CONFIRMED in a real browser by the round-2b reviewer, with DOM evidence."}
+{"ts":"2026-09-18T03:00:36.295Z","type":"note","item":"T-0059","by":"human:rahil","note":"CONFIRMED in a real browser by the round-2b reviewer, with DOM evidence."}
+{"ts":"2026-09-18T03:04:32.816Z","type":"claim","item":"T-0062","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:32.870Z","type":"move","item":"T-0062","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:32.928Z","type":"claim","item":"T-0063","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:32.983Z","type":"move","item":"T-0063","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.042Z","type":"claim","item":"T-0054","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.100Z","type":"move","item":"T-0054","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.156Z","type":"claim","item":"T-0055","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.216Z","type":"move","item":"T-0055","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.270Z","type":"claim","item":"T-0056","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.328Z","type":"move","item":"T-0056","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.383Z","type":"claim","item":"T-0057","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.442Z","type":"move","item":"T-0057","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.496Z","type":"claim","item":"T-0058","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.552Z","type":"move","item":"T-0058","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.607Z","type":"claim","item":"T-0059","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.665Z","type":"move","item":"T-0059","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.721Z","type":"claim","item":"T-0027","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.778Z","type":"move","item":"T-0027","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.833Z","type":"claim","item":"T-0064","by":"agent:viewer"}
+{"ts":"2026-09-18T03:04:33.892Z","type":"move","item":"T-0064","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:33.948Z","type":"claim","item":"T-0050","by":"agent:shared"}
+{"ts":"2026-09-18T03:04:34.005Z","type":"move","item":"T-0050","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:04:34.059Z","type":"claim","item":"T-0051","by":"agent:shared"}
+{"ts":"2026-09-18T03:04:34.116Z","type":"move","item":"T-0051","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:09:01.278Z","type":"move","item":"T-0036","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: creator refused rc=1 with a named reason, another actor approves rc=0, creator --drop still allowed; repair dry-run/--write/quarantine/digest all confirmed"]}
+{"ts":"2026-09-18T03:09:01.336Z","type":"move","item":"T-0048","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: creator refused rc=1 with a named reason, another actor approves rc=0, creator --drop still allowed; repair dry-run/--write/quarantine/digest all confirmed"]}
+{"ts":"2026-09-18T03:16:47.977Z","type":"move","item":"T-0028","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving guard: CVE and HTTP tokens alongside a real item pass silently rc=0; an actor claiming nothing but naming a real item passes via id match; unmatched-tokens-only and nothing-named both refuse rc=1 with the tokens listed"]}
+{"ts":"2026-09-18T03:18:59.805Z","type":"move","item":"T-0050","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving gw serve on a scratch board: POST /api/config stores a real array and gw add --type doc then succeeds; bare 'agent' refused 400 with the CLI's exact wording; bare name recorded as human:rahil; agent:codex kept"]}
+{"ts":"2026-09-18T03:18:59.863Z","type":"move","item":"T-0051","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving gw serve on a scratch board: POST /api/config stores a real array and gw add --type doc then succeeds; bare 'agent' refused 400 with the CLI's exact wording; bare name recorded as human:rahil; agent:codex kept"]}
+{"ts":"2026-09-18T03:32:05.447Z","type":"move","item":"T-0062","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.503Z","type":"move","item":"T-0063","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.557Z","type":"move","item":"T-0054","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.617Z","type":"move","item":"T-0055","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.677Z","type":"move","item":"T-0056","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.734Z","type":"move","item":"T-0057","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.792Z","type":"move","item":"T-0058","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.850Z","type":"move","item":"T-0059","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.909Z","type":"move","item":"T-0027","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:32:05.968Z","type":"move","item":"T-0064","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser (chromium/puppeteer) on a 61-item scratch board: evidence chips read 'commit abc123 Built' with no [object Object] anywhere; #board 15935px -> 724px; 0 bare ? pills; docScrollWidth 390 at phone width; +53 more is a real BUTTON expanding 8 -> 61 rows; panel labels human; dropped row offers no Claim or move picker"]}
+{"ts":"2026-09-18T03:35:10.180Z","type":"add","item":"T-0065","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:36:13.434Z","type":"move","item":"T-0061","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: verified-stage item round-trips with owner and all four stage-tagged evidence entries; three smuggling attempts (wrong tag, built-evidence-for-verified, no evidence) all refused to backlog; GW_ROOT project root works, .gatewright form warns, boardless path refuses rc=3 without creating a board"]}
+{"ts":"2026-09-18T03:36:13.491Z","type":"move","item":"T-0026","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: verified-stage item round-trips with owner and all four stage-tagged evidence entries; three smuggling attempts (wrong tag, built-evidence-for-verified, no evidence) all refused to backlog; GW_ROOT project root works, .gatewright form warns, boardless path refuses rc=3 without creating a board"]}
+{"ts":"2026-09-18T03:46:36.293Z","type":"add","item":"T-0066","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:46:36.350Z","type":"add","item":"T-0067","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:46:36.407Z","type":"add","item":"T-0068","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:46:36.468Z","type":"add","item":"T-0069","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:46:36.529Z","type":"add","item":"T-0070","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:51:58.693Z","type":"add","item":"T-0071","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:51:58.751Z","type":"add","item":"T-0072","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:51:58.810Z","type":"add","item":"T-0073","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T03:55:27.243Z","type":"note","item":"T-0068","by":"human:rahil","note":"DECISION (product owner): the hold blocks ADVANCEMENT, not capture or claiming.\n\nneeds-triage means 'captured but not yet accepted onto the board'. Two independent reviewers found it blocks nothing except triage --approve itself, while the agents block and brief both describe it as a hold someone must lift.\n\nImplement: gw move refuses to advance a needs-triage item PAST the initial stage, naming the flag, who created it, and that someone other than the creator must run gw triage <id> --approve. --force remains the recorded override, as everywhere else.\n- claim stays allowed: taking responsibility for unreviewed work is harmless and is a useful signal.\n- moves to side stages (dropped, paused) stay allowed: discarding or parking unreviewed capture needs no ceremony.\n- the flag must also not survive into a terminal stage. A verified item sitting in the brief's NEEDS TRIAGE list is nonsense; approving is implied once the work has been through the pipeline. Clear it on entry to a terminal stage if it somehow persists.\n\nThis keeps capture frictionless - the whole point of 'rigor at the evidence gate, not the capture gate' - while making the hold mean something."}
+{"ts":"2026-09-18T03:55:27.298Z","type":"note","item":"T-0072","by":"human:rahil","note":"DECISION (product owner): move refuses a non-owner, with the same --force escape claim offers.\n\nclaim already refuses a second claimant and names 'gw claim <id> --force' as the way to take it over. move ignoring ownership entirely makes that refusal theatre. Either both enforce or neither should, and for a multi-agent tool the lock is worth having.\n\nImplement: gw move refuses when the item has an owner and the acting actor is not that owner (use sameOwner from lib/owner.js). The refusal must name the current owner and offer 'gw claim <id> --force' to take it over first, which is the honest sequence - taking the work over is a recorded act, and then the move is yours. --force on move itself remains available as the deliberate one-off.\n\nAn unowned item is unaffected: anyone may move it, subject to the gates."}
+{"ts":"2026-09-18T03:55:27.352Z","type":"claim","item":"T-0067","by":"agent:gates3"}
+{"ts":"2026-09-18T03:55:27.409Z","type":"move","item":"T-0067","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:27.463Z","type":"claim","item":"T-0068","by":"agent:gates3"}
+{"ts":"2026-09-18T03:55:27.519Z","type":"move","item":"T-0068","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:27.575Z","type":"claim","item":"T-0071","by":"agent:gates3"}
+{"ts":"2026-09-18T03:55:27.632Z","type":"move","item":"T-0071","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:27.685Z","type":"claim","item":"T-0072","by":"agent:gates3"}
+{"ts":"2026-09-18T03:55:27.739Z","type":"move","item":"T-0072","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:27.793Z","type":"claim","item":"T-0066","by":"agent:brief3"}
+{"ts":"2026-09-18T03:55:27.851Z","type":"move","item":"T-0066","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:27.901Z","type":"claim","item":"T-0069","by":"agent:brief3"}
+{"ts":"2026-09-18T03:55:27.959Z","type":"move","item":"T-0069","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:28.013Z","type":"claim","item":"T-0070","by":"agent:brief3"}
+{"ts":"2026-09-18T03:55:28.070Z","type":"move","item":"T-0070","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:55:28.125Z","type":"claim","item":"T-0073","by":"agent:brief3"}
+{"ts":"2026-09-18T03:55:28.183Z","type":"move","item":"T-0073","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T03:58:42.331Z","type":"add","item":"T-0074","by":"agent:codex","parent":null}
+{"ts":"2026-09-18T03:58:42.389Z","type":"add","item":"T-0075","by":"agent:codex","parent":null}
+{"ts":"2026-09-18T03:58:42.450Z","type":"add","item":"T-0076","by":"agent:codex","parent":null}
+{"ts":"2026-09-18T03:58:42.509Z","type":"add","item":"T-0077","by":"agent:codex","parent":null}
+{"ts":"2026-09-18T03:58:45.681Z","type":"claim","item":"T-0074","by":"agent:codex"}
+{"ts":"2026-09-18T03:58:45.740Z","type":"claim","item":"T-0075","by":"agent:codex"}
+{"ts":"2026-09-18T03:58:45.796Z","type":"claim","item":"T-0076","by":"agent:codex"}
+{"ts":"2026-09-18T03:58:45.856Z","type":"claim","item":"T-0077","by":"agent:codex"}
+{"ts":"2026-09-18T03:58:45.918Z","type":"move","item":"T-0074","from":"backlog","to":"building","by":"agent:codex","evidence":[]}
+{"ts":"2026-09-18T03:58:45.979Z","type":"move","item":"T-0075","from":"backlog","to":"building","by":"agent:codex","evidence":[]}
+{"ts":"2026-09-18T03:58:46.042Z","type":"move","item":"T-0076","from":"backlog","to":"building","by":"agent:codex","evidence":[]}
+{"ts":"2026-09-18T03:58:46.104Z","type":"move","item":"T-0077","from":"backlog","to":"building","by":"agent:codex","evidence":[]}
+{"ts":"2026-09-18T04:00:45.569Z","type":"note","item":"T-0065","by":"human:rahil","note":"LIVE EVIDENCE, 2026-09-18T03:58:42Z: a fix agent (agent:codex) wrote four plan items - T-0074 through T-0077 - directly to this repo's board while working on it, then continued. It was following templates/agents-block.md ('put the plan on the board yourself') over its brief's prohibition on touching .gatewright/. That is at least the fifth agent tonight to hit this. The four items were dropped. This is no longer a theoretical contradiction; it actively corrupts the board of the one project most likely to be worked on by agents."}
+{"ts":"2026-09-18T04:01:09.403Z","type":"move","item":"T-0074","from":"building","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:01:09.464Z","type":"move","item":"T-0075","from":"building","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:01:09.530Z","type":"move","item":"T-0076","from":"building","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:01:09.599Z","type":"move","item":"T-0077","from":"building","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:14:49.319Z","type":"claim","item":"T-0027","by":"human:rahil"}
+{"ts":"2026-09-18T04:14:49.378Z","type":"move","item":"T-0027","from":"built","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:14:49.436Z","type":"note","item":"T-0027","by":"human:rahil","note":"REOPENED. My earlier verification was wrong. I measured docScrollWidth=390 at a 390px viewport and read it as 'no overflow, fixed'. A round-3 reviewer drove the same view and found what that number actually means: the table COMPRESSES to fit instead of scrolling, so the Title column collapses to ~30px and renders one character per line (B/l/o/c/k/e/d, featur/e). The absence of page overflow was the symptom of the bug, not evidence of the fix. The fix's own comment in board.html says the overflow belongs to the table container, not the document - either that never took effect or it loses to the column min-widths. Verify the NEXT fix by reading the rendered column widths and the table container's scrollWidth vs clientWidth, not the document's."}
+{"ts":"2026-09-18T04:14:49.498Z","type":"add","item":"T-0078","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T04:14:49.559Z","type":"add","item":"T-0079","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T04:14:49.623Z","type":"add","item":"T-0080","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T04:14:49.687Z","type":"add","item":"T-0081","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T04:14:49.746Z","type":"add","item":"T-0082","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T04:23:56.755Z","type":"move","item":"T-0066","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: claimed+building now counts in flight while claimed-unmoved does not; finished count and pointer appear; --me filters every bucket; the stranded-dep command was run verbatim and preserved the live dep"]}
+{"ts":"2026-09-18T04:23:56.815Z","type":"move","item":"T-0069","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: claimed+building now counts in flight while claimed-unmoved does not; finished count and pointer appear; --me filters every bucket; the stranded-dep command was run verbatim and preserved the live dep"]}
+{"ts":"2026-09-18T04:23:56.876Z","type":"move","item":"T-0070","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: claimed+building now counts in flight while claimed-unmoved does not; finished count and pointer appear; --me filters every bucket; the stranded-dep command was run verbatim and preserved the live dep"]}
+{"ts":"2026-09-18T04:23:56.938Z","type":"move","item":"T-0073","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: claimed+building now counts in flight while claimed-unmoved does not; finished count and pointer appear; --me filters every bucket; the stranded-dep command was run verbatim and preserved the live dep"]}
+{"ts":"2026-09-18T04:30:41.294Z","type":"move","item":"T-0067","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: hook install and status both warn the guard probe failed on this guardless machine; a held item is refused advancement and moves after another actor approves; check rc=1 INVALID STAGE even after repair re-baselined the digest; a non-owner move is refused naming both lawful exits"]}
+{"ts":"2026-09-18T04:30:41.356Z","type":"move","item":"T-0068","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: hook install and status both warn the guard probe failed on this guardless machine; a held item is refused advancement and moves after another actor approves; check rc=1 INVALID STAGE even after repair re-baselined the digest; a non-owner move is refused naming both lawful exits"]}
+{"ts":"2026-09-18T04:30:41.424Z","type":"move","item":"T-0071","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: hook install and status both warn the guard probe failed on this guardless machine; a held item is refused advancement and moves after another actor approves; check rc=1 INVALID STAGE even after repair re-baselined the digest; a non-owner move is refused naming both lawful exits"]}
+{"ts":"2026-09-18T04:30:41.485Z","type":"move","item":"T-0072","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: hook install and status both warn the guard probe failed on this guardless machine; a held item is refused advancement and moves after another actor approves; check rc=1 INVALID STAGE even after repair re-baselined the digest; a non-owner move is refused naming both lawful exits"]}
+{"ts":"2026-09-18T04:35:31.188Z","type":"claim","item":"T-0027","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.297Z","type":"claim","item":"T-0078","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.353Z","type":"move","item":"T-0078","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:35:31.408Z","type":"claim","item":"T-0079","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.466Z","type":"move","item":"T-0079","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:35:31.527Z","type":"claim","item":"T-0080","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.586Z","type":"move","item":"T-0080","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:35:31.643Z","type":"claim","item":"T-0081","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.701Z","type":"move","item":"T-0081","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:35:31.759Z","type":"claim","item":"T-0082","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.817Z","type":"move","item":"T-0082","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:35:31.872Z","type":"claim","item":"T-0060","by":"agent:viewer4"}
+{"ts":"2026-09-18T04:35:31.933Z","type":"move","item":"T-0060","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:35:31.990Z","type":"claim","item":"T-0065","by":"agent:docs4"}
+{"ts":"2026-09-18T04:35:32.054Z","type":"move","item":"T-0065","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T04:43:10.253Z","type":"move","item":"T-0065","from":"building","to":"built","by":"human:rahil","evidence":["verified: exception paragraph present in templates/agents-block.md line 7 and byte-matched in all four mirrors; names the scratch-board recipe and the cd-persistence trap; 689 tests pass"]}
+{"ts":"2026-09-18T05:07:10.200Z","type":"move","item":"T-0027","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:07:10.263Z","type":"move","item":"T-0078","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:07:10.326Z","type":"move","item":"T-0079","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:07:10.389Z","type":"move","item":"T-0080","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:07:10.449Z","type":"move","item":"T-0081","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:07:10.512Z","type":"move","item":"T-0082","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:07:10.572Z","type":"move","item":"T-0060","from":"building","to":"built","by":"human:rahil","evidence":["verified in a real browser: table container scrolls 893 vs 350 at 390px with a 208px title cell in word-lines; every gate reason bounded inside its own button wrap; zero console errors; glass applied with a solid @supports fallback and no external assets"]}
+{"ts":"2026-09-18T05:22:18.347Z","type":"add","item":"T-0083","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:22:18.405Z","type":"add","item":"T-0084","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:22:18.462Z","type":"add","item":"T-0085","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.187Z","type":"add","item":"T-0086","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.251Z","type":"add","item":"T-0087","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.309Z","type":"add","item":"T-0088","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:26:59.369Z","type":"add","item":"T-0089","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:35:12.470Z","type":"claim","item":"T-0083","by":"agent:integrity"}
+{"ts":"2026-09-18T05:35:12.528Z","type":"move","item":"T-0083","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.590Z","type":"claim","item":"T-0085","by":"agent:integrity"}
+{"ts":"2026-09-18T05:35:12.655Z","type":"move","item":"T-0085","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.713Z","type":"claim","item":"T-0086","by":"agent:integrity"}
+{"ts":"2026-09-18T05:35:12.772Z","type":"move","item":"T-0086","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.829Z","type":"claim","item":"T-0087","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:12.893Z","type":"move","item":"T-0087","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:12.951Z","type":"claim","item":"T-0084","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:13.009Z","type":"move","item":"T-0084","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:13.066Z","type":"claim","item":"T-0088","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:13.126Z","type":"move","item":"T-0088","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:35:13.182Z","type":"claim","item":"T-0089","by":"agent:advice"}
+{"ts":"2026-09-18T05:35:13.241Z","type":"move","item":"T-0089","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T05:47:11.103Z","type":"add","item":"T-0090","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:56:38.054Z","type":"add","item":"T-0091","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T05:56:38.118Z","type":"move","item":"T-0087","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T05:56:38.181Z","type":"move","item":"T-0084","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T05:56:38.244Z","type":"move","item":"T-0088","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T05:56:38.306Z","type":"move","item":"T-0089","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: the refusal's printed command was copied verbatim and succeeded; non-owner release refused naming both exits; claim discloses the hold in one line; tamper banner on brief and list with JSON left clean"]}
+{"ts":"2026-09-18T06:03:10.982Z","type":"move","item":"T-0083","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: parent refused verified naming the open child and its stage; agent creator refused even with --force while a different human and a solo human both approve; the three-command laundering sequence now ends with check rc=1 OUT-OF-BAND WRITE and repair refusing to re-baseline"]}
+{"ts":"2026-09-18T06:03:11.044Z","type":"move","item":"T-0085","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: parent refused verified naming the open child and its stage; agent creator refused even with --force while a different human and a solo human both approve; the three-command laundering sequence now ends with check rc=1 OUT-OF-BAND WRITE and repair refusing to re-baseline"]}
+{"ts":"2026-09-18T06:03:11.106Z","type":"move","item":"T-0086","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the CLI: parent refused verified naming the open child and its stage; agent creator refused even with --force while a different human and a solo human both approve; the three-command laundering sequence now ends with check rc=1 OUT-OF-BAND WRITE and repair refusing to re-baseline"]}
+{"ts":"2026-09-18T06:03:31.896Z","type":"add","item":"T-0092","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:03:31.955Z","type":"claim","item":"T-0092","by":"agent:viewer5"}
+{"ts":"2026-09-18T06:03:32.010Z","type":"move","item":"T-0092","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:03:32.068Z","type":"claim","item":"T-0091","by":"agent:viewer5"}
+{"ts":"2026-09-18T06:03:32.127Z","type":"move","item":"T-0091","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:03:32.183Z","type":"claim","item":"T-0090","by":"agent:viewer5"}
+{"ts":"2026-09-18T06:03:32.241Z","type":"move","item":"T-0090","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:15:30.006Z","type":"move","item":"T-0092","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: children_done checkboxes present per stage with verified checked and prose from describe.js; released mid-pipeline item drops out of in flight and appears under STRANDED; panel refusal measured at 6378ms across three 2.1s poll samples"]}
+{"ts":"2026-09-18T06:15:30.067Z","type":"move","item":"T-0091","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: children_done checkboxes present per stage with verified checked and prose from describe.js; released mid-pipeline item drops out of in flight and appears under STRANDED; panel refusal measured at 6378ms across three 2.1s poll samples"]}
+{"ts":"2026-09-18T06:15:30.127Z","type":"move","item":"T-0090","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: children_done checkboxes present per stage with verified checked and prose from describe.js; released mid-pipeline item drops out of in flight and appears under STRANDED; panel refusal measured at 6378ms across three 2.1s poll samples"]}
+{"ts":"2026-09-18T06:27:48.316Z","type":"add","item":"T-0093","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:27:48.374Z","type":"add","item":"T-0094","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:29:01.709Z","type":"add","item":"T-0095","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:29:01.772Z","type":"add","item":"T-0096","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:29:01.829Z","type":"note","item":"T-0095","by":"human:rahil","note":"DECISION NEEDED FROM ME, not an agent. Options as I see them:\n(a) triage_required_for defaults to [] rather than ['agent'], so the hold is opt-in for teams that want it. Capture stays frictionless and the all-agent case works out of the box; the cost is the hold protects nobody by default.\n(b) an agent may approve another AGENT's item, just never its own. Two agents on a board can proceed; a solo agent still cannot. Honest for multi-agent, still deadlocks the single-agent case that a user running one coding agent will hit first.\n(c) keep the rule and make the deadlock navigable: the refusal names the two real escapes (a human approves, or gw config triage_required_for '[]' turns the policy off) instead of leaving an agent to guess.\nLeaning (c) plus (b): the gate keeps meaning something, a second agent unblocks the common multi-agent case, and the solo case gets told exactly what to do rather than discovering a dead end. Wants Rahil's call because it changes what the product asserts about agent work."}
+{"ts":"2026-09-18T06:29:55.256Z","type":"add","item":"T-0097","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:29:55.318Z","type":"add","item":"T-0098","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:35:20.006Z","type":"add","item":"T-0099","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:35:20.069Z","type":"add","item":"T-0100","by":"human:rahil","parent":null}
+{"ts":"2026-09-18T06:40:31.789Z","type":"claim","item":"T-0098","by":"agent:round5"}
+{"ts":"2026-09-18T06:40:31.851Z","type":"move","item":"T-0098","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:40:31.907Z","type":"claim","item":"T-0099","by":"agent:round5"}
+{"ts":"2026-09-18T06:40:31.966Z","type":"move","item":"T-0099","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:40:32.022Z","type":"claim","item":"T-0100","by":"agent:round5"}
+{"ts":"2026-09-18T06:40:32.082Z","type":"move","item":"T-0100","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:40:32.144Z","type":"claim","item":"T-0094","by":"agent:round5"}
+{"ts":"2026-09-18T06:40:32.205Z","type":"move","item":"T-0094","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:40:32.263Z","type":"claim","item":"T-0096","by":"agent:round5"}
+{"ts":"2026-09-18T06:40:32.324Z","type":"move","item":"T-0096","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-18T06:50:03.135Z","type":"move","item":"T-0098","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: repair's printed remedy runs verbatim and check goes clean; check truncates 61 lines to 28 with (+35 more); next leads with the triage hold; Escape closes the drawer 9769 chars to 0 and the create dialog 1346 to 0; Enter on Close works; Release present for the owner"]}
+{"ts":"2026-09-18T06:50:03.195Z","type":"move","item":"T-0099","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: repair's printed remedy runs verbatim and check goes clean; check truncates 61 lines to 28 with (+35 more); next leads with the triage hold; Escape closes the drawer 9769 chars to 0 and the create dialog 1346 to 0; Enter on Close works; Release present for the owner"]}
+{"ts":"2026-09-18T06:50:03.257Z","type":"move","item":"T-0100","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: repair's printed remedy runs verbatim and check goes clean; check truncates 61 lines to 28 with (+35 more); next leads with the triage hold; Escape closes the drawer 9769 chars to 0 and the create dialog 1346 to 0; Enter on Close works; Release present for the owner"]}
+{"ts":"2026-09-18T06:50:03.321Z","type":"move","item":"T-0094","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: repair's printed remedy runs verbatim and check goes clean; check truncates 61 lines to 28 with (+35 more); next leads with the triage hold; Escape closes the drawer 9769 chars to 0 and the create dialog 1346 to 0; Enter on Close works; Release present for the owner"]}
+{"ts":"2026-09-18T06:50:03.386Z","type":"move","item":"T-0096","from":"building","to":"built","by":"human:rahil","evidence":["verified by driving the product: repair's printed remedy runs verbatim and check goes clean; check truncates 61 lines to 28 with (+35 more); next leads with the triage hold; Escape closes the drawer 9769 chars to 0 and the create dialog 1346 to 0; Enter on Close works; Release present for the owner"]}
+{"ts":"2026-09-18T06:56:10.921Z","type":"add","item":"T-0101","by":"human:rahil","parent":null}

@@ -40,9 +40,30 @@ test('rows missing an id or title are skipped with their line number', () => {
 // work and then blames the user for having no evidence.
 test('evidence survives both csv and json import', () => {
   const csv = parseCsv('id,title,evidence\nT-1,Title,"abc123, test/x.test.js"\n');
-  assert.deepEqual(csv.items[0].evidence, ['abc123', 'test/x.test.js']);
-  const json = parseJson('[{"id":"J-1","title":"T","evidence":["abc123"]}]');
-  assert.deepEqual(json.items[0].evidence, ['abc123']);
+  // A CSV cell is plain text: the migrated legacy shape, `stage: null`.
+  assert.deepEqual(csv.items[0].evidence, [
+    { text: 'abc123', stage: null },
+    { text: 'test/x.test.js', stage: null },
+  ]);
+  // T-0061 — a `gw list --json` dump carries the on-disk `{ text, stage }`
+  // objects and a hand-written file uses plain strings; both import, and the
+  // stage tag survives on the objects.
+  const json = parseJson('[{"id":"J-1","title":"T","evidence":["abc123",{"text":"commit def","stage":"built"}]}]');
+  assert.deepEqual(json.items[0].evidence, [
+    { text: 'abc123', stage: null },
+    { text: 'commit def', stage: 'built' },
+  ]);
+});
+
+// T-0061 — the same silence T-0053 removed from deps, on the evidence array:
+// an entry that is neither a string nor a `{ text, stage? }` object must not
+// vanish between the file and the board.
+test('json evidence entries that are neither strings nor {text,stage} objects skip the row', () => {
+  const { items, skipped } = parseJson('[{"id":"J-1","title":"x","evidence":["abc",7,{"stage":"built"}]}]');
+  assert.equal(items.length, 0, 'a row whose evidence cannot be trusted must not half-import the valid entries');
+  assert.equal(skipped.length, 1);
+  assert.equal(skipped[0].line, 1);
+  assert.match(skipped[0].reason, /invalid evidence entry: 7/);
 });
 
 test('json accepts a bare array and an items wrapper alike', () => {
@@ -53,6 +74,19 @@ test('json accepts a bare array and an items wrapper alike', () => {
 test('json deps may be an array or a delimited string', () => {
   assert.deepEqual(parseJson('[{"id":"A","title":"T","deps":["X","Y"]}]').items[0].deps, ['X', 'Y']);
   assert.deepEqual(parseJson('[{"id":"A","title":"T","deps":"X, Y"}]').items[0].deps, ['X', 'Y']);
+});
+
+// T-0053 — `[7, "T-0001"]` used to import as `["T-0001"]` with no trace of
+// the `7`: the non-string entries were filtered out before the
+// unknown-dependency check could ever see them. The row is now skipped with
+// the reason and its line number, the same report a row with an unknown
+// dependency gets.
+test('json deps entries that are not strings skip the row with the reason and line number', () => {
+  const { items, skipped } = parseJson('[{"id":"J-1","title":"x","deps":[7,"T-0001"]}]');
+  assert.equal(items.length, 0, 'a row whose deps cannot be trusted must not half-import the surviving string deps');
+  assert.equal(skipped.length, 1);
+  assert.equal(skipped[0].line, 1);
+  assert.match(skipped[0].reason, /non-string dependency: 7/);
 });
 
 test('malformed json and the wrong shape are both reported, not silently empty', () => {

@@ -88,7 +88,9 @@ test('close records verified decisions as canonical durable memory and a run plu
   const fixture = writeBoard({ type: 'decision' }); const calls = []; const transport = { remember: (...args) => { calls.push(args); } };
   const registry = createRunRegistry({ store: fixture.store }); registry.record({ run: 'r-ok', item: 'P5-06', pid: process.pid, worktree: fixture.worktree });
   createRunLifecycle({ store: fixture.store, registry, gitMessage: () => 'Complete it', memoryTransport: transport }).finish({ run: 'r-ok' }, { code: 0 });
-  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: {}, positionals: ['P5-06', 'verified'], stdout: { write() {} }, memoryTransport: transport }); await flush();
+  // T-0029 — the verified gate demands evidence supplied with the move; the
+  // fixture item's recorded strings earned under the old rule do not carry it.
+  move({ store: fixture.store, root: fixture.root, actor: 'human:test', flags: { evidence: ['https://ci.example.test/run/2'] }, positionals: ['P5-06', 'verified'], stdout: { write() {} }, memoryTransport: transport }); await flush();
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[0][2], { volatility: 'state' });
   assert.ok(calls[1][1].includes('verified')); assert.deepEqual(calls[1][2], { volatility: 'durable', canonical: true });

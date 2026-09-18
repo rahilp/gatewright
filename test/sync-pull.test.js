@@ -63,7 +63,10 @@ test('existing items merge intake fields only and preserve tracker-owned fields 
   assert.equal(updated.title, 'From GitHub'); assert.equal(updated.scope, 'Done means it works.');
   assert.equal(updated.priority, 'P1'); assert.equal(updated.type, 'defect'); assert.equal(updated.phase, 'P9', 'the milestone, not a label, decides phase');
   for (const field of ['stage', 'flag', 'owner', 'deps', 'evidence', 'notes', 'refs', 'id', 'created_by', 'parent', 'created', 'updated']) {
-    assert.deepEqual(updated[field], original[field], `${field} is tracker-owned`);
+    // Evidence entries are `{ text, stage }` in the store (T-0029); the flat
+    // fixture string is the migrated shape and reads back tagged `null`.
+    const expected = field === 'evidence' ? original[field].map((text) => ({ text, stage: null })) : original[field];
+    assert.deepEqual(updated[field], expected, `${field} is tracker-owned`);
   }
 });
 
@@ -97,6 +100,20 @@ test('an unchanged second sync performs zero data writes and appends zero events
   pull({ store, gh: gh([fixture]) });
   assert.deepEqual(hash(store), before);
   assert.equal(store.readEvents().length, events);
+});
+
+// A sync advances the watermark and writes config.json through
+// store.writeConfig. That is gw's own write, so it must re-baseline the
+// digest instead of being reported as tampering by the next check.
+test('a sync that advances the watermark keeps gw check clean', async () => {
+  const store = board();
+  const result = pull({ store, gh: gh([issue()]) });
+  assert.equal(result.watermarkChanged, true);
+  assert.equal(store.verifyDigest().status, 'clean');
+  let stdout = '';
+  const code = await runRouter(['check'], { cwd: store.root, env: {}, stdout: { write: (text) => { stdout += text; } }, stderr: { write() {} } });
+  assert.equal(code, 0);
+  assert.equal(stdout, 'Board is clean.\n');
 });
 
 test('--dry-run prints item changes while leaving the board untouched', () => {

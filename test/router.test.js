@@ -34,6 +34,24 @@ test('root lookup honors GW_ROOT, stops at its boundary, and gives a useful miss
   assert.throws(() => findRoot(base, {}, { stopAt: base }), /no .gatewright/);
 });
 
+// T-0030 — the actor convention (`agent:<name>`) must hold at the one place
+// every command's actor passes through: `agent:codex` is kept, a bare
+// `agent` (flag or env) is refused with the convention named, and the root
+// help documents both the env var and the flag.
+test('a bare agent actor is refused, agent:<name> passes, and the help says so', async () => {
+  const { actor } = await import('../lib/cli/root.js');
+  assert.equal(actor({ by: 'agent:codex' }, {}), 'agent:codex');
+  assert.equal(actor({}, { GW_ACTOR: 'agent:opencode' }), 'agent:opencode');
+  for (const [flags, env] of [[{ by: 'agent' }, {}], [{ by: 'agent:' }, {}], [{}, { GW_ACTOR: 'agent' }], [{}, { GW_ACTOR: 'agent:' }]]) {
+    assert.throws(() => actor(flags, env), (error) => error.message.includes('agent:<name>'));
+  }
+  const help = io();
+  await runRouter(['--help'], { env: {}, ...help });
+  assert.match(help.out, /GW_ACTOR=agent:opencode/);
+  assert.match(help.out, /--by agent:opencode/);
+  assert.match(help.out, /bare "agent" is refused/);
+});
+
 test('root lookup warns when an ancestor root is outside the enclosing git repository', async () => {
   const { findRoot } = await import('../lib/cli/root.js');
   const base = mkdtempSync(join(tmpdir(), 'gw-root-warning-'));

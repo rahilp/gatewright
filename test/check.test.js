@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,18 +13,52 @@ const stages = { stages: [{ id: 'backlog' }, { id: 'specified' }, { id: 'buildin
 const item = (over = {}) => ({ id: 'P1-01', title: 'test', stage: 'backlog', owner: null, deps: [], evidence: [], updated: new Date().toISOString(), gh: null, flag: null, ...over });
 // `config` is merged into the check block; `vocab` is top level, because that
 // is where readConfig looks for it.
-function board(items = [item()], { stages: boardStages = stages, config = {}, vocab } = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(boardStages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'], ...config }, ...(vocab ? { vocab } : {}) })); return { root, store }; }
+function board(items = [item()], { stages: boardStages = stages, config = {}, vocab } = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-check-')); const store = createStore(root); store.ensure(); store.writeItems(items); writeFileSync(store.paths.stages, JSON.stringify(boardStages)); writeFileSync(store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'], ...config }, ...(vocab ? { vocab } : {}) })); // The fixture writes stages.json and config.json by hand to stand up the board; a real board reaches this state through gw, which re-baselines the digest. Baseline here too, so only deliberate tampering in a test is ever reported.
+ store.rebaselineDigest(); return { root, store }; }
 function ctx(b, flags = {}) { let output = ''; return { output: () => output, ctx: { flags, positionals: [], store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write(s) { output += s; } }, stderr: { write(s) { output += s; } } } }; }
 
-test('check reports an out-of-band edit once then rebaselines it', () => {
+test('check reports an out-of-band edit without treating the audit as acknowledgement', () => {
   const b = board(); writeFileSync(b.store.paths.items, JSON.stringify(item({ title: 'hand edit' })) + '\n');
   const first = ctx(b); assert.equal(run(first.ctx), 1); assert.match(first.output(), /items\.jsonl modified outside gw since/);
-  const second = ctx(b); assert.equal(run(second.ctx), 0); assert.match(second.output(), /clean/i);
+  const second = ctx(b); assert.equal(run(second.ctx), 1); assert.match(second.output(), /items\.jsonl modified outside gw since/);
 });
 
 test('check silently baselines an unknown digest', () => {
   const b = board(); rmSync(b.store.paths.digest);
   const result = ctx(b); assert.equal(run(result.ctx), 0); assert.doesNotMatch(result.output(), /digest|modified/i); assert.equal(b.store.verifyDigest().status, 'clean');
+});
+
+// T-0002: stages.json DEFINES the gates, so deleting a `requires` block by hand
+// must be reported, not greeted with "Board is clean."
+test('check reports a hand edit to stages.json without re-baselining it', () => {
+  const b = board();
+  const tampered = JSON.parse(JSON.stringify(stages));
+  delete tampered.stages.find((stage) => stage.id === 'built').requires;
+  writeFileSync(b.store.paths.stages, JSON.stringify(tampered));
+  const first = ctx(b); assert.equal(run(first.ctx), 1);
+  assert.match(first.output(), /OUT-OF-BAND WRITE\n  stages\.json modified outside gw since /);
+  const second = ctx(b); assert.equal(run(second.ctx), 1);
+  assert.match(second.output(), /OUT-OF-BAND WRITE[\s\S]*stages\.json modified outside gw since/);
+});
+
+test('check reports a hand edit to config.json in the same style', () => {
+  const b = board();
+  const tampered = JSON.parse(readFileSync(b.store.paths.config, 'utf8'));
+  tampered.check.stale_days = 9999;
+  writeFileSync(b.store.paths.config, JSON.stringify(tampered));
+  const first = ctx(b); assert.equal(run(first.ctx), 1);
+  assert.match(first.output(), /OUT-OF-BAND WRITE\n  config\.json modified outside gw since /);
+  const second = ctx(b); assert.equal(run(second.ctx), 1);
+  assert.match(second.output(), /OUT-OF-BAND WRITE[\s\S]*config\.json modified outside gw since/);
+});
+
+// The event log is append-only; appending is normal operation, so it must
+// never be reported as tampering.
+test('check does not report an appended events.jsonl line', () => {
+  const b = board();
+  b.store.appendEvent({ type: 'note', item: 'P1-01', by: 'human:test' });
+  const result = ctx(b); assert.equal(run(result.ctx), 0);
+  assert.equal(result.output(), 'Board is clean.\n');
 });
 
 test('check validates stages before examining items and keeps validation JSON machine-readable', () => {
@@ -50,19 +84,29 @@ test('check catches a hand-placed verified item with no evidence', () => {
   const result = ctx(b);
   assert.equal(run(result.ctx), 1);
   assert.match(result.output(), /items\.jsonl modified outside gw since/);
-  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*needs at least 2 evidence/i);
+  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*Needs at least two new pieces of evidence/i);
 });
 
-// The wording is the point: an untriaged item names BOTH ways out, because
-// classifying it and simply working it as-is are equally valid answers.
-// Superseded on the exit code only -- a fresh capture is reported without
-// failing; see the inbox tests below for why.
-test('check reports an untriaged item, naming both the classify and the claim-as-is fix', () => {
+// T-0039 — the wording is the point, and so is the follow-through: the
+// printed command has to actually clear the flag. `gw edit` and `gw claim`
+// never did -- needs-triage is a hold on unreviewed work, and only `gw
+// triage` lifts it, so the advice names triage and nothing else.
+test('check reports an untriaged item, naming the triage fix that actually works', () => {
   const b = board([item({ flag: 'needs-triage' })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'reported, but capturing an idea is not a violation');
   assert.match(result.output(), /INBOX/);
-  assert.match(result.output(), /P1-01: classify with `gw edit P1-01 --phase P --type T --priority P`, or claim and work it as-is with `gw claim P1-01`/);
+  assert.match(result.output(), /To clear a hold, run `gw triage <id> --approve`; to discard it, run `gw triage <id> --drop`/);
+  assert.match(result.output(), /^  P1-01$/m);
+  assert.doesNotMatch(result.output(), /gw edit P1-01|gw claim P1-01/, 'the dead-end advice must be gone');
+});
+
+test('following the printed triage command ends the report', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  execFileSync(process.execPath, [BIN, 'triage', 'T-0001', '--approve'], { cwd: b.root });
+  const after = ctx(b);
+  assert.equal(run(after.ctx), 0);
+  assert.equal(after.output(), 'Board is clean.\n', 'the advice check prints must leave the board clean when followed');
 });
 
 test('check does not report a classified item as needing triage', () => {
@@ -116,7 +160,23 @@ test('check catches a hand-edited merged item that skipped the built evidence ga
   const b = board([item({ stage: 'merged' })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 1);
-  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*built: needs at least 1 evidence/i);
+  assert.match(result.output(), /CURRENT STAGE RULE[\s\S]*P1-01[\s\S]*built: Needs at least one new piece of evidence/i);
+});
+
+// T-0083 — the stage rule protects future moves, but a board may predate it
+// or have been edited out of band. A parent already presented as done must be
+// audited against its open direct children too.
+test('check reports a done-stage parent whose direct child is still open', () => {
+  const hierarchy = {
+    stages: [{ id: 'backlog' }, { id: 'done', role: 'done' }],
+    terminal: ['done'], extra: [],
+  };
+  const parent = item({ id: 'P1-01', stage: 'done' });
+  const child = item({ id: 'P1-01.1', parent: 'P1-01', stage: 'backlog' });
+  const b = board([parent, child], { stages: hierarchy });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /OPEN CHILD[\s\S]*P1-01: done stage done has open child items: P1-01\.1 \(backlog\)/);
 });
 
 test('check groups current-stage, missing-dependency, cycle, dropped-dependency, stale, and conflict findings', () => {
@@ -211,7 +271,26 @@ test('a freshly captured untriaged item is reported but does not fail the check'
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'capturing an idea must not break a build');
   assert.match(result.output(), /INBOX — 1 item not classified yet/);
+  assert.match(result.output(), /To clear a hold, run `gw triage <id> --approve`/);
+  assert.match(result.output(), /^  T-0001$/m);
   assert.doesNotMatch(result.output(), /NEEDS TRIAGE/, 'a fresh capture is not a violation');
+});
+
+test('check bounds a large inbox and states the repeated triage instruction once', () => {
+  const items = Array.from({ length: 60 }, (_, index) => item({
+    id: `T-${String(index + 1).padStart(4, '0')}`,
+    flag: 'needs-triage',
+    updated: new Date().toISOString(),
+  }));
+  const b = board(items);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'a fresh inbox remains a note, not a CI failure');
+  const out = result.output();
+  assert.match(out, /INBOX — 60 items not classified yet/);
+  assert.match(out, /\(\+35 more\)/, 'only the first 25 rows are shown');
+  assert.equal((out.match(/^  T-\d{4}$/gm) || []).length, 25, out);
+  assert.equal((out.match(/gw triage <id> --approve/g) || []).length, 1, 'the shared remedy is not repeated per item');
+  assert.doesNotMatch(out, /gw triage T-0001 --approve/, 'per-item rows stay compact');
 });
 
 // A rotting inbox is a different thing.
@@ -231,4 +310,89 @@ test('json output carries notes separately from problems', () => {
   const parsed = JSON.parse(result.output());
   assert.equal(parsed.problems.length, 0, 'an inbox entry is not a problem');
   assert.equal(parsed.notes.length, 1, 'but it is still reported to anything reading json');
+});
+
+// T-0019 — a dispatch queued while runner.enabled is false can never run:
+// nothing will ever record the run_ended that would clear it, so the item
+// sits in "queued · no agent run yet" forever. A queued dispatch is a
+// legitimate choice, but only as a visible one, so it is reported as a note
+// beside the inbox rather than failing the board.
+test('a queued dispatch with the runner disabled is reported as a note, not a violation', () => {
+  const b = board([item()]);
+  b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'a stranded dispatch is a report, not a failure');
+  assert.equal(
+    result.output(),
+    'QUEUED DISPATCH — 1 dispatch no agent will ever run while the runner is disabled.\n'
+    + '  P1-01: queued while runner.enabled is false, so no agent will ever pick it up: enable it with `gw config runner.enabled true` and start the scheduler with `gw serve`, or cancel the dispatch from the board\n',
+  );
+});
+
+test('an ended or cancelled dispatch is not reported, and an enabled runner is not reported', () => {
+  const ended = board([item()]);
+  ended.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  ended.store.appendEvent({ type: 'run_ended', item: 'P1-01', by: 'scheduler' });
+  const endedResult = ctx(ended);
+  assert.equal(run(endedResult.ctx), 0);
+  assert.equal(endedResult.output(), 'Board is clean.\n');
+
+  const cancelled = board([item()]);
+  cancelled.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  cancelled.store.appendEvent({ type: 'cancel', item: 'P1-01', by: 'human:test' });
+  const cancelledResult = ctx(cancelled);
+  assert.equal(run(cancelledResult.ctx), 0);
+  assert.equal(cancelledResult.output(), 'Board is clean.\n');
+
+  const enabled = board([item()]);
+  // The board() helper merges its config option into the check block, so the
+  // runner settings are written here, where readConfig actually looks.
+  writeFileSync(enabled.store.paths.config, JSON.stringify({ check: { stale_days: 7, stale_exempt_stages: ['merged'] }, runner: { enabled: true, provider: 'stub', providers: { stub: { cmd: ['stub'] } } } }));
+  enabled.store.rebaselineDigest();
+  enabled.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const enabledResult = ctx(enabled);
+  assert.equal(run(enabledResult.ctx), 0);
+  assert.equal(enabledResult.output(), 'Board is clean.\n', 'a runner that can run will pick the dispatch up');
+});
+
+test('a queued dispatch note travels in --json alongside the inbox notes', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const result = ctx(b, { json: true });
+  assert.equal(run(result.ctx), 0);
+  const parsed = JSON.parse(result.output());
+  assert.deepEqual(parsed.notes.map((entry) => entry.type), ['inbox', 'queued dispatch']);
+  assert.equal(parsed.notes[1].id, 'P1-01');
+});
+
+test('an inbox and a queued dispatch get their own headings in one report', () => {
+  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0);
+  const out = result.output();
+  assert.match(out, /^INBOX — 1 item not classified yet\. Not a violation; nothing to do unless you want to\.$/m);
+  assert.match(out, /^QUEUED DISPATCH — 1 dispatch no agent will ever run while the runner is disabled\.$/m);
+  assert.ok(out.indexOf('INBOX') < out.indexOf('QUEUED DISPATCH'));
+});
+
+// T-0071 — the digest proves items.jsonl was not touched since the last gw
+// write; it never proved the items were valid. A line of valid JSON with
+// stage "nonsense" loaded fine and sailed through as "Board is clean." Shape
+// is judged independently of digest state: the fixture's rebaseline puts this
+// board in exactly the "out-of-band write that predates the last repair"
+// state the digest cannot see.
+test('check fails a stage no board defines, even when the digest is clean', () => {
+  const b = board([item({ stage: 'nonsense' })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /INVALID STAGE[\s\S]*P1-01: stage "nonsense" is not a stage on this board/);
+  assert.doesNotMatch(result.output(), /Board is clean/);
+});
+
+test('check fails a flag the board does not know', () => {
+  const b = board([item({ flag: 'urgent' })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 1);
+  assert.match(result.output(), /INVALID FLAG[\s\S]*P1-01: flag "urgent" is not a flag this board knows/);
 });

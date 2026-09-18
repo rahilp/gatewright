@@ -38,10 +38,10 @@ test('spawn carries main-board environment and persists a reservation before inv
   const calls = []; let recordAtSpawn = null;
   const registry = { record(record) { calls.push(record); return record; } };
   const child = new PassThrough(); child.pid = 424242; child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.once = (event, fn) => { if (event === 'close') child.on(event, fn); return child; };
-  const result = createRunner({ spawnFn: (argv, options) => { recordAtSpawn = calls.at(-1); assert.deepEqual(argv.slice(0, 2), ['agent', '--prompt']); assert.equal(options.env.GW_ACTOR, 'agent:r-42'); assert.equal(options.env.GW_ITEM, 'P1-01'); assert.equal(options.env.GW_ROOT, join(root, '.gatewright')); return child; } }).start({ config: config(), item, run: 'r-42', worktree, root, registry });
+  const result = createRunner({ spawnFn: (argv, options) => { recordAtSpawn = calls.at(-1); assert.deepEqual(argv.slice(0, 2), ['agent', '--prompt']); assert.equal(options.env.GW_ACTOR, 'agent:r-42'); assert.equal(options.env.GW_ITEM, 'P1-01'); assert.equal(options.env.GW_ROOT, root); return child; } }).start({ config: config(), item, run: 'r-42', worktree, root, registry });
   assert.equal(recordAtSpawn.pid ?? null, null, 'durable reservation exists before the provider is invoked');
   assert.equal(calls.at(-1).pid, 424242);
-  assert.equal(result.env.GW_ROOT, join(root, '.gatewright'));
+  assert.equal(result.env.GW_ROOT, root);
   assert.equal(result.log, join(root, '.gatewright', 'runs', 'P1-01-r-42.log'));
   child.emit('close');
 });

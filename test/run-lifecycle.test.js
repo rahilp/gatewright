@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
@@ -9,12 +9,13 @@ import { createRunRegistry } from '../lib/run/registry.js';
 import { createRunLifecycle } from '../lib/run/lifecycle.js';
 import { createRunner } from '../lib/run/spawn.js';
 import { createScheduler } from '../lib/run/scheduler.js';
+import { runRouter } from '../lib/cli/router.js';
 
 function board({ timeout = 0.02 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gw-run-lifecycle-')); const store = createStore(root); store.ensure();
   mkdirSync(join(root, '.gatewright', 'runs'), { recursive: true }); mkdirSync(join(root, 'worktree'));
   writeFileSync(store.paths.config, JSON.stringify({ runner: { stop_timeout_s: timeout, run_timeout_min: 1, paused: false } }));
-  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }], terminal: [], extra: [{ id: 'paused', role: 'paused' }] }));
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }, { id: 'building' }], terminal: [], extra: [{ id: 'paused', role: 'paused' }] }));
   store.writeItems([{ id: 'P4-07', title: 'fixture', stage: 'building', flag: null, owner: 'agent:r-1', updated: new Date().toISOString() }]);
   return { root, store, registry: createRunRegistry({ store }), worktree: join(root, 'worktree') };
 }
@@ -99,6 +100,19 @@ test('stop all works with no server: it stops every record and persistently paus
   } finally { killFinally(first); killFinally(second); }
 });
 
+// stopAll persists runner.paused through store.writeConfig, which re-baselines
+// the digest. gw's own kill switch must never be reported by `gw check` as an
+// out-of-band write — that report has to mean someone touched the board.
+test('stopAll keeps gw check clean', async () => {
+  const fixture = board();
+  createRunLifecycle({ store: fixture.store, registry: fixture.registry }).stopAll();
+  assert.equal(JSON.parse(readFileSync(fixture.store.paths.config, 'utf8')).runner.paused, true);
+  let stdout = '';
+  const code = await runRouter(['check'], { cwd: fixture.root, env: {}, stdout: { write: (text) => { stdout += text; } }, stderr: { write() {} } });
+  assert.equal(code, 0);
+  assert.equal(stdout, 'Board is clean.\n');
+});
+
 test('a dead recorded run is a clean no-op', async () => {
   const fixture = board(); fixture.registry.record({ run: 'r-dead', item: 'P4-07', pid: 99999999, worktree: fixture.worktree });
   const result = await createRunLifecycle({ store: fixture.store, registry: fixture.registry }).stopItem('P4-07');
@@ -168,6 +182,48 @@ test('resume dispatches its stopped-run log tail into the next dry-run rendered 
     const started = scheduler.tick().started;
     assert.match(started.prompt, /tail follows:\nknown first line\nknown final line/);
   } finally { killFinally(proc); }
+});
+
+// T-0003: resume used to dispatch anything and clear its owner, silently
+// releasing another actor's live claim. Resume must refuse an item that stop
+// never paused.
+test('resume refuses an item that was never paused and leaves its owner untouched', () => {
+  const fixture = board();
+  const owned = fixture.store.readItems();
+  owned[0].owner = 'agent:someone-else';
+  fixture.store.writeItems(owned);
+
+  let refused = null;
+  try { createRunLifecycle({ store: fixture.store, registry: fixture.registry }).resume('P4-07'); }
+  catch (error) { refused = error; }
+  assert.ok(refused, 'resume must refuse a never-paused item, not dispatch it');
+  assert.equal(
+    refused.message,
+    'item P4-07 is not paused; resume only restores an item that `gw stop` paused. Run `gw show P4-07` to inspect it.',
+  );
+  const item = fixture.store.readItems()[0];
+  assert.equal(item.stage, 'building');
+  assert.equal(item.flag, null);
+  assert.equal(item.owner, 'agent:someone-else', 'a refused resume must never clear another actor\'s owner');
+  assert.deepEqual(fixture.store.readEvents(), [], 'a refused resume dispatches nothing');
+});
+
+test('resume still restores a genuinely paused item and keeps whatever owner it finds', () => {
+  const fixture = board();
+  const paused = fixture.store.readItems();
+  paused[0].flag = 'paused';
+  paused[0].prev_stage = 'building';
+  paused[0].stage = 'paused';
+  paused[0].owner = 'human:rahil';
+  fixture.store.writeItems(paused);
+
+  const resumed = createRunLifecycle({ store: fixture.store, registry: fixture.registry }).resume('P4-07');
+  assert.equal(resumed.item.stage, 'building');
+  const item = fixture.store.readItems()[0];
+  assert.equal(item.stage, 'building');
+  assert.equal(item.flag, null);
+  assert.equal(item.owner, 'human:rahil', 'resume restores work; it does not strip ownership');
+  assert.equal(fixture.store.readEvents().at(-1).type, 'dispatch');
 });
 
 // stop is split across the grace period so the wait can be blocking or not

@@ -101,7 +101,7 @@ test('GitHub sync writes intake only and ignores hostile tracker-shaped issue ke
     { title: intake.title, scope: intake.body, priority: 'P1', type: 'defect', phase: 'P9' },
   );
   for (const field of TRACKER_OWNED_FIELDS) {
-    assert.equal(JSON.stringify(updated[field]), JSON.stringify(original[field]), `${field} is tracker-owned`);
+    assert.equal(JSON.stringify(updated[field]), JSON.stringify(field === 'evidence' ? original[field].map((text) => ({ text, stage: null })) : original[field]), `${field} is tracker-owned`);
   }
 });
 
@@ -159,7 +159,10 @@ test('push comments, closes, and dispatches without changing any item field', ()
 
   push({ store, gh: fakeGh, issues: [issue({ labels: ['agent/go'] })] });
   assert.deepEqual(calls.map(([action]) => action), ['comment', 'close', 'labels']);
-  assert.deepEqual(store.readItems()[0], original, 'push changed the materialized item');
+  // T-0029: the store reads evidence back as `{ text, stage }` entries; the
+  // flat fixture strings are the migrated shape, tagged `null` on read.
+  const stored = { ...original, evidence: original.evidence.map((text) => ({ text, stage: null })) };
+  assert.deepEqual(store.readItems()[0], stored, 'push changed the materialized item');
 });
 
 function jsFiles(dir) {
