@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,6 +33,27 @@ function runCli(root, args) {
   const child = spawn(process.execPath, [BIN, ...args], {
     cwd: root,
     env: { ...process.env, GW_ACTOR: 'human:tester' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = ''; let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  return new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+// Follow a command exactly as repair printed it. The test supplies a temporary
+// `gw` executable on PATH, but does not edit, reinterpret, or reconstruct the
+// captured command string -- this is the contract a user follows at a shell.
+function runPrintedCommand(root, command) {
+  const binDir = mkdtempSync(join(tmpdir(), 'gw-repair-bin-'));
+  symlinkSync(BIN, join(binDir, 'gw'));
+  const child = spawn(command, {
+    cwd: root,
+    env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, GW_ACTOR: 'human:tester' },
+    shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stdout = ''; let stderr = '';
@@ -97,7 +118,7 @@ test('a repair --write does not read as tampering afterwards', async () => {
 // satisfy every stage rule, so only the digest distinguishes it from a CLI
 // move. `check` must preserve that known-stale baseline and repair must not
 // adopt the surviving forgery merely because it quarantined a later bad line.
-test('repair cannot launder a fully evidenced forged verified item through a corrupt suffix', async () => {
+test('the re-baseline command repair prints runs verbatim from that state and leaves check clean', async () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-repair-launder-'));
   const store = createStore(root);
   store.ensure();
@@ -125,9 +146,15 @@ test('repair cannot launder a fully evidenced forged verified item through a cor
   assert.match(repair.stdout, /line 2 quarantined/);
   assert.match(repair.stdout, /digest remains stale[\s\S]*gw check[\s\S]*repair --write --force/);
 
+  const printed = repair.stdout.match(/After deliberate review, run `([^`]+)` to re-baseline\./);
+  assert.ok(printed, 'repair prints one follow-up command');
+  const forced = await runPrintedCommand(root, printed[1]);
+  assert.equal(forced.code, 0, forced.stdout + forced.stderr);
+  assert.match(forced.stdout, /Digest re-baselined by explicit recovery/);
+
   const finalCheck = await runCli(root, ['check']);
-  assert.equal(finalCheck.code, 1, finalCheck.stdout + finalCheck.stderr);
-  assert.match(finalCheck.stdout, /OUT-OF-BAND WRITE[\s\S]*items\.jsonl modified outside gw/);
+  assert.equal(finalCheck.code, 0, finalCheck.stdout + finalCheck.stderr);
+  assert.equal(finalCheck.stdout, 'Board is clean.\n');
 });
 
 test('a clean board has nothing for repair to do', async () => {

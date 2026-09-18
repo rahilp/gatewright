@@ -149,3 +149,62 @@ test('T-0090: a triage self-approval refusal survives three browser poll cycles'
     } finally { await browser.close(); }
   }, { items: [held], env: { ...process.env, GW_ACTOR: 'agent:tester' } });
 });
+
+// T-0099: these have to be real browser keystrokes. A structural test can
+// prove a document handler exists while a closed drawer still retains all of
+// its interactive DOM and looks open to a user or accessibility tooling.
+test('T-0099: Escape clears both drawers and Enter activates the focused Close button', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.click('[data-view="board"]');
+      await page.click('.card[data-id="P1-01"]');
+      assert.equal(await page.$eval('#gw-panel', (el) => el.innerHTML.length > 0), true, 'the item drawer opened');
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'panel-close', 'the item Close button is focused');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.$eval('#gw-panel', (el) => el.innerHTML.length), 0, 'Enter emptied the item drawer');
+
+      await page.click('.card[data-id="P1-01"]');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.$eval('#gw-panel', (el) => el.innerHTML.length), 0, 'Escape emptied the item drawer');
+
+      await page.click('#f-new');
+      await page.waitForSelector('#create-form');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.$eval('#gw-panel', (el) => el.innerHTML.length), 0, 'Escape emptied the create dialog');
+    } finally { await browser.close(); }
+  });
+});
+
+test('T-0100: an owner can release from the drawer, while a non-owner is not offered Release', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  const owned = item({ owner: 'human:rahil' });
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.click('[data-view="board"]');
+      await page.click('.card[data-id="P1-01"]');
+      await page.waitForSelector('#panel-release');
+      await page.click('#panel-release');
+      await page.waitForFunction(() => !document.querySelector('#panel-release'));
+      const state = await (await fetch(url + '/api/state')).json();
+      assert.equal(state.items[0].owner, null, 'drawer Release used the server release path');
+    } finally { await browser.close(); }
+  }, { items: [owned], env: { ...process.env, GW_ACTOR: 'human:rahil' } });
+
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.click('[data-view="board"]');
+      await page.click('.card[data-id="P1-01"]');
+      assert.equal(await page.$('#panel-release'), null, 'a non-owner sees no Release control');
+    } finally { await browser.close(); }
+  }, { items: [owned], env: { ...process.env, GW_ACTOR: 'human:someone-else' } });
+});

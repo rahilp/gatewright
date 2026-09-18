@@ -91,6 +91,15 @@ test('gw next stays quiet about dependencies when none is in the way', () => {
   assert.doesNotMatch(c.out, /waiting on/);
 });
 
+test('gw next names a triage hold before its generic unmet gate reasons', () => {
+  const b = board([item({ stage: 'specified', flag: 'needs-triage', created_by: 'agent:maker' })]);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.match(c.out, /next: building \(blocked\)/);
+  assert.match(c.out, /  - held for triage: someone other than its creator must run `gw triage P1-01 --approve` before it can advance/);
+  assert.ok(c.out.indexOf('held for triage') < c.out.indexOf('Someone must have claimed it'), 'the actual policy blocker is named first');
+});
+
 // T-0073 — "waiting on T-0002 (dropped)" used to be the one failure state in
 // the product that printed no command: the user had to guess
 // `gw edit <id> --deps ""`, which would also wipe every other dependency.

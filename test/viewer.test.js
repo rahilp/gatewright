@@ -1409,18 +1409,23 @@ test('claim is not offered on finished work', () => {
     'an unowned terminal item gets no Claim button',
   );
   assert.match(
-    rowActionsHtml(live, { id: 'T-0002', owner: 'human:x', stage: 'built' }),
+    rowActionsHtml(live, { id: 'T-0002', owner: 'human:x', can_release: true, stage: 'built' }),
     /data-release-row/,
     'an owned terminal item still gets Release',
   );
   assert.doesNotMatch(
-    rowActionsHtml(live, { id: 'T-0002', owner: 'human:x', stage: 'built' }),
+    rowActionsHtml(live, { id: 'T-0002', owner: 'human:x', can_release: true, stage: 'built' }),
     /data-claim-row/,
   );
   assert.match(
     rowActionsHtml(live, { id: 'T-0003', owner: null, stage: 'backlog' }),
     /data-claim-row/,
     'an unfinished unowned item still gets Claim',
+  );
+  assert.doesNotMatch(
+    rowActionsHtml(live, { id: 'T-0004', owner: 'human:x', can_release: false, stage: 'backlog' }),
+    /data-release-row/,
+    'a non-owner is not offered a Release button the server will refuse',
   );
 });
 

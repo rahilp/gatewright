@@ -96,7 +96,8 @@ test('check reports an untriaged item, naming the triage fix that actually works
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'reported, but capturing an idea is not a violation');
   assert.match(result.output(), /INBOX/);
-  assert.match(result.output(), /P1-01: run `gw triage P1-01 --approve` to clear the hold, or `gw triage P1-01 --drop` to discard it/);
+  assert.match(result.output(), /To clear a hold, run `gw triage <id> --approve`; to discard it, run `gw triage <id> --drop`/);
+  assert.match(result.output(), /^  P1-01$/m);
   assert.doesNotMatch(result.output(), /gw edit P1-01|gw claim P1-01/, 'the dead-end advice must be gone');
 });
 
@@ -270,7 +271,26 @@ test('a freshly captured untriaged item is reported but does not fail the check'
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'capturing an idea must not break a build');
   assert.match(result.output(), /INBOX — 1 item not classified yet/);
+  assert.match(result.output(), /To clear a hold, run `gw triage <id> --approve`/);
+  assert.match(result.output(), /^  T-0001$/m);
   assert.doesNotMatch(result.output(), /NEEDS TRIAGE/, 'a fresh capture is not a violation');
+});
+
+test('check bounds a large inbox and states the repeated triage instruction once', () => {
+  const items = Array.from({ length: 60 }, (_, index) => item({
+    id: `T-${String(index + 1).padStart(4, '0')}`,
+    flag: 'needs-triage',
+    updated: new Date().toISOString(),
+  }));
+  const b = board(items);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'a fresh inbox remains a note, not a CI failure');
+  const out = result.output();
+  assert.match(out, /INBOX — 60 items not classified yet/);
+  assert.match(out, /\(\+35 more\)/, 'only the first 25 rows are shown');
+  assert.equal((out.match(/^  T-\d{4}$/gm) || []).length, 25, out);
+  assert.equal((out.match(/gw triage <id> --approve/g) || []).length, 1, 'the shared remedy is not repeated per item');
+  assert.doesNotMatch(out, /gw triage T-0001 --approve/, 'per-item rows stay compact');
 });
 
 // A rotting inbox is a different thing.

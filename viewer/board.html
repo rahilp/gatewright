@@ -2053,11 +2053,11 @@
     // claim route on the server (lib/serve/) should refuse a terminal item
     // at the API too; that half is not this file's to fix.
     if (isTerminalItem(it)) {
-      return it.owner
+      return it.can_release
         ? '<span class="row-actions"><button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button></span>'
         : '';
     }
-    return '<span class="row-actions">' + (it.owner
+    return '<span class="row-actions">' + (it.can_release
       ? '<button data-release-row="' + escapeHtml(it.id) + '" title="Release ownership of this item.">Release</button>'
       : '<button data-claim-row="' + escapeHtml(it.id) + '" title="Claims this item for you.">Claim</button>') + '</span>';
   }
@@ -2598,6 +2598,10 @@
     State.creatingItem = false;
     State.panelBaseline = null;
     document.getElementById('gw-overlay').classList.remove('open');
+    // Hiding the overlay alone leaves a full, focusable drawer in the DOM.
+    // That made Escape and native Enter on Close appear to do nothing to
+    // browser users and to assistive technology. A closed drawer is empty.
+    document.getElementById('gw-panel').innerHTML = '';
     const returnFocus = State.panelReturnFocus;
     State.panelReturnFocus = null;
     // The control that opened the drawer may have been re-rendered away by
@@ -2779,6 +2783,13 @@
         '<button id="panel-triage-drop" title="Moves this item to the dropped stage.">Drop</button></div>'
       : '';
 
+    // `can_release` is calculated by /api/state with lib/owner.js's sameOwner
+    // rule. Never offer the control to a non-owner -- release now correctly
+    // refuses them server-side, and a button guaranteed to fail is a trap.
+    const releaseHtml = (State.live && it.can_release)
+      ? '<div class="panel-actions"><button id="panel-release" title="Release ownership of this item.">Release</button></div>'
+      : '';
+
     const resumeHtml = (State.live && it.flag === 'paused')
       ? '<div class="panel-actions"><button id="panel-resume" title="Restores the item and dispatches it again.">Resume</button></div>'
       : '';
@@ -2906,7 +2917,7 @@
     panel.innerHTML = '<div class="panel-head"><h2>' + escapeHtml(it.id) + '</h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>' +
       '<p>' + escapeHtml(it.title) + '</p>' +
       '<div id="panel-error">' + panelError + '</div>' +
-      banner + triageHtml + resumeHtml + playStop + logHtml +
+      banner + triageHtml + resumeHtml + releaseHtml + playStop + logHtml +
       '<h3>Stage</h3><div class="stage-buttons">' + stageButtonsHtml + '</div>' +
       '<h3>Evidence</h3><ul class="evidence-list">' + evidenceHtml + '</ul>' + evidenceEditor +
       '<h3>Fields</h3><dl>' + fieldRows + '</dl>' + saveBtn +
@@ -2958,6 +2969,8 @@
     if (approveBtn) approveBtn.addEventListener('click', () => onTriageClick(it.id, 'approve', approveBtn));
     const dropBtn = panel.querySelector('#panel-triage-drop');
     if (dropBtn) dropBtn.addEventListener('click', () => onTriageClick(it.id, 'drop', dropBtn));
+    const releaseBtn = panel.querySelector('#panel-release');
+    if (releaseBtn) releaseBtn.addEventListener('click', () => onReleaseClick(it.id, releaseBtn));
 
     const evBtn = panel.querySelector('#evidence-add-btn');
     if (evBtn) evBtn.addEventListener('click', () => {
