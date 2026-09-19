@@ -346,7 +346,7 @@
     border: 1px solid var(--border);
   }
   .tag.flag-blocked, .tag.flag-conflict { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
-  .tag.flag-needs-triage, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+  .tag.flag-needs-triage, .tag.flag-unclassified, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
 
   /* Table */
   table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
@@ -1437,7 +1437,7 @@
     fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase, 'phase');
     fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type, 'type');
     fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
-    fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
+    fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'unclassified', 'paused', 'conflict'], State.filters.flag);
   }
 
   function renderHeader() {
@@ -1592,7 +1592,8 @@
     const active = computeActiveDispatch(State.events);
     const open = State.items.filter((it) => !isTerminalItem(it));
     const blocked = open.filter((it) => it.flag === 'blocked' || !depsReadyItem(it));
-    const triage = open.filter((it) => it.flag === 'needs-triage');
+    // T-0113: an unclassified capture sits in the inbox too, but can be worked.
+    const triage = open.filter((it) => it.flag === 'needs-triage' || it.flag === 'unclassified');
     const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && isInFlightItem(it, active));
     const stranded = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && !it.owner && pipelineIndex(it.stage) > 0);
     const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 && stranded.indexOf(it) === -1 &&
@@ -1638,7 +1639,7 @@
       briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
       briefSectionHtml('Stranded', stranded, (it) => stageLabel(it.stage).toLowerCase() + ' · unowned', 'Nothing is stranded.') +
       briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
-      briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
+      briefSectionHtml('Needs triage', triage, (it) => (it.flag === 'unclassified' ? 'not classified yet · ' : '') + 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
       briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-'), 'Nothing is unblocked and unowned.') +
       '</div>';
 
@@ -2392,7 +2393,7 @@
     { key: 'github.repo', type: 'string', summary: 'owner/name of the linked GitHub repository.' },
     { key: 'github.sync_interval_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes between automatic syncs while `gw serve` runs.' },
     { key: 'github.dispatch_label', type: 'string', summary: 'Issue label that queues the linked item for dispatch.' },
-    { key: 'github.mirror_children', type: 'boolean', summary: 'Comment agent-created children on the parent issue.' },
+    { key: 'github.mirror_children', type: 'boolean', summary: 'Open a GitHub issue for each agent-created child of a linked item.' },
     { key: 'github.comment_on_move', type: 'boolean', summary: 'Comment on the linked issue when the item moves stage.' },
     { key: 'github.close_on', type: 'string', summary: 'Stage that closes the linked issue on the next sync.' },
     { key: 'github.milestone_to', type: 'string', summary: 'Vocab field GitHub milestones map onto, such as phase.' },
@@ -2775,7 +2776,7 @@
         ) + '</pre>'
       : '';
 
-    const triageHtml = (State.live && it.flag === 'needs-triage')
+    const triageHtml = (State.live && (it.flag === 'needs-triage' || it.flag === 'unclassified'))
       ? '<div class="panel-actions triage"><button id="panel-triage-approve" title="Clears the hold and makes this item schedulable again.">Approve</button> ' +
         '<button id="panel-triage-drop" title="Moves this item to the dropped stage.">Drop</button></div>'
       : '';
@@ -3254,11 +3255,10 @@
       '<form id="create-form" class="create-form">' +
       '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
       // T-0081: leaving all three vocab fields at "(none)" is a real choice
-      // with a real cost -- the server holds the item for triage and nobody
-      // (including its creator) can approve the hold away. The dialog used
-      // to let that happen silently; now it says so before the submit, not
-      // after the surprise. The holding itself is deliberate and stays.
-      '<div class="create-hold-note">An item created with no phase, type or priority is held for triage: it stays off the scheduler until someone other than you approves it. Classify it here to skip the hold.</div>' +
+      // with a cost, so the dialog says so before the submit, not after the
+      // surprise. T-0113: the cost is the scheduler only -- the item is
+      // flagged unclassified and can be claimed and moved at once.
+      '<div class="create-hold-note">An item created with no phase, type or priority is marked unclassified: you can work on it straight away, but the scheduler will not pick it up until it is classified or approved. Classify it here to skip that.</div>' +
       '<label>Phase<select name="phase">' + options(vocab.phase) + '</select></label>' +
       '<label>Type<select name="type">' + options(vocab.type) + '</select></label>' +
       '<label>Priority<select name="priority">' + options(vocab.priority) + '</select></label>' +

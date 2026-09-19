@@ -163,7 +163,7 @@ test('check reports a terminal needs-triage hold as a tidy-up note, never a viol
   const b = board([item({ id: 'T-0109', stage: 'verified', flag: 'needs-triage', owner: 'human:test', evidence: ['abc123', 'https://github.com/a/b/pull/1'] })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'finished work with an old hold is not open triage work');
-  assert.match(result.output(), /STALE TRIAGE HOLD — 1 finished item still carry a needs-triage hold\. Not a violation/);
+  assert.match(result.output(), /STALE TRIAGE HOLD — 1 finished item still carries a triage flag\. Not a violation; run `gw repair --write` to tidy it up\./);
   assert.match(result.output(), /T-0109: finished in verified[\s\S]*gw repair --write/);
   assert.doesNotMatch(result.output(), /INBOX|NEEDS TRIAGE/);
 
@@ -283,11 +283,11 @@ test('a null field and an unconfigured vocabulary are not drift', () => {
 // classify it before you could commit — exactly the ceremony that one-command
 // capture exists to remove. An inbox is not a defect.
 test('a freshly captured untriaged item is reported but does not fail the check', () => {
-  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  const b = board([item({ id: 'T-0001', flag: 'unclassified', created_by: 'human:me', updated: new Date().toISOString() })]);
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'capturing an idea must not break a build');
   assert.match(result.output(), /INBOX — 1 item not classified yet/);
-  assert.match(result.output(), /T-0001: run `gw triage T-0001 --approve`/);
+  assert.match(result.output(), /T-0001: it can be worked now; set its phase, type or priority with gw edit, or run `gw triage T-0001 --approve` to take it as is/);
   assert.match(result.output(), /^  T-0001:/m);
   assert.doesNotMatch(result.output(), /NEEDS TRIAGE/, 'a fresh capture is not a violation');
 });
@@ -295,7 +295,8 @@ test('a freshly captured untriaged item is reported but does not fail the check'
 test('check bounds a large inbox and states the repeated triage instruction once', () => {
   const items = Array.from({ length: 60 }, (_, index) => item({
     id: `T-${String(index + 1).padStart(4, '0')}`,
-    flag: 'needs-triage',
+    flag: 'unclassified',
+    created_by: 'human:me',
     updated: new Date().toISOString(),
   }));
   const b = board(items);
@@ -391,7 +392,7 @@ test('a queued dispatch note travels in --json alongside the inbox notes', () =>
 });
 
 test('an inbox and a queued dispatch get their own headings in one report', () => {
-  const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
+  const b = board([item({ id: 'T-0001', flag: 'unclassified', created_by: 'human:me', updated: new Date().toISOString() })]);
   b.store.appendEvent({ type: 'dispatch', item: 'P1-01', by: 'scheduler' });
   const result = ctx(b);
   assert.equal(run(result.ctx), 0);

@@ -1470,16 +1470,18 @@ test('a stage button and its reasons are one bounded unit, so a reason cannot at
 });
 
 // T-0081: creating an unclassified item from the board silently held it for
-// triage -- the dialog never said so, and self-approval is refused. The
-// holding is deliberate; the silence was the bug.
+// triage -- the dialog never said so. T-0113: the only cost left is the
+// scheduler; the item is flagged unclassified and can be worked at once.
 test('the create dialog says what an unclassified creation costs before the submit', () => {
   const openCreatePanel = SHELL.match(/function openCreatePanel\(\) \{[\s\S]*?\n  \}/);
   assert.ok(openCreatePanel);
   assert.match(openCreatePanel[0], /create-hold-note/, 'the notice is part of the form itself');
   const notice = openCreatePanel[0].match(/class="create-hold-note">([^<]+)</);
   assert.ok(notice, 'the notice renders text');
-  assert.match(notice[1], /held for triage/, 'it names the hold');
-  assert.match(notice[1], /someone other than you approves/, 'and the fact that its creator cannot lift it');
+  assert.match(notice[1], /marked unclassified/, 'it names the flag');
+  assert.match(notice[1], /work on it straight away/, 'it says the item is not held from its creator');
+  assert.match(notice[1], /scheduler will not pick it up until it is classified or approved/, 'and names the one real cost');
+  assert.doesNotMatch(notice[1], /someone other than you/, 'a human may approve their own capture');
 });
 
 // T-0082: the favicon was the only console error in an otherwise clean

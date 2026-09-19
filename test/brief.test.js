@@ -485,7 +485,7 @@ test('brief --json returns the brief, not the database', async () => {
       { id: 'B-1', title: 'Waiting on a dependency', flag: null, waiting_on: 'F-1', waiting_on_stage: 'building' },
       { id: 'B-2', title: 'Flagged blocked', flag: 'blocked', waiting_on: null, waiting_on_stage: null },
     ],
-    needs_triage: [{ id: 'T-1', title: 'Held for triage', created_by: null }],
+    needs_triage: [{ id: 'T-1', title: 'Held for triage', flag: 'needs-triage', created_by: null }],
     next_unblocked: [{ id: 'N-1', title: 'Ready for pickup', phase: null }],
     rules: [
       'Rules: use `gw add` for work someone else could pick up; checklists go in notes.',
