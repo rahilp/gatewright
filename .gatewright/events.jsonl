@@ -1304,3 +1304,58 @@
 {"ts":"2026-09-19T02:08:22.916Z","type":"add","item":"T-0106","by":"human:rahil","parent":null}
 {"ts":"2026-09-19T02:08:22.974Z","type":"claim","item":"T-0106","by":"human:rahil"}
 {"ts":"2026-09-19T02:08:23.033Z","type":"move","item":"T-0106","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T02:21:39.709Z","type":"move","item":"T-0106","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.12.0 on npm, tag v0.12.0; fresh registry install ran init and walked an item to done"]}
+{"ts":"2026-09-19T13:31:01.303Z","type":"claim","item":"P0-08","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.367Z","type":"move","item":"P0-08","from":"backlog","to":"building","by":"human:rahil","evidence":[],"queued_comment":true}
+{"ts":"2026-09-19T13:31:01.484Z","type":"claim","item":"T-0104","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.545Z","type":"move","item":"T-0104","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:31:01.655Z","type":"claim","item":"T-0103","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.712Z","type":"move","item":"T-0103","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:31:01.828Z","type":"claim","item":"T-0101","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.888Z","type":"move","item":"T-0101","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:31:58.378Z","type":"sync","pushed":{"comments":["2026-09-19T13:31:01.367Z"],"closed":[],"dispatch_removed":[],"mirrored":[]}}
+{"ts":"2026-09-19T13:35:03.968Z","type":"note","item":"P0-08","by":"human:rahil","note":"AGREED SCOPE (Rahil, 2026-09-19): the interactive flows of gw init and gw config, made as graphical as possible - arrow-key selection with a highlighted current choice, colour, boxes/panels, step progress, a live description of the focused option, and a closing summary card of what was done. Zero dependencies. Numbered entry still works as a fallback; anything non-interactive (no TTY, --yes, --no-input, CI, GW_NO_INPUT) stays byte-identical. init must ask one workflow question, not two overlapping ones."}
+{"ts":"2026-09-19T13:36:25.407Z","type":"dispatch","item":"P0-08","by":"human:rahil"}
+{"ts":"2026-09-19T13:36:58.907Z","type":"sync","pulled":1,"pushed":0,"conflicts":0}
+{"ts":"2026-09-19T13:38:35.137Z","type":"add","item":"T-0107","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T13:38:35.197Z","type":"add","item":"T-0108","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T13:38:35.259Z","type":"add","item":"T-0109","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T13:38:35.326Z","type":"add","item":"T-0110","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T13:38:55.100Z","type":"note","item":"T-0110","by":"human:rahil","note":"Not a defect: the phone board showed 'reconnecting (Load failed)' only during the gap while gw serve was restarted, then recovered on its own to 'live - updated 6s ago' within about a minute, with no refresh (Rahil's screenshot, 09:38)."}
+{"ts":"2026-09-19T13:38:55.218Z","type":"move","item":"T-0110","from":"backlog","to":"dropped","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:39:09.288Z","type":"claim","item":"T-0107","by":"human:rahil"}
+{"ts":"2026-09-19T13:39:09.354Z","type":"move","item":"T-0107","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:39:09.473Z","type":"claim","item":"T-0108","by":"human:rahil"}
+{"ts":"2026-09-19T13:39:09.534Z","type":"move","item":"T-0108","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:39:09.659Z","type":"claim","item":"T-0109","by":"human:rahil"}
+{"ts":"2026-09-19T13:39:09.725Z","type":"move","item":"T-0109","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:45:22.308Z","type":"add","item":"T-0111","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T13:45:22.373Z","type":"move","item":"T-0103","from":"building","to":"built","by":"human:rahil","evidence":["test/refusal-advice.test.js 4/4: runs every refusal's printed advice through the platform shell and inventories 85 refusal constructors plus 7 rule emitters so an uncovered addition fails; found the dependency-advice defect"]}
+{"ts":"2026-09-19T13:45:46.306Z","type":"claim","item":"T-0111","by":"human:rahil"}
+{"ts":"2026-09-19T13:45:46.368Z","type":"move","item":"T-0111","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:52:06.077Z","type":"move","item":"T-0107","from":"building","to":"built","by":"human:rahil","evidence":["Viewer verified in browser: idle run chip and Queue hidden when runner off; queued card keeps Cancel (/tmp/gw-t0107-phone.png, /tmp/gw-t0107-desktop.png)"]}
+{"ts":"2026-09-19T13:52:22.631Z","type":"move","item":"T-0108","from":"building","to":"built","by":"human:rahil","evidence":["Viewer verified: owner chip renders as 'agent · codex' on cards; header flagged count includes only open items (test/viewer.browser.test.js)"]}
+{"ts":"2026-09-19T13:52:22.698Z","type":"move","item":"T-0109","from":"building","to":"built","by":"human:rahil","evidence":["Stale terminal needs-triage holds cleared by gw repair --write on team (dropped) and solo (done) scratch boards; flag null afterwards (test/repair.test.js, test/check.test.js)"]}
+{"ts":"2026-09-19T13:57:58.916Z","type":"move","item":"T-0111","from":"building","to":"built","by":"human:rahil","evidence":["Dependency refusal names real ids with per-dependency runnable commands; drove on scratch board: printed 'gw move T-0001 building' ran rc=0 and next refusal advised the evidence form (test/dependency-advice.test.js)"]}
+{"ts":"2026-09-19T14:06:10.687Z","type":"move","item":"P0-08","from":"building","to":"built","by":"human:rahil","evidence":["Full-screen gw init (3 steps, review before write) and gw config settings screen driven in tmux at 80x24 (/tmp/gw-p008-screens); --yes output byte-identical to 0.12.0 for solo and team; test/tui-prompt.test.js, test/setup.test.js, test/config.test.js"],"queued_comment":true}
+{"ts":"2026-09-19T14:07:02.816Z","type":"sync","pushed":{"comments":["2026-09-19T14:06:10.687Z"],"closed":[],"dispatch_removed":[],"mirrored":[]}}
+{"ts":"2026-09-19T14:07:22.911Z","type":"move","item":"T-0104","from":"building","to":"built","by":"human:rahil","evidence":["Installed PRETOOL_COMMAND driven under sh: stale gw (guard exits 2) -> rc 0, edits not blocked; current gw -> PreToolUse deny JSON for unclaimed edit (test/hook.test.js runs it on win32 via gw.cmd shim, no skips)"]}
+{"ts":"2026-09-19T14:07:22.973Z","type":"move","item":"T-0101","from":"building","to":"built","by":"human:rahil","evidence":["scripts/test.mjs gives each run its own TMPDIR/TEMP/TMP dir, sweeps it on exit and SIGINT/SIGTERM, reclaims >24h scratch at startup; two concurrent npm test runs both 772/772 (test/test-runner.test.js)"]}
+{"ts":"2026-09-19T14:12:03.307Z","type":"sync","pulled":1,"pushed":0,"conflicts":0}
+{"ts":"2026-09-19T14:31:03.785Z","type":"add","item":"T-0112","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:31:03.842Z","type":"claim","item":"T-0112","by":"human:rahil"}
+{"ts":"2026-09-19T14:31:08.651Z","type":"flag","item":"T-0112","flag":null,"by":"human:rahil","approved_by":"human:rahil","reason":"triage approved by human:rahil"}
+{"ts":"2026-09-19T14:31:08.714Z","type":"move","item":"T-0112","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:39:34.359Z","type":"add","item":"T-0113","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:39:34.422Z","type":"add","item":"T-0114","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:39:34.487Z","type":"add","item":"T-0115","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:39:34.613Z","type":"claim","item":"T-0113","by":"human:rahil"}
+{"ts":"2026-09-19T14:39:34.676Z","type":"move","item":"T-0113","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:39:34.805Z","type":"claim","item":"T-0114","by":"human:rahil"}
+{"ts":"2026-09-19T14:39:34.872Z","type":"move","item":"T-0114","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:39:34.995Z","type":"claim","item":"T-0115","by":"human:rahil"}
+{"ts":"2026-09-19T14:39:35.057Z","type":"move","item":"T-0115","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:51:13.508Z","type":"move","item":"T-0113","from":"building","to":"built","by":"human:rahil","evidence":["Scratch team board: human bare add -> flag unclassified -> claim -> move building succeeds; agent:codex add stays needs-triage and move refused; check INBOX splits the two (test/unclassified.test.js)"]}
+{"ts":"2026-09-19T14:51:13.568Z","type":"move","item":"T-0114","from":"building","to":"built","by":"human:rahil","evidence":["claim hold message matches move/next per creator; check 'finished item still carries' singular/plural and repair counts fixed (test/check.test.js, test/repair.test.js)"]}
+{"ts":"2026-09-19T14:51:13.632Z","type":"move","item":"T-0115","from":"building","to":"built","by":"human:rahil","evidence":["scripts/preflight.mjs parses only the usage block of gw --help; full preflight help check passes (test/preflight.test.js)"]}
+{"ts":"2026-09-19T14:53:17.147Z","type":"move","item":"T-0112","from":"building","to":"built","by":"human:rahil","evidence":["package.json 0.13.0; README v0.13 paragraph, init/config/triage text verified on scratch boards incl. quickstart line by line; npm test 799/799, preflight:ci passed"]}

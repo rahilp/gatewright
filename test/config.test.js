@@ -30,8 +30,25 @@ function capture() {
   return { write: (chunk) => { text += chunk; }, read: () => text };
 }
 
-function ctxFor({ store, positionals = [], flags = {}, env = {}, stdin, stdout = capture() }) {
-  return { store, positionals, flags, env, stdin, stdout };
+function rawTty() {
+  const input = new PassThrough();
+  input.isTTY = true;
+  const raw = [];
+  input.setRawMode = (value) => raw.push(value);
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 88;
+  output.rows = 24;
+  let text = '';
+  output.on('data', (chunk) => { text += chunk; });
+  return { input, output, raw, read: () => text };
+}
+
+// The platform is pinned so the full-screen tests draw the same glyphs on
+// every CI runner; Windows console detection is tested on its own, with
+// explicit capabilities, in test/tui-prompt.test.js and test/setup.test.js.
+function ctxFor({ store, positionals = [], flags = {}, env = {}, stdin, stdout = capture(), platform = 'linux' }) {
+  return { store, positionals, flags, env, stdin, stdout, platform };
 }
 
 // Runs the real binary. A digest test that only asked store.verifyDigest()
@@ -114,6 +131,7 @@ test('a non-interactive gw config lists settings instead of waiting for a human'
   assert.equal(code, 0);
   assert.match(stdout.read(), /runner\.enabled\s+\(unset\)/);
   assert.match(stdout.read(), /runner\.max_concurrent\s+1/);
+  assert.doesNotMatch(stdout.read(), /\x1b\[/, 'a non-TTY never receives terminal escapes');
 });
 
 test('CI is treated as non-interactive even when it hands out a TTY', () => {
@@ -185,6 +203,118 @@ test('aborting the editor leaves the config byte-identical', async () => {
   assert.equal(code, 1, 'an abort is not a success');
   assert.equal(readFileSync(store.paths.config, 'utf8'), before);
   assert.match(read(), /nothing was changed/);
+});
+
+async function keys(tty, ...sequence) {
+  for (const key of sequence) {
+    await new Promise((resolve) => setImmediate(resolve));
+    tty.input.write(key);
+  }
+}
+
+test('the rich settings screen shows sections, values and the danger note, and Esc cancels without writing', async () => {
+  const { store } = board();
+  const before = readFileSync(store.paths.config, 'utf8');
+  const tty = rawTty();
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color' } }));
+  // Nine runner settings and four policy settings precede guard.enabled.
+  await keys(tty, ...Array(13).fill('\x1b[B'), '\x1b');
+  assert.equal(await run, 1);
+  assert.match(tty.read(), /COMMIT CHECK/);
+  assert.match(tty.read(), /runner\.max_concurrent\s+1/);
+  assert.match(tty.read(), /Warning: This is the only check that each commit belongs to an item on the/);
+  assert.match(tty.read(), /Cancelled; nothing was changed/);
+  assert.deepEqual(tty.raw, [true, false], 'raw mode is restored after cancelling the settings screen');
+  assert.equal(readFileSync(store.paths.config, 'utf8'), before);
+});
+
+test('the rich settings screen edits a value, reviews it, and saves through the one write path', async () => {
+  const { root, store } = board();
+  store.rebaselineDigest();
+  const tty = rawTty();
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color', NO_COLOR: '1' } }));
+  // runner.max_concurrent is the third row: open it, replace 1 with 3.
+  await keys(tty, 'j', 'j', '\r', '\x15', '9', '9', '\r');
+  await keys(tty, '\x15', '3', '\r');
+  // runner.enabled (first row) is a boolean: pick On.
+  await keys(tty, 'g', '\r', '\x1b[A', '\r');
+  await keys(tty, 's', '\r');
+  assert.equal(await run, 0);
+  assert.match(tty.read(), /runner\.max_concurrent must be at most 64/, 'an out-of-range value is refused on the screen');
+  assert.match(tty.read(), /Save 2 changes/);
+  assert.match(tty.read(), /runner\.max_concurrent: 1 → 3/);
+  assert.match(tty.read(), /Saved to \.gatewright\/config\.json/);
+  const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+  assert.equal(saved.runner.max_concurrent, 3);
+  assert.equal(saved.runner.enabled, true);
+  checkClean(root);
+});
+
+// Screen text with escapes removed and whitespace collapsed, so wording can be
+// asserted whatever width it wrapped at.
+function flat(text) { return text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\s+/g, ' '); }
+
+// The last frame drawn, as the 24 rows a person would see.
+function lastFrame(text) {
+  return text.slice(text.lastIndexOf('\x1b[H')).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').split('\r\n');
+}
+
+test('each config editor explains the setting, and each value says what it does', async () => {
+  const { store } = board();
+  const tty = rawTty();
+  tty.output.columns = 80;
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color', NO_COLOR: '1' } }));
+  // guard.mode (row 15): an enum, one line per value.
+  await keys(tty, ...Array(14).fill('j'), '\r');
+  const mode = flat(tty.read().slice(tty.read().lastIndexOf('\x1b[H')));
+  assert.ok(mode.includes('What happens to a commit that is not tied to any item on the board.'));
+  assert.ok(mode.includes('block (default) The commit is refused.'));
+  assert.ok(mode.includes('warn The commit goes through, with a warning printed.'));
+  assert.ok(mode.includes('Warning: With warn, commits that belong to no item still go through.'));
+  // runner.enabled (row 1): on/off, each described, the default marked.
+  await keys(tty, '\x1b', 'g', '\r');
+  const enabled = flat(tty.read().slice(tty.read().lastIndexOf('\x1b[H')));
+  assert.ok(enabled.includes('On The board can start agents here.'));
+  assert.ok(enabled.includes('Off (default) Nothing is started.'));
+  // runner.max_concurrent (row 3): a number, with its range, unit and default.
+  await keys(tty, '\x1b', 'g', 'j', 'j', '\r');
+  const number = flat(tty.read().slice(tty.read().lastIndexOf('\x1b[H')));
+  assert.ok(number.includes('The most agents that may work at the same time.'));
+  assert.ok(number.includes('Allowed: 1–64 agents.'));
+  await keys(tty, '\x1b', 'q');
+  assert.equal(await run, 0);
+});
+
+test('every config editor fits 80x24 without cutting its explanations', async () => {
+  const { store } = board();
+  const tty = rawTty();
+  tty.output.columns = 80;
+  tty.output.rows = 24;
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color' } }));
+  const { SETTINGS } = await import('../lib/settings.js');
+  for (let index = 0; index < SETTINGS.length; index++) {
+    await keys(tty, 'g', ...Array(index).fill('j'), '\r');
+    const rows = lastFrame(tty.read());
+    assert.equal(rows.length, 24, `${SETTINGS[index].key}: one screen`);
+    assert.ok(rows.every((row) => [...row].length <= 80), `${SETTINGS[index].key} fits 80 columns`);
+    assert.ok(rows.every((row) => !/…\s*$/.test(row)), `${SETTINGS[index].key}: nothing is cut off:\n${rows.join('\n')}`);
+    assert.ok(rows.some((row) => row.includes(SETTINGS[index].key)), `${SETTINGS[index].key} editor is showing`);
+    await keys(tty, '\x1b');
+  }
+  await keys(tty, 'q');
+  assert.equal(await run, 0);
+});
+
+test('quitting the settings screen with unsaved edits asks before discarding them', async () => {
+  const { store } = board();
+  const before = readFileSync(store.paths.config, 'utf8');
+  const tty = rawTty();
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color' } }));
+  await keys(tty, 'j', 'j', '\r', '\x15', '5', '\r', 'q', 'y');
+  assert.equal(await run, 0);
+  assert.match(tty.read(), /Discard 1 unsaved change\?/);
+  assert.match(tty.read(), /Discarded; nothing was changed/);
+  assert.equal(readFileSync(store.paths.config, 'utf8'), before);
 });
 
 // T-0043 — `gw config vocab.type` prints `["decision","defect",...]`, and

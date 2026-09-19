@@ -64,6 +64,31 @@ test('parses aliases and long usage lines without relying on columns', () => {
   assert.deepEqual(usageCommandEntries('  show <id> | list [--stage S]          read items').map((entry) => entry.name), ['show', 'list']);
 });
 
+// T-0115 — prose after the command list shares its two-space indent. Only the
+// block under `usage:` is the command list; the rest must not be read as one.
+test('reads only the command list under usage:, not the prose after it', () => {
+  const help = [
+    'gw — evidence-gated work tracking',
+    '',
+    'usage: gw <command> [options]',
+    '',
+    '  init [--force]                        create the board',
+    '  claim <id> | release <id>             take or drop ownership',
+    '  stop <id> | --all                     stop recorded runs',
+    '',
+    '  who did what: every command that writes records an actor. Default is',
+    '  human:<user>; agents must identify as agent:<name> — pass --by agent:x',
+    '  or export GW_ACTOR=agent:x (all commands).',
+    '',
+    '  GW_ROOT names the project root. A path ending in .gatewright gets a',
+    '  deprecation warning.',
+    '',
+    '  --version   print the version',
+  ].join('\n');
+  assert.deepEqual(helpCommands(help), new Set(['init', 'claim', 'release', 'stop']));
+  assert.deepEqual(usageCommandEntries(help).map((entry) => entry.line), [5, 6, 6, 7], 'line numbers still count from the top of the help');
+});
+
 test('fails when a command has duplicate usage entries', () => {
   const root = fixture({ help: '  init  create a board\n  init  create a board again' });
   assertFailure(root, /gw --help: command `init` appears 2 times/);

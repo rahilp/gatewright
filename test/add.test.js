@@ -12,6 +12,7 @@ import { isSchedulable } from '../lib/policy.js';
 import { readStages } from '../lib/config.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
+const HUMAN_ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !['GW_ACTOR', 'CLAUDECODE', 'AI_AGENT'].includes(key)));
 function repo(config = {}) { const root = mkdtempSync(join(tmpdir(), 'gw-add-')); mkdirSync(join(root, '.gatewright')); writeFileSync(join(root, '.gatewright/config.json'), JSON.stringify({ vocab: { phase: ['P1', 'P2'] }, policy: {}, ...config })); const store = createStore(root); store.ensure(); return { root, store }; }
 
 test('add creates a fully defaulted item and exactly one add event', () => {
@@ -41,7 +42,7 @@ test('gw add --gate is rejected as an unknown flag', () => {
 test('a fresh default board goes from a bare `gw add` to "working on it" in add, claim, move -- no mandatory edit', () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-capture-'));
   execFileSync(process.execPath, [BIN, 'init', '--yes'], { cwd: root, encoding: 'utf8' });
-  const id = execFileSync(process.execPath, [BIN, 'add', 'Fix the login bug'], { cwd: root, encoding: 'utf8' }).trim();
+  const id = execFileSync(process.execPath, [BIN, 'add', 'Fix the login bug'], { cwd: root, encoding: 'utf8', env: HUMAN_ENV }).trim();
   assert.equal(id, 'T-0001', 'the shipped default id_scheme is seq, so a bare add needs no phase');
 
   const store = createStore(root);
@@ -51,15 +52,33 @@ test('a fresh default board goes from a bare `gw add` to "working on it" in add,
   assert.equal(created.priority, null);
   assert.equal(created.stage, 'backlog');
 
-  execFileSync(process.execPath, [BIN, 'claim', id], { cwd: root, encoding: 'utf8' });
-  // T-0068 — an unclassified capture is held for triage, and the hold now
-  // gates advancement past the initial stage. The capture itself still needs
-  // no edit; the hold is lifted as triage's own override allows.
-  execFileSync(process.execPath, [BIN, 'triage', id, '--approve', '--force'], { cwd: root, encoding: 'utf8' });
-  execFileSync(process.execPath, [BIN, 'move', id, 'building'], { cwd: root, encoding: 'utf8' });
+  // T-0113 — the capture is flagged unclassified, which keeps it off the
+  // scheduler and nothing else: its creator claims and moves it with no
+  // triage step. (A previous version of this test had to approve its own
+  // capture first, which is the bug the README promised did not exist.)
+  assert.equal(created.flag, 'unclassified');
+  assert.equal(isSchedulable(created, { config: {}, stages: readStages(store), items: [created] }), false, 'kept off the scheduler until classified or approved');
+  execFileSync(process.execPath, [BIN, 'claim', id], { cwd: root, encoding: 'utf8', env: HUMAN_ENV });
+  execFileSync(process.execPath, [BIN, 'move', id, 'building'], { cwd: root, encoding: 'utf8', env: HUMAN_ENV });
   const building = store.readItems().find((item) => item.id === id);
   assert.equal(building.stage, 'building');
   assert.match(building.owner, /^human:/, 'claim assigns an owner with no --scope, --phase, or other edit required first');
+});
+
+// T-0113 — the other half of the same rule: an agent's capture under a
+// policy that holds agent work (the team pipeline's default) is still a
+// needs-triage hold, and move still refuses it.
+test('an agent capture on a team board is still held: claim works, move is refused', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-capture-agent-'));
+  execFileSync(process.execPath, [BIN, 'init', '--yes', '--pipeline', 'team'], { cwd: root, encoding: 'utf8', env: HUMAN_ENV });
+  const env = { ...HUMAN_ENV, GW_ACTOR: 'agent:maker' };
+  const id = execFileSync(process.execPath, [BIN, 'add', 'Agent-found bug'], { cwd: root, encoding: 'utf8', env }).trim();
+  assert.equal(createStore(root).readItems().find((item) => item.id === id).flag, 'needs-triage');
+  const claimed = execFileSync(process.execPath, [BIN, 'claim', id], { cwd: root, encoding: 'utf8', env });
+  assert.match(claimed, /held for triage: you cannot approve your own item/);
+  const moved = spawnSync(process.execPath, [BIN, 'move', id, 'building'], { cwd: root, encoding: 'utf8', env });
+  assert.equal(moved.status, 1);
+  assert.match(moved.stderr, /held for triage \(flagged needs-triage by agent:maker\)/);
 });
 
 test('add with no flags at all produces a workable item: no phase, type or priority guessed', () => {
@@ -68,7 +87,7 @@ test('add with no flags at all produces a workable item: no phase, type or prior
   assert.equal(id, undefined); assert.equal(out, 'T-0001\n');
   const item = store.readItems()[0];
   assert.equal(item.id, 'T-0001'); assert.equal(item.phase, null); assert.equal(item.type, null); assert.equal(item.priority, null);
-  assert.equal(item.stage, 'backlog'); assert.equal(item.flag, 'needs-triage', 'unclassified capture is held from the scheduler, not silently marked ready');
+  assert.equal(item.stage, 'backlog'); assert.equal(item.flag, 'unclassified', 'unclassified capture is kept from the scheduler, not silently marked ready');
 });
 
 test('seq config produces board-wide ids and children', () => {
@@ -137,9 +156,10 @@ test('agent creation is held, is capped per parent, and a human is not subject t
   assert.throws(() => run({ store, root: store.root, actor: 'agent:r', flags: { parent: 'P1-01' }, positionals: ['eleventh'], stdout: { write() {} } }), /P1-01.*max_children_per_item \(10\)/);
   run({ store, root: store.root, actor: 'human:lead', flags: { parent: 'P1-01' }, positionals: ['human child'], stdout: { write() {} } });
   // Not subject to the agent cap. It is still unclassified (no phase/type/priority
-  // -- the parent stub carries none to inherit), so it is held from the scheduler
-  // exactly like an agent-held item -- but claim/move never consult that flag.
-  assert.equal(store.readItems().at(-1).flag, 'needs-triage');
+  // -- the parent stub carries none to inherit), so it is kept from the
+  // scheduler -- but by the unclassified flag, which claim/move never consult,
+  // not by the agent policy hold (T-0113).
+  assert.equal(store.readItems().at(-1).flag, 'unclassified');
 });
 
 test('a fourth-generation child is refused at the default max_depth of 3', () => {

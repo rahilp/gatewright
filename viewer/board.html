@@ -346,7 +346,7 @@
     border: 1px solid var(--border);
   }
   .tag.flag-blocked, .tag.flag-conflict { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
-  .tag.flag-needs-triage, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+  .tag.flag-needs-triage, .tag.flag-unclassified, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
 
   /* Table */
   table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
@@ -639,6 +639,7 @@
   /* Running must be visually distinct from queued: one is costing money right
      now, the other is waiting for a scheduler tick. */
   .tag.badge-running { color: #7ee787; border-color: #2ea043; background: rgba(46,160,67,0.15); }
+  .tag.owner-chip { white-space: nowrap; }
   #gw-pause-btn {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -1292,6 +1293,20 @@
     return { kind: 'idle' };
   }
 
+  // The runner only knows about runs it started itself. On a board where it
+  // is disabled, "no agent run" says nothing about people or external agents
+  // who own and are doing the work, and inviting another queue is misleading.
+  // A dispatch that already exists is real state, however, so it remains
+  // visible and cancellable until its matching cancel event arrives.
+  function showRunnerControls(action) {
+    return !schedulerIsOff() || action.kind === 'queued' || action.kind === 'running';
+  }
+
+  function ownerLabel(owner) {
+    const match = /^(agent|human):(.+)$/.exec(String(owner || ''));
+    return match ? match[1] + ' · ' + match[2] : String(owner || '');
+  }
+
   function isDispatched(id) {
     const relevant = State.events.filter((e) => e.item === id && (e.type === 'dispatch' || e.type === 'cancel'));
     if (!relevant.length) return false;
@@ -1422,7 +1437,7 @@
     fill(document.getElementById('f-phase'), vocab.phase || [...new Set(State.items.map((i) => i.phase).filter(Boolean))], State.filters.phase, 'phase');
     fill(document.getElementById('f-type'), vocab.type || [...new Set(State.items.map((i) => i.type).filter(Boolean))], State.filters.type, 'type');
     fill(document.getElementById('f-stage'), stageList(State.stages).map((s) => s.id), State.filters.stage);
-    fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'paused', 'conflict'], State.filters.flag);
+    fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'unclassified', 'paused', 'conflict'], State.filters.flag);
   }
 
   function renderHeader() {
@@ -1436,10 +1451,10 @@
     document.getElementById('gw-snapshot-meta').innerHTML = State.live
       ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>' + syncPill
       : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>' + syncPill;
-    const total = State.items.length;
-    const flagged = State.items.filter((i) => i.flag).length;
     const terminal = terminalStageIds();
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
+    const flagged = State.items.filter((i) => i.flag && !terminal.has(i.stage)).length;
+    const total = State.items.length;
     document.getElementById('gw-totals').innerHTML =
       '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
     renderPauseUI();
@@ -1577,7 +1592,8 @@
     const active = computeActiveDispatch(State.events);
     const open = State.items.filter((it) => !isTerminalItem(it));
     const blocked = open.filter((it) => it.flag === 'blocked' || !depsReadyItem(it));
-    const triage = open.filter((it) => it.flag === 'needs-triage');
+    // T-0113: an unclassified capture sits in the inbox too, but can be worked.
+    const triage = open.filter((it) => it.flag === 'needs-triage' || it.flag === 'unclassified');
     const inFlight = open.filter((it) => blocked.indexOf(it) === -1 && isInFlightItem(it, active));
     const stranded = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && !it.owner && pipelineIndex(it.stage) > 0);
     const next = open.filter((it) => blocked.indexOf(it) === -1 && triage.indexOf(it) === -1 && inFlight.indexOf(it) === -1 && stranded.indexOf(it) === -1 &&
@@ -1623,7 +1639,7 @@
       briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
       briefSectionHtml('Stranded', stranded, (it) => stageLabel(it.stage).toLowerCase() + ' · unowned', 'Nothing is stranded.') +
       briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
-      briefSectionHtml('Needs triage', triage, (it) => 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
+      briefSectionHtml('Needs triage', triage, (it) => (it.flag === 'unclassified' ? 'not classified yet · ' : '') + 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
       briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-'), 'Nothing is unblocked and unowned.') +
       '</div>';
 
@@ -1668,20 +1684,6 @@
   // and Evidence sections -- they just stop being printed when they add
   // nothing.
 
-  // The owner most items already have. Only worth omitting when it really is
-  // the common case; a board split roughly evenly between owners has no
-  // "obvious" one to leave off.
-  function defaultOwner() {
-    const counts = new Map();
-    for (const it of State.items) {
-      if (!it.owner) continue;
-      counts.set(it.owner, (counts.get(it.owner) || 0) + 1);
-    }
-    let top = null; let max = 0;
-    for (const [owner, n] of counts) { if (n > max) { max = n; top = owner; } }
-    return (State.items.length && max > State.items.length / 2) ? top : null;
-  }
-
   // Whether this item's evidence is short of what its OWN next stage
   // requires -- read straight off the stage the server already sent, the
   // same way the panel's stage buttons and depsSelect already read
@@ -1712,11 +1714,11 @@
     const parentState = it.parent && !parent ? 'orphaned parent' : parent && terminalStageIds().has(parent.stage) ? 'parent terminal' : null;
     const action = actionFor(it);
     var actionHtml = '';
-    if (action.kind === 'running') {
+    if (showRunnerControls(action) && action.kind === 'running') {
       actionHtml = '<button data-stoprun="' + escapeHtml(it.id) + '" title="Stops the agent process for this run.">Stop run</button>';
-    } else if (action.kind === 'queued') {
+    } else if (showRunnerControls(action) && action.kind === 'queued') {
       actionHtml = '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch before it starts.">Cancel</button>';
-    } else if (action.kind === 'idle') {
+    } else if (showRunnerControls(action) && action.kind === 'idle') {
       actionHtml = '<button data-play="' + escapeHtml(it.id) + '"' + (schedulerIsOff() ? ' class="secondary"' : '') +
         ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
@@ -1725,14 +1727,12 @@
     // button cannot answer "is it actually doing the work?" -- a card sitting
     // in Building, owned by a human, with nothing running, used to look
     // identical to one an agent was burning money on.
-    const owner = defaultOwner();
-    const ownerIsDefault = Boolean(it.owner) && it.owner === owner;
-    const runStatus = action.kind === 'running'
+    const runStatus = action.kind === 'running' && showRunnerControls(action)
       ? '<span class="tag badge-running" data-run-id="' + escapeHtml(action.run.run) + '" data-run-started="' + escapeHtml(action.run.started || '') + '">' + escapeHtml(runLabel(action.run)) + '</span>'
       : action.kind === 'queued'
-        ? '<span class="tag badge-queued">queued · no agent run yet</span>'
-        : action.kind === 'idle'
-          ? '<span class="tag badge-idle">no agent run' + (it.owner && !ownerIsDefault ? ' · ' + escapeHtml(it.owner) : (it.owner ? '' : ' · unowned')) + '</span>'
+        ? '<span class="tag badge-queued">queued</span>'
+        : action.kind === 'idle' && showRunnerControls(action)
+          ? '<span class="tag badge-idle">no agent run' + (it.owner ? '' : ' · unowned') + '</span>'
           : '';
     // action.kind === 'none' is a finished item: no button, because there is
     // nothing left to start, queue or stop.
@@ -1761,9 +1761,7 @@
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
       runStatus +
-      // The idle chip already names the owner when it is worth naming; do not
-      // say it twice, and never print the owner every other card already has.
-      (it.owner && action.kind !== 'idle' && !ownerIsDefault ? '<span class="tag" title="owner">' + escapeHtml(it.owner) + '</span>' : '') +
+      (it.owner ? '<span class="tag owner-chip" title="' + escapeHtml(it.owner) + '">' + escapeHtml(ownerLabel(it.owner)) + '</span>' : '') +
       // A count only means something next to the gate it is judged against --
       // see evidenceGateUnmet(). The number is still in the panel's Evidence
       // section regardless.
@@ -2395,7 +2393,7 @@
     { key: 'github.repo', type: 'string', summary: 'owner/name of the linked GitHub repository.' },
     { key: 'github.sync_interval_min', type: 'integer', min: 1, max: 1440, summary: 'Minutes between automatic syncs while `gw serve` runs.' },
     { key: 'github.dispatch_label', type: 'string', summary: 'Issue label that queues the linked item for dispatch.' },
-    { key: 'github.mirror_children', type: 'boolean', summary: 'Comment agent-created children on the parent issue.' },
+    { key: 'github.mirror_children', type: 'boolean', summary: 'Open a GitHub issue for each agent-created child of a linked item.' },
     { key: 'github.comment_on_move', type: 'boolean', summary: 'Comment on the linked issue when the item moves stage.' },
     { key: 'github.close_on', type: 'string', summary: 'Stage that closes the linked issue on the next sync.' },
     { key: 'github.milestone_to', type: 'string', summary: 'Vocab field GitHub milestones map onto, such as phase.' },
@@ -2757,11 +2755,11 @@
     const dispatched = isDispatched(it.id);
     const panelAction = actionFor(it);
     var panelButton = '';
-    if (panelAction.kind === 'running') {
+    if (showRunnerControls(panelAction) && panelAction.kind === 'running') {
       panelButton = '<button id="panel-stoprun" title="Stops the agent process for this run.">Stop run</button>';
-    } else if (panelAction.kind === 'queued') {
+    } else if (showRunnerControls(panelAction) && panelAction.kind === 'queued') {
       panelButton = '<button id="panel-stop" title="Cancels the queued dispatch before it starts.">Cancel dispatch</button>';
-    } else if (panelAction.kind === 'idle') {
+    } else if (showRunnerControls(panelAction) && panelAction.kind === 'idle') {
       panelButton = '<button id="panel-play"' + (schedulerIsOff() ? ' class="secondary"' : '') +
         ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
@@ -2778,7 +2776,7 @@
         ) + '</pre>'
       : '';
 
-    const triageHtml = (State.live && it.flag === 'needs-triage')
+    const triageHtml = (State.live && (it.flag === 'needs-triage' || it.flag === 'unclassified'))
       ? '<div class="panel-actions triage"><button id="panel-triage-approve" title="Clears the hold and makes this item schedulable again.">Approve</button> ' +
         '<button id="panel-triage-drop" title="Moves this item to the dropped stage.">Drop</button></div>'
       : '';
@@ -3257,11 +3255,10 @@
       '<form id="create-form" class="create-form">' +
       '<label>Title<input type="text" name="title" required maxlength="120"></label>' +
       // T-0081: leaving all three vocab fields at "(none)" is a real choice
-      // with a real cost -- the server holds the item for triage and nobody
-      // (including its creator) can approve the hold away. The dialog used
-      // to let that happen silently; now it says so before the submit, not
-      // after the surprise. The holding itself is deliberate and stays.
-      '<div class="create-hold-note">An item created with no phase, type or priority is held for triage: it stays off the scheduler until someone other than you approves it. Classify it here to skip the hold.</div>' +
+      // with a cost, so the dialog says so before the submit, not after the
+      // surprise. T-0113: the cost is the scheduler only -- the item is
+      // flagged unclassified and can be claimed and moved at once.
+      '<div class="create-hold-note">An item created with no phase, type or priority is marked unclassified: you can work on it straight away, but the scheduler will not pick it up until it is classified or approved. Classify it here to skip that.</div>' +
       '<label>Phase<select name="phase">' + options(vocab.phase) + '</select></label>' +
       '<label>Type<select name="type">' + options(vocab.type) + '</select></label>' +
       '<label>Priority<select name="priority">' + options(vocab.priority) + '</select></label>' +

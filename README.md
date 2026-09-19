@@ -28,7 +28,7 @@ Capture is one command with no required flags: `phase`, `type` and `priority` st
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
-In a terminal, `init` asks one question: solo or team. Solo installs `backlog → building → done`, with no PR stage or policy hold for agent-created work. Team installs `backlog → building → built → in_review → reviewed → merged → verified`, with PR review and triage. With `--yes`, a GitHub origin selects team; otherwise it selects solo.
+In a terminal, `init` walks you through three screens driven by the arrow keys, and each one explains its question and every option in plain English: how you want to work (Solo or Team), what to set up (instruction files for your AI tools and a commit check, ticked with Space; `AGENTS.md` is always written, and a tool already found in the project starts ticked), and a review listing every file that will be written. Nothing is written until you confirm the review; Esc or Ctrl-C at any screen leaves the directory untouched. Terminals that cannot run a full-screen picker (`TERM=dumb`, a legacy Windows console, or `GW_TUI=0`) get the same workflow question as a numbered prompt instead. Solo installs `backlog → building → done`, with no PR stage or policy hold for agent-created work. Team installs `backlog → building → built → in_review → reviewed → merged → verified`, with PR review and triage. With `--yes`, a GitHub origin selects team; otherwise it selects solo.
 
 In a Git repository, `init` installs the commit hook unless you pass `--no-hook`. It finishes by pointing at `gw serve` for the live board.
 
@@ -162,9 +162,9 @@ gw config runner.enabled true
 # restart `gw serve` — config is read once, at startup
 ```
 
-Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
+Or run `gw config` with no arguments in a terminal for the settings screen: every setting grouped by section with its current value, ↑/↓ (or j/k) to move, Enter to edit the highlighted one, `s` to review and save, `q` to quit. Each setting's editor says what the setting does, gives one line for each value it can take, marks the default, and states the allowed range for a number, refusing one outside it before anything is saved. Changes are marked until saved, and nothing is written until the review is confirmed; Esc in an editor goes back to the list, and Ctrl-C cancels without writing. In a terminal without full-screen support it walks every setting as numbered prompts instead. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
 
-Agent-created work is held with `needs-triage` in the team pipeline. An agent may approve another agent's item but never its own; a human may approve their own item. Use `gw config policy.triage_required_for none` to turn holds off and release existing ones. Identity is declared, not authenticated. This prevents a run from filing three items, each of which starts a run that files three more.
+Agent-created work is held with `needs-triage` in the team pipeline. An agent may approve another agent's item but never its own; a human may approve their own item. Use `gw config policy.triage_required_for none` to turn holds off and release existing ones. Identity is declared, not authenticated. This prevents a run from filing three items, each of which starts a run that files three more. A human's `gw add` with no phase, type or priority is not held: it is flagged `unclassified`, can be claimed and moved at once, and only the scheduler waits until it is classified or approved.
 
 `max_children_per_item`, `max_depth`, `max_concurrent`, and `run_timeout_min` are enforced before a run starts. The runner also has three kill switches: per-run stop, `gw stop --all`, and global pause. `gw stop --all` works from any terminal with no browser and no `serve` process running, including after `serve` has crashed.
 
@@ -236,7 +236,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw guard [--message-file F] [--message M] [--branch B] [--range A..B] [--pretool] [--tool T] [--file F] [--warn] [--json]` | Refuse a change no board item accounts for: a commit (via the hook), every commit in a range (via CI), or an agent's edit before it happens |
 | `gw hook install [--ci] [--agent] [--force]` | Install the enforcement points: a `commit-msg` hook, a pull-request workflow, and the agent pre-edit guard. Also `gw hook status` and `gw hook uninstall` |
 | `gw help <command>`, `gw <command> --help` | Print that command's own usage and flags |
-| `gw config [<key> [<value>]] [--list] [--yes] [--no-input]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script. List settings that allow an empty value accept `none` (or `[]`) |
+| `gw config [<key> [<value>]] [--list] [--yes] [--no-input]` | Show or change a setting. With no arguments in a terminal it opens the settings screen; anywhere else it lists them, so it never blocks a script. List settings that allow an empty value accept `none` (or `[]`) |
 | `gw import <file> [--format md\|csv\|json] [--dry-run]` | Ingest a task list. The format is inferred from the extension. CSV needs `id` and `title` columns and understands common aliases; JSON takes a bare array or an `items` wrapper. A source stage is honoured only if the item's evidence actually earns it, and every downgrade is reported |
 | `gw open [--no-browser] [--watch] [--port P]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
@@ -244,7 +244,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw sync [--dry-run]` | Pull linked GitHub issues through `gh`; `--dry-run` previews synchronization |
 | `gw stop <id> \| --all` | Stop one recorded run, or all recorded runs from any terminal |
 | `gw resume <id>` | Resume a paused item in its existing worktree with the previous log tail |
-| `gw triage <id> [--approve] [--drop] [--by <who>] [--force]` | Approve or drop an item held for review |
+| `gw triage <id> [--approve] [--drop] [--by <who>] [--force]` | Approve or drop an item in the inbox: one held for review, or an `unclassified` capture, which approving takes as it is |
 | `gw gc [--dry-run] [--force]` | Remove terminal-stage worktrees; dry-run previews and force permits dirty worktrees |
 
 The full contract, including field ownership, the move algorithm, and the brief layout, is in `specs.md`.
@@ -273,7 +273,7 @@ Every command that writes records who did it: `--by <who>` if given, else `$GW_A
 
 The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item. `brief --json` returns the same digest structured — bucket membership, titles, stage, owner, and what each blocked item waits on — not the raw board, so a polling agent pays for the answer, not for the database.
 
-Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
+Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that first verifies a guard-capable `gw`, then runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
 
 ## Choosing a workflow shape
 
@@ -311,7 +311,7 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 ## Status
 
-Gatewright is at v0.12.0.
+Gatewright is at v0.13.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only at the time; CSV and JSON arrived in v0.9), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
@@ -342,6 +342,8 @@ The `Specified` stage is gone and its scope rule moved to `Built`, beside the ev
 The item field `gate` was deleted rather than renamed. It was read by no rule, and its vocabulary duplicated `priority` — `G0` "the phase cannot be called done while this is open" against `P1` "do it in this phase". What remains is `requires` on a stage, which is what actually gates and is now the only thing the word means.
 
 Shipped in v0.12, and it breaks things on purpose. Evidence gates can fail now: `evidence_min` used to count an item's lifetime evidence, so the team pipeline's final Verified gate had already been paid for before the move. A move now counts distinct evidence supplied with that move, and each entry records the stage it paid for; old evidence migrates on the next write. Onboarding is one choice, a pipeline that fits, instructions where an agent reads them, a hook in a Git repository, and a first task with no dead end. An agent can approve another agent's held work but not its own; a human can approve their own, and `policy.triage_required_for none` releases holds for an all-agent team. Refusals print commands that run as printed. `gw repair` replaces hand-editing a corrupt board: dry run first, quarantine with `--write`, then use `--force` only after review to accept a stale digest. Windows now gets advice `cmd.exe` can run, portable paths, and writes that tolerate a live board holding the file open. This changes the evidence data shape, makes `GW_ROOT` the project root rather than `.gatewright/`, and changes triage policy.
+
+Shipped in v0.13: `gw init` and `gw config` are full-screen and driven by the arrow keys. `init` is three screens — how you want to work, what to set up, and a review of exactly what will be written — and nothing is written until the review is confirmed. `gw config` opens a settings screen that marks changes until you review and save them. Every question, option and setting says in plain English what choosing it does, and each setting marks its default. A terminal that cannot draw it (`TERM=dumb`, a legacy Windows console, or `GW_TUI=0`) gets numbered prompts instead, and non-interactive runs print what they printed before. The Claude Code pre-edit hook used to call `gw guard` directly, so an older `gw` first on PATH answered with a usage error, which Claude Code reads as a refusal, and every edit in the repository was blocked. The hook now checks for a guard-capable `gw` first and steps aside if there is none, `gw hook status` warns when that check fails, and on Windows it finds `gw.cmd`. A project set up before 0.13 keeps the old hook until `gw hook install --agent` is run again. A dependency refusal names each unfinished dependency and gives the commands that move it forward now, where it used to print a template with a placeholder in it, and a standing test runs the advice every refusal prints, so none can ship advice that fails. On the live board, the idle run chip and Queue control are hidden while the runner is off, owner chips say who holds an item (`agent · codex`), and the flagged count counts open items only. `gw check` notes a needs-triage hold left on finished work without failing, and `gw repair --write` clears it. A human's bare `gw add` used to be flagged `needs-triage`, the same hold as agent-created work, so `gw move` refused it until someone approved it; it is now flagged `unclassified`, can be claimed and worked straight away, and stays in the inbox and off the scheduler until `gw edit --phase`, `--type` or `--priority` classifies it or `gw triage --approve` takes it as it is. Agent-created holds are unchanged, and on an existing board `gw check` reports the old capture holds and `gw repair --write` converts them.
 
 Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 

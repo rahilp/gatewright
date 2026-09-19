@@ -78,9 +78,24 @@ function documentedCommands(readme) {
   return commands;
 }
 
+// T-0115 — the command list is the one indented block under `usage:`, ending
+// at the first blank line. Everything after it is prose (who did what,
+// GW_ROOT, --version) that happens to share the two-space indent, and reading
+// it as commands turned "who", "human" and "or" into advertised commands.
+// Help text without a `usage:` line is read from the top.
+function commandBlock(lines) {
+  const usage = lines.findIndex((line) => /^usage:/i.test(line));
+  let start = usage + 1;
+  while (start < lines.length && lines[start].trim() === '') start += 1;
+  const end = lines.findIndex((line, index) => index >= start && line.trim() === '');
+  return { start, lines: lines.slice(start, end < 0 ? lines.length : end) };
+}
+
 export function usageCommandEntries(help) {
   const entries = [];
-  for (const [index, line] of help.split(/\r?\n/).entries()) {
+  const block = commandBlock(help.split(/\r?\n/));
+  for (const [offset, line] of block.lines.entries()) {
+    const index = block.start + offset;
     const syntax = line.match(/^ {2}([^\n]+)$/)?.[1] ?? '';
     const primary = syntax.match(/^([a-z][\w-]*)\b/);
     if (primary) entries.push({ name: primary[1], line: index + 1 });

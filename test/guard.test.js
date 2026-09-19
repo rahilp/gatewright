@@ -310,6 +310,7 @@ test('--pretool refuses an edit that no item accounts for, and says how to fix i
   assert.equal(decision.permissionDecision, 'deny');
   assert.match(decision.permissionDecisionReason, /gw add/);
   assert.match(decision.permissionDecisionReason, /gw claim/);
+  assert.doesNotMatch(decision.permissionDecisionReason, /--phase/);
 });
 
 test('--pretool allows the edit once the work is on the board and claimed', () => {
