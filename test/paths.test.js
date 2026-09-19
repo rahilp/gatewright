@@ -1,3 +1,4 @@
+import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { win32, posix } from 'node:path';

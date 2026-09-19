@@ -4,6 +4,7 @@
 // ignore it. The agent policy hold (needs-triage) is unchanged. Boards written
 // by an older gw carry needs-triage on those captures, and `gw repair` releases
 // them.
+import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';

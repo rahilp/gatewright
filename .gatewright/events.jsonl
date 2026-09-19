@@ -1386,3 +1386,14 @@
 {"ts":"2026-09-19T17:07:19.607Z","type":"add","item":"T-0122","by":"human:rahil","parent":null}
 {"ts":"2026-09-19T17:07:19.665Z","type":"claim","item":"T-0122","by":"human:rahil"}
 {"ts":"2026-09-19T17:07:19.728Z","type":"move","item":"T-0122","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T19:08:41.267Z","type":"move","item":"T-0122","from":"building","to":"built","by":"human:rahil","evidence":["https://www.npmjs.com/package/gatewright/v/0.13.1 published and installed from the registry"]}
+{"ts":"2026-09-19T19:39:49.372Z","type":"add","item":"T-0123","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T19:39:49.432Z","type":"claim","item":"T-0123","by":"human:rahil"}
+{"ts":"2026-09-19T19:39:49.495Z","type":"move","item":"T-0123","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T19:46:20.022Z","type":"add","item":"T-0124","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T19:46:20.086Z","type":"add","item":"T-0125","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T19:46:20.148Z","type":"claim","item":"T-0124","by":"human:rahil"}
+{"ts":"2026-09-19T19:46:20.210Z","type":"move","item":"T-0124","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T19:46:20.269Z","type":"claim","item":"T-0125","by":"human:rahil"}
+{"ts":"2026-09-19T19:46:20.333Z","type":"move","item":"T-0125","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T19:47:10.339Z","type":"move","item":"T-0123","from":"building","to":"built","by":"human:rahil","evidence":["GW_ROOT/GW_ACTOR pointed at a sentinel board: node --test test/add.test.js and full npm test (816/816) leave it byte-identical (test/env-isolation.test.js)"]}

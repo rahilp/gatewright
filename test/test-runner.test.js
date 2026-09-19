@@ -1,3 +1,4 @@
+import './helpers/isolate-env.js';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
