@@ -2372,7 +2372,7 @@
     { key: 'policy.auto_dispatch_children', type: 'boolean', summary: 'Whether agent-created children dispatch without a human.', danger: 'Leaving this off is what stops a run filing work that starts more runs.' },
     { key: 'policy.max_children_per_item', type: 'integer', min: 0, max: 100, summary: 'Cap on children one item may create.' },
     { key: 'policy.max_depth', type: 'integer', min: 1, max: 10, summary: 'How deep agent-created work may nest.' },
-    { key: 'policy.triage_required_for', type: 'list', summary: 'Actor kinds whose created items are held for triage. Use [] for no policy holds.' },
+    { key: 'policy.triage_required_for', type: 'list', summary: 'Actor kinds whose created items are held for triage. Use none (or []) for no policy holds.' },
     { key: 'guard.enabled', type: 'boolean', summary: 'Gate commits on the board. Off means every commit is allowed through.', danger: 'This is the only check that a commit is accounted for on the board.' },
     { key: 'guard.mode', type: 'string', choices: ['block', 'warn'], summary: 'block refuses an unaccounted commit; warn reports it and lets it through.', danger: 'warn reports and allows the commit.' },
     { key: 'guard.accept', type: 'list', summary: 'Evidence the guard accepts, in order: message, branch, owner.' },

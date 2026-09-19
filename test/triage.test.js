@@ -10,6 +10,7 @@ import { run } from '../lib/commands/triage.js';
 import { run as move } from '../lib/commands/move.js';
 import { isSchedulable } from '../lib/policy.js';
 import { RuleError } from '../lib/cli/errors.js';
+import { runPrintedCommand } from './helpers/printed-command.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 
@@ -53,7 +54,7 @@ test('an agent cannot approve its own item even with --force, but the printed dr
   assert.throws(() => run({ ...ctx(b, { approve: true, force: true }), actor: 'agent:lead' }), (error) => {
     assert.match(error.message, /created by agent:lead/);
     assert.match(error.message, /ask a human or a different agent to approve it/);
-    assert.match(error.message, /gw config policy\.triage_required_for '\[\]'/);
+    assert.match(error.message, /gw config policy\.triage_required_for none/);
     assert.match(error.message, /--force does not allow self-approval/);
     return error instanceof RuleError;
   });
@@ -62,8 +63,8 @@ test('an agent cannot approve its own item even with --force, but the printed dr
   assert.equal(b.store.readItems()[0].stage, 'discarded', 'the exact printed drop route is usable by the creator');
 });
 
-// T-0095.1 — the test extracts the command from the refusal, pins its exact
-// shell spelling, then executes the argv that spelling produces.
+// T-0095.1 — the test extracts the command from the refusal and sends its
+// exact text through the platform shell (cmd.exe on Windows).
 test('T-0095.1: the triage refusal advice turns off the policy hold in front of the creator', () => {
   const root = mkdtempSync(join(tmpdir(), 'gw-triage-advice-'));
   const gw = (args, actor) => execFileSync(process.execPath, [BIN, ...args], {
@@ -80,12 +81,11 @@ test('T-0095.1: the triage refusal advice turns off the policy hold in front of 
     () => gw(['triage', 'T-0001', '--approve'], 'agent:a'),
     (error) => { refusal = String(error.stderr); return true; },
   );
-  const command = refusal.match(/`(gw config policy\.triage_required_for '\[\]')`/)?.[1];
-  assert.equal(command, "gw config policy.triage_required_for '[]'", refusal);
-  // Run the extracted command's exact argument sequence. The preceding exact
-  // string assertion pins its shell quoting; execFileSync receives the argv
-  // that a shell would produce from that verbatim command.
-  assert.match(gw(command.split(' ').slice(1).map((part) => part.replace(/^'|'$/g, '')), 'agent:a'), /released 1 triage hold no longer required by policy/);
+  const command = refusal.match(/`(gw config policy\.triage_required_for none)`/)?.[1];
+  assert.equal(command, 'gw config policy.triage_required_for none', refusal);
+  const result = runPrintedCommand(root, command, { ...process.env, GW_ACTOR: 'agent:a' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /released 1 triage hold no longer required by policy/);
 
   const store = createStore(root);
   assert.equal(store.readItems().find((candidate) => candidate.id === 'T-0001').flag, null);

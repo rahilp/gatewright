@@ -10,7 +10,10 @@ import { readTemplate } from '../lib/templates.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const DATA = ['.gatewright/items.jsonl', '.gatewright/events.jsonl', '.gatewright/stages.json', '.gatewright/config.json', '.gatewright/prompt.md', '.gatewright/.digest'];
-const MIRRORS = ['CLAUDE.md', join('.cursor', 'rules', 'gatewright.mdc'), join('.github', 'copilot-instructions.md')];
+// Forward-slash relative paths: that is how init and upgrade name these files
+// to the user on every platform. Node accepts them for filesystem calls on
+// Windows too, so the same list serves both the join and the output match.
+const MIRRORS = ['CLAUDE.md', '.cursor/rules/gatewright.mdc', '.github/copilot-instructions.md'];
 
 const run = (args, cwd) => execFileSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, GW_ROOT: '' } });
 const digest = (root, files) => files.map((f) => {

@@ -232,6 +232,14 @@ test('T-0095.1: only list settings with a useful empty meaning accept []', () =>
     vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'] },
   });
   for (const key of ['policy.triage_required_for', 'guard.exempt_paths', 'check.stale_exempt_stages', 'memory.remember.extra_tags']) {
+    execFileSync(process.execPath, [BIN, 'config', key, 'none'], { cwd: root, encoding: 'utf8' });
+  }
+  const savedAfterNone = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+  assert.deepEqual(savedAfterNone.policy.triage_required_for, []);
+  assert.deepEqual(savedAfterNone.guard.exempt_paths, []);
+  assert.deepEqual(savedAfterNone.check.stale_exempt_stages, []);
+  assert.deepEqual(savedAfterNone.memory.remember.extra_tags, []);
+  for (const key of ['policy.triage_required_for', 'guard.exempt_paths', 'check.stale_exempt_stages', 'memory.remember.extra_tags']) {
     execFileSync(process.execPath, [BIN, 'config', key, '[]'], { cwd: root, encoding: 'utf8' });
   }
   const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
@@ -242,4 +250,14 @@ test('T-0095.1: only list settings with a useful empty meaning accept []', () =>
   for (const key of ['guard.accept', 'vocab.phase', 'vocab.priority', 'vocab.type']) {
     assert.throws(() => execFileSync(process.execPath, [BIN, 'config', key, '[]'], { cwd: root, encoding: 'utf8' }), /JSON array of non-empty strings/);
   }
+});
+
+test("T-0095.1: literal single-quoted [] is refused rather than stored as a list entry", () => {
+  const { root, store } = board({ policy: { triage_required_for: ['agent'] } });
+  const before = readFileSync(store.paths.config, 'utf8');
+  assert.throws(
+    () => execFileSync(process.execPath, [BIN, 'config', 'policy.triage_required_for', "'[]'"], { cwd: root, encoding: 'utf8' }),
+    (error) => error.status === 2 && /quoted \[\] is not valid.*use none or \[\] for an empty list/i.test(`${error.stderr}`),
+  );
+  assert.equal(readFileSync(store.paths.config, 'utf8'), before, 'a quoted empty-array spelling writes nothing');
 });
