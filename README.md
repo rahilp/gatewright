@@ -28,7 +28,7 @@ Capture is one command with no required flags: `phase`, `type` and `priority` st
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
-In a terminal, `init` asks one question: solo or team. Solo installs `backlog → building → done`, with no PR stage or policy hold for agent-created work. Team installs `backlog → building → built → in_review → reviewed → merged → verified`, with PR review and triage. With `--yes`, a GitHub origin selects team; otherwise it selects solo.
+In a terminal, `init` walks you through three screens driven by the arrow keys: the workflow (solo or team), what to set up (instruction files for each detected agent tool and the commit hook, toggled with Space), and a review of exactly what will be written. Nothing is written until you confirm the review; Esc or Ctrl-C at any screen leaves the directory untouched. Terminals that cannot run a full-screen picker (`TERM=dumb`, a legacy Windows console, or `GW_TUI=0`) get the same workflow question as a numbered prompt instead. Solo installs `backlog → building → done`, with no PR stage or policy hold for agent-created work. Team installs `backlog → building → built → in_review → reviewed → merged → verified`, with PR review and triage. With `--yes`, a GitHub origin selects team; otherwise it selects solo.
 
 In a Git repository, `init` installs the commit hook unless you pass `--no-hook`. It finishes by pointing at `gw serve` for the live board.
 
@@ -162,7 +162,7 @@ gw config runner.enabled true
 # restart `gw serve` — config is read once, at startup
 ```
 
-Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
+Or run `gw config` with no arguments in a terminal for the settings screen: every setting grouped by section with its current value, ↑/↓ (or j/k) to move, Enter to edit the highlighted one, `s` to review and save, `q` to quit. Changes are marked until saved, and nothing is written until the review is confirmed; Esc or Ctrl-C cancels. In a terminal without full-screen support it walks every setting as numbered prompts instead. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
 
 Agent-created work is held with `needs-triage` in the team pipeline. An agent may approve another agent's item but never its own; a human may approve their own item. Use `gw config policy.triage_required_for none` to turn holds off and release existing ones. Identity is declared, not authenticated. This prevents a run from filing three items, each of which starts a run that files three more.
 
@@ -236,7 +236,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw guard [--message-file F] [--message M] [--branch B] [--range A..B] [--pretool] [--tool T] [--file F] [--warn] [--json]` | Refuse a change no board item accounts for: a commit (via the hook), every commit in a range (via CI), or an agent's edit before it happens |
 | `gw hook install [--ci] [--agent] [--force]` | Install the enforcement points: a `commit-msg` hook, a pull-request workflow, and the agent pre-edit guard. Also `gw hook status` and `gw hook uninstall` |
 | `gw help <command>`, `gw <command> --help` | Print that command's own usage and flags |
-| `gw config [<key> [<value>]] [--list] [--yes] [--no-input]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script. List settings that allow an empty value accept `none` (or `[]`) |
+| `gw config [<key> [<value>]] [--list] [--yes] [--no-input]` | Show or change a setting. With no arguments in a terminal it opens the settings screen; anywhere else it lists them, so it never blocks a script. List settings that allow an empty value accept `none` (or `[]`) |
 | `gw import <file> [--format md\|csv\|json] [--dry-run]` | Ingest a task list. The format is inferred from the extension. CSV needs `id` and `title` columns and understands common aliases; JSON takes a bare array or an `items` wrapper. A source stage is honoured only if the item's evidence actually earns it, and every downgrade is reported |
 | `gw open [--no-browser] [--watch] [--port P]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
@@ -273,7 +273,7 @@ Every command that writes records who did it: `--by <who>` if given, else `$GW_A
 
 The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item. `brief --json` returns the same digest structured — bucket membership, titles, stage, owner, and what each blocked item waits on — not the raw board, so a polling agent pays for the answer, not for the database.
 
-Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
+Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that first verifies a guard-capable `gw`, then runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
 
 ## Choosing a workflow shape
 
