@@ -1341,3 +1341,4 @@
 {"ts":"2026-09-19T14:07:02.816Z","type":"sync","pushed":{"comments":["2026-09-19T14:06:10.687Z"],"closed":[],"dispatch_removed":[],"mirrored":[]}}
 {"ts":"2026-09-19T14:07:22.911Z","type":"move","item":"T-0104","from":"building","to":"built","by":"human:rahil","evidence":["Installed PRETOOL_COMMAND driven under sh: stale gw (guard exits 2) -> rc 0, edits not blocked; current gw -> PreToolUse deny JSON for unclaimed edit (test/hook.test.js runs it on win32 via gw.cmd shim, no skips)"]}
 {"ts":"2026-09-19T14:07:22.973Z","type":"move","item":"T-0101","from":"building","to":"built","by":"human:rahil","evidence":["scripts/test.mjs gives each run its own TMPDIR/TEMP/TMP dir, sweeps it on exit and SIGINT/SIGTERM, reclaims >24h scratch at startup; two concurrent npm test runs both 772/772 (test/test-runner.test.js)"]}
+{"ts":"2026-09-19T14:12:03.307Z","type":"sync","pulled":1,"pushed":0,"conflicts":0}
