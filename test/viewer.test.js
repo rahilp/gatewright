@@ -937,6 +937,7 @@ test('a page only goes live when a server actually answered /api/state', () => {
 const CARD_HELPERS = [
   'escapeHtml', 'stageList', 'nextStageId', 'glossaryFor', 'describeTerm', 'termTitle',
   'ageLabel', 'runLabel', 'evidenceGateUnmet', 'runFor', 'isDispatched', 'isTerminalItem', 'actionFor', 'showRunnerControls', 'ownerLabel',
+  'pipelineIndex', 'waitingOnDeps', 'waitsOnLabel',
 ].map(liftHelper).join('\n');
 const CARD_ZERO_ARG = ['terminalStageIds', 'schedulerIsOff', 'playLabel', 'playTitle']
   .map(liftFunction).join('\n');
@@ -1490,4 +1491,128 @@ test('the create dialog says what an unclassified creation costs before the subm
 test('the board carries an inline favicon so no view 404s and the snapshot still works', () => {
   assert.match(SHELL, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,/, 'an inline SVG icon, no request');
   assert.doesNotMatch(SHELL, /<link rel="icon"[^>]*href="(?!data:)/, 'no icon href that a file:// page would have to fetch');
+});
+
+// --------------------------------------------------------------------------
+// T-0117..T-0120: defects the README screenshots exposed. The geometry is
+// measured in a real browser in test/viewer.browser.test.js; these pin the
+// logic and the rules that geometry depends on.
+
+// T-0117: the meta span was nowrap and unshrinkable, so titles collapsed to
+// "T-0003 · P…" and a long triage meta painted past the card.
+test('T-0117: an Overview row wraps its meta under the title and truncates it inside the card', () => {
+  assert.match(SHELL, /\.brief-row \{ cursor: pointer; gap: [^;]+; flex-wrap: wrap; \}/, 'the row may wrap');
+  assert.match(SHELL, /\.brief-row span:first-child \{ flex: 1 1 12rem; \}/, 'the title claims a readable basis before the meta gets any room');
+  const meta = SHELL.match(/\.brief-row span:last-child \{ flex: 0 1 auto;[^}]*\}/);
+  assert.ok(meta, 'the meta span is allowed to shrink');
+  assert.match(meta[0], /min-width: 0;/);
+  assert.match(meta[0], /max-width: 100%;/, 'on its own line it is never wider than the card');
+  assert.match(meta[0], /text-overflow: ellipsis;/);
+});
+
+test('T-0118: a dependency-blocked card names what it waits on, by the same test the Overview uses', () => {
+  const run = new Function('State', 'it', `
+    ${liftHelper('pipelineIndex')}
+    ${liftHelper('depsReadyItem')}
+    ${liftHelper('waitingOnDeps')}
+    ${liftHelper('waitsOnLabel')}
+    const ids = waitingOnDeps(it);
+    return { ids, label: waitsOnLabel(ids), ready: depsReadyItem(it) };
+  `);
+  const stages = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built', requires: { deps_at_least: 'built' } }], extra: [] };
+  const items = [
+    { id: 'A', stage: 'backlog' },
+    { id: 'B', stage: 'built' },
+    { id: 'C', stage: 'building', deps: ['A', 'B'] },
+    { id: 'D', stage: 'building', deps: ['A', 'X', 'Y'] },
+    { id: 'E', stage: 'building', deps: ['B'] },
+  ];
+  const State = { stages, items };
+  const byId = (id) => items.find((it) => it.id === id);
+
+  assert.deepEqual(run(State, byId('C')), { ids: ['A'], label: 'waits on A', ready: false }, 'only the dep short of the boundary is named');
+  assert.deepEqual(run(State, byId('D')), { ids: ['A', 'X', 'Y'], label: 'waits on A +2', ready: false }, 'a missing dep waits too, and extras are counted');
+  assert.deepEqual(run(State, byId('E')), { ids: [], label: '', ready: true }, 'a ready item has no chip -- and agrees with depsReadyItem');
+
+  const cardMarkup = liftHelper('cardMarkup');
+  assert.match(cardMarkup, /const waits = isTerminalItem\(it\) \? \[\] : waitingOnDeps\(it\);/, 'finished work never shows a hold');
+  assert.match(cardMarkup, /<span class="tag dep-wait"/, 'the card renders it as a chip');
+  assert.match(SHELL, /\.tag\.dep-wait \{ color: var\(--danger\); border-color: var\(--danger\); background: var\(--danger-bg\); \}/, 'styled like the blocked flag chip');
+  const update = SHELL.match(/function updateBoardInPlace\([\s\S]*?\n  \}/)[0];
+  assert.match(update, /card\.dataset\.waits \|\| ''\) !== /, 'the poll redraws a card when only its dependency moved');
+  assert.match(liftHelper('renderOverview'), /waitsOnLabel\(waitingOnDeps\(it\)\)/, 'the Overview Blocked row says the same thing');
+});
+
+test('T-0118: "Show all" is offered only when the preview is hiding something', () => {
+  const needed = new Function('count', 'isTerminal', 'expanded', `
+    ${liftConstLine('COLLAPSED_PREVIEW_COUNT')}
+    ${liftHelper('columnToggleNeeded')}
+    return columnToggleNeeded(count, isTerminal, expanded);
+  `);
+  const limit = Number(SHELL.match(/\n  const COLLAPSED_PREVIEW_COUNT = (\d+);/)[1]);
+  assert.equal(needed(0, true, false), false, 'an empty Dropped has nothing to show');
+  assert.equal(needed(limit, true, false), false, 'a column the preview already shows in full has nothing to show');
+  assert.equal(needed(limit + 1, true, false), true, 'one hidden item is enough');
+  assert.equal(needed(0, true, true), true, 'an opened column can always be folded back');
+  assert.equal(needed(50, false, true), false, 'a working column never collapses');
+  const update = SHELL.match(/function updateBoardInPlace\([\s\S]*?\n  \}/)[0];
+  assert.match(update, /columnToggleNeeded\(inCol\.length, isTerminal, expanded\)/, 'the poll path adds and removes the toggle as counts change');
+});
+
+test('T-0118: an empty terminal or side column folds to a narrow strip that is still a column', () => {
+  const folded = new Function('State', 'stageId', 'count', 'isTerminal', `
+    ${liftHelper('pipelineIndex')}
+    ${liftHelper('columnFolded')}
+    return columnFolded(stageId, count, isTerminal);
+  `);
+  const State = { stages: { stages: [{ id: 'backlog' }, { id: 'in_review' }, { id: 'verified' }], extra: [{ id: 'dropped' }, { id: 'paused' }] } };
+  assert.equal(folded(State, 'dropped', 0, true), true);
+  assert.equal(folded(State, 'paused', 0, false), true, 'a side stage folds whether or not it is declared terminal');
+  assert.equal(folded(State, 'verified', 0, true), true, 'an empty finish line folds too');
+  assert.equal(folded(State, 'in_review', 0, false), false, 'an empty working stage is still where work goes next');
+  assert.equal(folded(State, 'dropped', 1, true), false, 'a column with anything in it never folds');
+
+  const renderBoard = SHELL.match(/function renderBoard\(container\) \{[\s\S]*?\n  \}/)[0];
+  assert.match(renderBoard, /\(folded \? ' column-folded' : ''\) \+ '" data-stage="/, 'the folded column keeps its data-stage, so drag and drop still find it');
+  assert.match(SHELL, /\.column\.column-folded \{[^}]*width: 2\.6rem;/, 'folded is narrow');
+  assert.match(SHELL, /\.column \{[^}]*min-width: 11rem;[^}]*flex: 1 1 220px;/s, 'columns share the width instead of a fixed 240px each');
+});
+
+// T-0119: a forward skip is judged cumulatively, so Reviewed, Merged and
+// Verified all listed In review's pull-request rule, after a lowercase
+// fragment. A skip now shows only its own stage's gate, in sentences.
+test('T-0119: a forward-skip stage button shows its own gate, never the gates before it', () => {
+  assert.doesNotMatch(SHELL, /and a jump across stages is never offered here/, 'the fragment is gone');
+  const branch = SHELL.match(/else if \(!transition \|\| \(transition\.force && !backward && pipelineIndex\(s\.id\) >= 0\)\) \{[\s\S]*?\n      \} else if/);
+  assert.ok(branch, 'a pipeline skip is decided before its cumulative reasons can be shown');
+  assert.match(branch[0], /const gate = gateFor\(s\.id\);/, 'it reads that one stage\'s gate');
+  assert.match(branch[0], /unmet = gate\.sentences;/);
+  assert.doesNotMatch(branch[0], /transition\.reasons/, 'and never the cumulative reasons');
+  assert.doesNotMatch(branch[0], /disabled = false/, 'a skip stays disabled');
+  for (const note of SHELL.match(/note = [^;]+;/g).filter((line) => /board|CLI/.test(line))) {
+    assert.match(note, /note = (transition\s*\? )?'[A-Z]/, `a stage note starts a sentence: ${note}`);
+  }
+});
+
+test('T-0120: every distribution bar in a card starts at the same x', () => {
+  assert.match(liftHelper('renderOverview'), /'<div class="dist-rows">' \+ body \+ '<\/div>'/, 'a card\'s rows share one container');
+  assert.match(SHELL, /\.dist-rows \{ display: grid; grid-template-columns: fit-content\(50%\) 1fr auto; \}/, 'one label column, sized to the longest label');
+  assert.match(SHELL, /\.dist-rows \.count-row \{ display: grid; grid-column: 1 \/ -1; grid-template-columns: subgrid;/, 'every row lays out on that same grid');
+});
+
+test('T-0118: the rendered card wears a "waits on" chip only while a dependency holds it', () => {
+  const state = CARD_STATE();
+  state.stages = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built' }], extra: [], terminal: ['built'] };
+  state.items = [
+    { id: 'T-0002', title: 'Dep', stage: 'backlog', updated: '2024-01-01' },
+    { id: 'T-0008', title: 'Waiter', stage: 'building', deps: ['T-0002'], updated: '2024-01-01' },
+  ];
+  const waiting = renderCardWith(state, state.items[1]);
+  assert.match(waiting, /<span class="tag dep-wait" title="Blocked until T-0002 reaches [^"]+">waits on T-0002<\/span>/);
+  assert.match(waiting, /data-waits="T-0002"/, 'the card records what it waits on, so the poll can tell when that changes');
+
+  state.items[0].stage = 'building';
+  const free = renderCardWith(state, state.items[1]);
+  assert.doesNotMatch(free, /dep-wait/, 'once the dependency catches up the chip is gone');
+  assert.match(free, /data-waits=""/);
 });

@@ -189,6 +189,15 @@
   .count-row:last-child { border-bottom: none; }
   .count-row .bar { flex: 1; margin: 0 0.6rem; background: var(--bg-sunken); border-radius: 0.2rem; overflow: hidden; height: 0.5rem; align-self: center; }
   .count-row .bar span { display: block; height: 100%; background: var(--accent); }
+  /* T-0120: each row used to size its own label, so a bar started wherever
+     that row's label happened to end and equal counts looked unequal. The
+     rows share one grid now: the label column is as wide as the longest
+     label in the card (never more than half of it), so every bar in a card
+     starts at the same x. */
+  .dist-rows { display: grid; grid-template-columns: fit-content(50%) 1fr auto; }
+  .dist-rows .count-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
+  .dist-rows .count-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dist-rows .count-row > span:last-child { text-align: right; }
   /* Overview (P8-13): the headline answers "what should I do next", the four
      census charts move behind a <details> toggle below it. Never deleted --
      see renderOverview -- just no longer the first thing on screen. */
@@ -197,7 +206,15 @@
   .overview-distribution { margin-top: 0.4rem; }
   .overview-distribution > summary { cursor: pointer; font-size: 0.8rem; color: var(--accent); padding: 0.3rem 0; }
   .overview-distribution .overview-grid { margin-top: 0.7rem; }
-  .brief-row { cursor: pointer; gap: 0.6rem; }
+  /* T-0117: the meta span used to be nowrap and unshrinkable, so it took
+     whatever it wanted and the title got the rest -- "T-0003 · P…" at 1440px,
+     and a long "not classified yet · created by ..." painted past the card.
+     The title now claims a readable basis first; when the meta does not fit
+     beside it the row wraps and the meta moves under the title, and a meta
+     that is wider than the card on its own line truncates inside it. */
+  .brief-row { cursor: pointer; gap: 0.1rem 0.6rem; flex-wrap: wrap; }
+  .brief-row span:first-child { flex: 1 1 12rem; }
+  .brief-row span:last-child { flex: 0 1 auto; margin-left: auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .brief-row:hover { color: var(--accent); }
   /* T-0021: without min-width: 0 a flex item's automatic minimum is its
      content, so one unbroken 118-character title resists the ellipsis below
@@ -236,13 +253,17 @@
     max-height: calc(100vh - 11rem);
     min-height: 12rem;
   }
+  /* T-0118: columns used to be a fixed 240-260px, so nine of them needed
+     ~2250px and a 1440px screen scrolled sideways through the main flow.
+     They now share the width they are given and only scroll once each has
+     shrunk to a card that still reads (11rem). */
   .column {
     background: var(--bg-raised);
     border: 1px solid var(--border);
     border-radius: 0.5rem;
-    min-width: 240px;
-    max-width: 260px;
-    flex: 0 0 auto;
+    min-width: 11rem;
+    max-width: 280px;
+    flex: 1 1 220px;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -250,7 +271,15 @@
   /* A terminal column collapsed to its recent handful gets its width back to
      the non-terminal columns that matter -- see terminalStageIds() and
      renderBoard(). Never so narrow the count or the toggle wrap. */
-  .column.collapsed { min-width: 150px; max-width: 170px; }
+  .column.collapsed { min-width: 150px; max-width: 170px; flex: 0 1 160px; }
+  /* T-0118: an empty terminal or side column (Dropped, Paused) has nothing
+     to show but its name, so it folds to a narrow strip with the name read
+     sideways. It is still a whole-height .column with its data-stage, so it
+     stays a drop target exactly as before. */
+  .column.column-folded { min-width: 0; max-width: none; width: 2.6rem; flex: 0 0 auto; }
+  .column.column-folded .column-head { flex-direction: column; justify-content: flex-start; padding: 0.6rem 0; border-bottom: none; border-radius: 0.5rem; }
+  .column.column-folded .column-head-main { writing-mode: vertical-rl; flex-direction: row; align-items: center; }
+  .column.column-folded .column-body { padding: 0; flex: 1; }
   .column-head {
     padding: 0.55rem 0.7rem;
     border-bottom: 1px solid var(--border);
@@ -338,6 +367,10 @@
      nothing is truncated and no title attribute is needed. */
   .card .card-title { margin: 0.15rem 0 0.35rem; font-weight: 500; overflow-wrap: anywhere; }
   .card .card-meta { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.7rem; color: var(--text-dim); }
+  /* A chip is one label: in a narrow column it moves to the next line whole
+     ("child of T-\n0002" read as two chips), and truncates if it is wider
+     than the card on its own. */
+  .card .card-meta .tag { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .tag {
     display: inline-block;
     padding: 0.05rem 0.35rem;
@@ -347,6 +380,10 @@
   }
   .tag.flag-blocked, .tag.flag-conflict { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
   .tag.flag-needs-triage, .tag.flag-unclassified, .tag.flag-paused { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+  /* T-0118: a card held back by a dependency is blocked as surely as a
+     flagged one -- the Overview files both under Blocked -- so it wears the
+     same chip, naming what it waits on. */
+  .tag.dep-wait { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
 
   /* Table */
   table.gw-table { width: 100%; border-collapse: collapse; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
@@ -1584,6 +1621,23 @@
     });
   }
 
+  // T-0118: which dependencies depsReadyItem is waiting on, by the same test,
+  // so a card and the Overview can name them instead of just saying "blocked".
+  function waitingOnDeps(it) {
+    const target = (State.stages.stages || [])[pipelineIndex(it.stage) + 1];
+    const boundary = (target && target.requires && target.requires.deps_at_least) || ((it.deps || []).length ? it.stage : null);
+    return (it.deps || []).filter((id) => {
+      const dep = State.items.find((candidate) => candidate.id === id);
+      return !(dep && (!boundary || pipelineIndex(dep.stage) >= pipelineIndex(boundary)));
+    });
+  }
+
+  // "waits on T-0002", or "waits on T-0002 +1" when there are more; the full
+  // list goes in the chip's title.
+  function waitsOnLabel(ids) {
+    return ids.length ? 'waits on ' + ids[0] + (ids.length > 1 ? ' +' + (ids.length - 1) : '') : '';
+  }
+
   // The same open/blocked/triage/in-flight/next split renderBrief computes,
   // minus the "assigned to me" personalization gw brief applies for a CLI
   // user (the board has no login, so a live dispatch belongs to "in flight"
@@ -1638,7 +1692,7 @@
     const whatNext = '<div class="overview-grid">' +
       briefSectionHtml('In flight', inFlight, (it) => stageLabel(it.stage).toLowerCase() + ' · ' + (it.owner || 'unowned'), 'Nothing is in flight.') +
       briefSectionHtml('Stranded', stranded, (it) => stageLabel(it.stage).toLowerCase() + ' · unowned', 'Nothing is stranded.') +
-      briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : 'waiting on a dependency', 'Nothing is blocked.') +
+      briefSectionHtml('Blocked', blocked, (it) => it.flag === 'blocked' ? 'flagged blocked' : (waitsOnLabel(waitingOnDeps(it)) || 'waiting on a dependency'), 'Nothing is blocked.') +
       briefSectionHtml('Needs triage', triage, (it) => (it.flag === 'unclassified' ? 'not classified yet · ' : '') + 'created by ' + (it.created_by || 'unknown'), 'Nothing needs triage.') +
       briefSectionHtml('Next unblocked', next, (it) => (it.phase || '-'), 'Nothing is unblocked and unowned.') +
       '</div>';
@@ -1661,7 +1715,7 @@
       // These charts are where codes are aggregated with nothing else on the
       // row to explain them, so the descriptions are on screen rather than
       // only in a tooltip nobody knows to hover.
-      return '<div class="overview-card"><h2>' + title + '</h2>' + (body || '<p class="meta">none</p>') +
+      return '<div class="overview-card"><h2>' + title + '</h2>' + (body ? '<div class="dist-rows">' + body + '</div>' : '<p class="meta">none</p>') +
         glossaryLegend(field, rows.map((r) => r[0])) + '</div>';
     }
     const byStageOrdered = stageList(State.stages).map((s) => [s.id, State.items.filter((i) => i.stage === s.id).length]).filter((r) => r[1] > 0);
@@ -1747,7 +1801,9 @@
     // than derived from the card's text because a live card also contains
     // Play/Stop buttons, and their labels must not be glued into its name.
     const openLabel = ' role="button" tabindex="0" aria-label="Open item ' + escapeHtml(it.id) + ': ' + escapeHtml(it.title) + '"';
-    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '"' + openLabel + drag + '>' +
+    // Only open work waits: a finished card's deps are history, not a hold.
+    const waits = isTerminalItem(it) ? [] : waitingOnDeps(it);
+    return '<div class="card' + (it.parent ? ' card-child' : '') + (moved ? ' card-moved' : '') + '" data-id="' + escapeHtml(it.id) + '" data-waits="' + escapeHtml(waits.join(' ')) + '"' + openLabel + drag + '>' +
       '<div class="card-id">' + escapeHtml(it.id) + '</div>' +
       '<div class="card-title">' + escapeHtml(it.title) + '</div>' +
       '<div class="card-meta">' +
@@ -1758,6 +1814,7 @@
       // set still renders, glossary tooltip and all.
       (it.type ? '<span class="tag"' + termTitle('type', it.type) + '>' + escapeHtml(it.type) + '</span>' : '') +
       (it.flag ? '<span class="tag flag-' + escapeHtml(it.flag) + '">' + escapeHtml(it.flag) + '</span>' : '') +
+      (waits.length ? '<span class="tag dep-wait" title="' + escapeHtml('Blocked until ' + waits.join(', ') + (waits.length > 1 ? ' reach' : ' reaches') + ' the stage this item\'s next move needs.') + '">' + escapeHtml(waitsOnLabel(waits)) + '</span>' : '') +
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
       runStatus +
@@ -1797,12 +1854,29 @@
     return expanded ? hierarchicalOrder(inCol) : mostRecentFirst(inCol).slice(0, COLLAPSED_PREVIEW_COUNT);
   }
 
+  // T-0118: "Show all" on a column that already shows everything (Dropped
+  // with 0 items, Verified with 3) is a control that does nothing. It is
+  // offered only when the preview is hiding something; once a column is
+  // open, "Collapse" stays so it can always be folded back.
+  function columnToggleNeeded(count, isTerminal, expanded) {
+    return isTerminal && (expanded || count > COLLAPSED_PREVIEW_COUNT);
+  }
+
+  function columnToggleHtml(s, expanded) {
+    return '<button class="column-toggle" data-toggle-stage="' + escapeHtml(s.id) + '" title="' +
+      (expanded ? 'Collapse finished work back down.' : 'Show every item in ' + escapeHtml(s.label) + '.') + '">' +
+      (expanded ? 'Collapse' : 'Show all') + '</button>';
+  }
+
+  // T-0118: an empty terminal or side column folds to a narrow strip -- see
+  // .column.column-folded. Pipeline stages before the finish never fold: an
+  // empty In review is still the next place work goes.
+  function columnFolded(stageId, count, isTerminal) {
+    return count === 0 && (isTerminal || pipelineIndex(stageId) < 0);
+  }
+
   function columnHeadHtml(s, count, isTerminal, expanded) {
-    const toggle = isTerminal
-      ? '<button class="column-toggle" data-toggle-stage="' + escapeHtml(s.id) + '" title="' +
-        (expanded ? 'Collapse finished work back down.' : 'Show every item in ' + escapeHtml(s.label) + '.') + '">' +
-        (expanded ? 'Collapse' : 'Show all') + '</button>'
-      : '';
+    const toggle = columnToggleNeeded(count, isTerminal, expanded) ? columnToggleHtml(s, expanded) : '';
     return '<div class="column-head"><span class="column-head-main"><span>' + escapeHtml(s.label) + '</span><span class="count">' + count + '</span></span>' + toggle + '</div>';
   }
 
@@ -1815,7 +1889,9 @@
       const isTerminal = terminal.has(s.id);
       const expanded = !isTerminal || State.expandedStages.has(s.id);
       const shown = columnBodyItems(s.id, inCol, expanded);
-      return '<div class="column' + (isTerminal && !expanded ? ' collapsed' : '') + '" data-stage="' + escapeHtml(s.id) + '">' +
+      const folded = columnFolded(s.id, inCol.length, isTerminal);
+      return '<div class="column' + (isTerminal && !expanded ? ' collapsed' : '') + (folded ? ' column-folded' : '') + '" data-stage="' + escapeHtml(s.id) + '"' +
+        (folded ? ' title="' + escapeHtml(s.label + ' is empty.') + '"' : '') + '>' +
         columnHeadHtml(s, inCol.length, isTerminal, expanded) +
         '<div class="column-body">' + (shown.map(cardMarkup).join('') || '') + '</div></div>';
     }).join('') + '</div>';
@@ -2821,20 +2897,29 @@
         note = State.transitionErrors[it.id]
           ? 'unable to check transition rules'
           : 'checking transition rules…';
-      } else if (!transition) {
+      } else if (!transition || (transition.force && !backward && pipelineIndex(s.id) >= 0)) {
         // T-0018: the button is off, and the reason is a fact about the board
         // -- it never skips stages -- not an instruction to run a command the
         // browser cannot run. The same holds for the forced-skip branches
         // below: where the board does not offer an action, it says so instead
         // of pointing at the CLI.
-        note = 'Not reachable from here — the board does not skip stages; forcing a jump is a CLI decision.';
+        // T-0119: a forward skip is judged cumulatively -- every gate from here
+        // to that stage -- so its reasons listed In review's pull-request rule
+        // under Reviewed, Merged and Verified too, after a lowercase fragment.
+        // The board never offers the jump anyway, so say that in a sentence
+        // and show only what this stage's own gate checks.
+        note = transition
+          ? 'The board does not skip stages — forcing a jump past the stages in between is a CLI decision.'
+          : 'Not reachable from here — the board does not skip stages; forcing a jump is a CLI decision.';
+        const gate = gateFor(s.id);
+        if (gate) { heading = 'This gate checks:'; unmet = gate.sentences; }
       } else if (transition.force && transition.ok && backward) {
         disabled = false;
         note = 'Backward move — this skips the gates ahead of ' + s.label + '.';
       } else if (transition.force && transition.ok) {
         note = 'The board does not skip gates — a forced skip is a CLI decision.';
       } else if (!transition.ok) {
-        if (transition.force && !backward) note = 'and a jump across stages is never offered here';
+        if (transition.force && !backward) note = 'The board does not offer this forced move — it is a CLI decision.';
         else if (backward) note = 'Backward move — not met yet.';
         heading = 'Not met yet:';
         machine = transition.failures || [];
@@ -3329,7 +3414,10 @@
         let card = cards.get(item.id);
         if (!card || moved) {
           const holder = document.createElement('div'); holder.innerHTML = cardMarkup(item, moved); card = holder.firstChild;
-        } else if (JSON.stringify(prior) !== JSON.stringify(item) || dispatchChanged) {
+        } else if (JSON.stringify(prior) !== JSON.stringify(item) || dispatchChanged ||
+          // A dependency moving on changes this card's "waits on" chip even
+          // though this item itself did not change.
+          (card.dataset.waits || '') !== (isTerminalItem(item) ? [] : waitingOnDeps(item)).join(' ')) {
           const holder = document.createElement('div'); holder.innerHTML = cardMarkup(item, false);
           const replacement = holder.firstChild; card.replaceWith(replacement); card = replacement;
         }
@@ -3338,8 +3426,14 @@
       body.replaceChildren(fragment);
       column.querySelector('.count').textContent = String(inCol.length);
       column.classList.toggle('collapsed', isTerminal && !expanded);
+      const folded = columnFolded(stage.id, inCol.length, isTerminal);
+      column.classList.toggle('column-folded', folded);
+      if (folded) column.title = stage.label + ' is empty.'; else column.removeAttribute('title');
       const toggleBtn = column.querySelector('[data-toggle-stage]');
-      if (toggleBtn) toggleBtn.textContent = expanded ? 'Collapse' : 'Show all';
+      const wantToggle = columnToggleNeeded(inCol.length, isTerminal, expanded);
+      if (toggleBtn && !wantToggle) toggleBtn.remove();
+      else if (!toggleBtn && wantToggle) column.querySelector('.column-head').insertAdjacentHTML('beforeend', columnToggleHtml(stage, expanded));
+      else if (toggleBtn) toggleBtn.textContent = expanded ? 'Collapse' : 'Show all';
     }
   }
 

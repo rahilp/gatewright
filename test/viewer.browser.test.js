@@ -274,3 +274,111 @@ test('T-0100: an owner can release from the drawer, while a non-owner is not off
     } finally { await browser.close(); }
   }, { items: [owned], env: { ...process.env, GW_ACTOR: 'human:someone-else' } });
 });
+
+// T-0117..T-0120: the defects the README screenshots exposed, measured where
+// they happened -- in a laid-out page at a laptop width and a phone width.
+const SCREENSHOT_STAGES = {
+  stages: [
+    { id: 'backlog', label: 'Backlog' },
+    { id: 'building', label: 'Building', requires: { owner: true } },
+    { id: 'built', label: 'Built', requires: { evidence_min: 1 } },
+    { id: 'in_review', label: 'In review', requires: { evidence_match: '^https://github.com/.+/pull/\\d+' } },
+    { id: 'reviewed', label: 'Reviewed' },
+    { id: 'merged', label: 'Merged', requires: { deps_at_least: 'merged' } },
+    { id: 'verified', label: 'Verified', requires: { evidence_min: 2 } },
+  ],
+  terminal: ['verified'],
+  extra: [{ id: 'dropped', label: 'Dropped' }, { id: 'paused', label: 'Paused' }],
+};
+const SCREENSHOT_ITEMS = [
+  item({ id: 'T-0002', title: 'HTTP check worker', stage: 'backlog', owner: 'human:jonas' }),
+  item({ id: 'T-0003', title: 'Public status page shows current incidents', stage: 'in_review', owner: 'human:maya', evidence: ['abc1234'] }),
+  item({ id: 'T-0005', title: 'Email an alert when a check fails twice in a row', stage: 'built', owner: 'agent:claude', evidence: ['9ab61fe'] }),
+  item({ id: 'T-0008', title: 'Slack alerts through an incoming webhook', stage: 'building', owner: 'human:jonas', deps: ['T-0002'] }),
+  item({ id: 'T-0015', title: 'Checks page is slow with 300+ checks', stage: 'backlog', owner: null, flag: 'unclassified', type: null, phase: null, created_by: 'human:maya-with-a-long-actor-name' }),
+  item({ id: 'T-0010', title: 'Self-hosting guide', stage: 'verified', owner: 'human:maya', evidence: ['a', 'b'] }),
+];
+
+test('T-0117..T-0120: overview rows, board columns, stage strip and bars at 1440px and 390px', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      for (const width of [1440, 390]) {
+        await page.setViewport({ width, height: 900 });
+        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.click('[data-view="overview"]');
+        await page.waitForSelector('.brief-row');
+        const overview = await page.evaluate(() => {
+          document.querySelector('.overview-distribution').open = true;
+          const escapes = [];
+          for (const card of document.querySelectorAll('.overview-card')) {
+            const box = card.getBoundingClientRect();
+            for (const el of card.querySelectorAll('span, p, button')) {
+              const r = el.getBoundingClientRect();
+              if (r.width && (r.right > box.right + 0.5 || r.left < box.left - 0.5)) escapes.push(el.textContent.slice(0, 50));
+            }
+          }
+          const titleWidths = [...document.querySelectorAll('.brief-row span:first-child')].map((s) => s.getBoundingClientRect().width);
+          const barStarts = [...document.querySelectorAll('.dist-rows')].map((rows) =>
+            new Set([...rows.querySelectorAll('.bar')].map((bar) => Math.round(bar.getBoundingClientRect().left))).size);
+          const blocked = [...document.querySelectorAll('.brief-row')].find((row) => row.dataset.id === 'T-0008');
+          return { docWidth: document.documentElement.scrollWidth, escapes, minTitle: Math.min(...titleWidths), barStarts, blocked: blocked?.textContent || '' };
+        });
+        assert.equal(overview.docWidth, width, `the Overview never scrolls sideways at ${width}px`);
+        assert.deepEqual(overview.escapes, [], `nothing paints past its Overview card at ${width}px`);
+        assert.ok(overview.minTitle >= 150, `every row title keeps most of a title at ${width}px (narrowest ${Math.round(overview.minTitle)}px; was ~30px)`);
+        assert.ok(overview.barStarts.length >= 3 && overview.barStarts.every((n) => n === 1), `every bar in a distribution card starts at one x (${overview.barStarts})`);
+        assert.match(overview.blocked, /waits on T-0002/, 'the Blocked row names its dependency');
+
+        await page.click('[data-view="board"]');
+        await page.waitForSelector('.card[data-id="T-0008"]');
+        const board = await page.evaluate(() => {
+          const column = (id) => document.querySelector(`.column[data-stage="${id}"]`);
+          column('dropped').scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const dropped = column('dropped').getBoundingClientRect();
+          const middle = document.elementFromPoint(dropped.left + dropped.width / 2, dropped.top + dropped.height * 0.75);
+          return {
+            chip: document.querySelector('.card[data-id="T-0008"] .tag.dep-wait')?.textContent || '',
+            freeChip: Boolean(document.querySelector('.card[data-id="T-0002"] .tag.dep-wait')),
+            toggles: [...document.querySelectorAll('[data-toggle-stage]')].map((b) => b.dataset.toggleStage),
+            droppedFolded: column('dropped').classList.contains('column-folded'),
+            pausedFolded: column('paused').classList.contains('column-folded'),
+            reviewedFolded: column('reviewed').classList.contains('column-folded'),
+            droppedWidth: dropped.width, droppedHeight: dropped.height,
+            dropTarget: middle?.closest('.column')?.dataset.stage,
+            board: document.getElementById('board').scrollWidth,
+            docWidth: document.documentElement.scrollWidth,
+          };
+        });
+        assert.equal(board.chip, 'waits on T-0002', 'a dependency-blocked card says what it waits on');
+        assert.equal(board.freeChip, false, 'an unblocked card has no such chip');
+        assert.deepEqual(board.toggles, [], 'no "Show all" where nothing is hidden (empty Dropped, one-item Verified)');
+        assert.equal(board.droppedFolded && board.pausedFolded, true, 'empty side columns fold');
+        assert.equal(board.reviewedFolded, false, 'an empty working stage does not');
+        assert.ok(board.droppedWidth < 50, `a folded column is a narrow strip (${board.droppedWidth}px)`);
+        assert.ok(board.droppedHeight > 150, 'but still the full lane height');
+        assert.equal(board.dropTarget, 'dropped', 'the strip is still the Dropped column under the pointer, so a drop lands there');
+        assert.equal(board.docWidth, width, 'the page itself never grows sideways; the board scrolls in its own container');
+        if (width === 1440) assert.ok(board.board <= 1440 - 40, `nine columns fit a 1440px screen (${board.board}px)`);
+
+        await page.click('.card[data-id="T-0005"]');
+        await page.waitForFunction(() => document.querySelector('#gw-panel .stage-button-wrap [data-move="reviewed"]')
+          && !/checking transition rules/.test(document.querySelector('#gw-panel').textContent));
+        const strip = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#gw-panel .stage-button-wrap')].map((wrap) =>
+          [wrap.querySelector('[data-move]').dataset.move, wrap.innerText])));
+        assert.match(strip.in_review, /pull request/, 'the next stage names its own unmet rule');
+        for (const skip of ['reviewed', 'merged', 'verified']) {
+          assert.doesNotMatch(strip[skip], /pull request/, `${skip} does not repeat In review's rule`);
+          assert.doesNotMatch(strip[skip], /(^|\n)[a-z]/, `${skip}'s notes start as sentences: ${JSON.stringify(strip[skip])}`);
+          assert.match(strip[skip], /This gate checks:/);
+        }
+        assert.match(strip.merged, /Every dependency must have reached Merged/, 'each skip shows its own gate');
+        assert.match(strip.verified, /at least two new pieces of evidence/);
+        assert.match(strip.reviewed, /Nothing is checked here/);
+        await page.keyboard.press('Escape');
+      }
+    } finally { await browser.close(); }
+  }, { items: SCREENSHOT_ITEMS, stages: SCREENSHOT_STAGES });
+});
