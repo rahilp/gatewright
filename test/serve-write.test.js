@@ -317,6 +317,20 @@ test('POST /api/config sets a setting and persists it', async () => {
   });
 });
 
+test('T-0095.1: POST /api/config releases holds that policy no longer requires', async () => {
+  const held = { ...item, id: 'T-0001', flag: 'needs-triage', created_by: 'agent:a' };
+  await withServer(async ({ store, url }) => {
+    store.writeItems([held]);
+    const response = await write(url, '/api/config', { key: 'policy.triage_required_for', value: '[]', by: 'human:lead' });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).released, 1);
+    assert.equal(store.readItems()[0].flag, null);
+    const release = store.readEvents().find((event) => event.item === 'T-0001' && event.reason === 'triage hold no longer required by policy');
+    assert.equal(release.by, 'human:lead');
+    assert.equal(release.policy_changed_by, 'human:lead');
+  });
+});
+
 test('POST /api/config sets several settings at once', async () => {
   await withServer(async ({ store, url }) => {
     const response = await write(url, '/api/config', { settings: { 'runner.enabled': true, 'vocab.phase': 'P1,P2' } });

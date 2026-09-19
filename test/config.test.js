@@ -222,3 +222,24 @@ test('T-0043: a bracketed value that is not a JSON array of strings is refused w
   }
   assert.equal(readFileSync(store.paths.config, 'utf8'), before, 'a refused value writes nothing');
 });
+
+test('T-0095.1: only list settings with a useful empty meaning accept []', () => {
+  const { root, store } = board({
+    policy: { triage_required_for: ['agent'] },
+    guard: { exempt_paths: ['.gatewright/'], accept: ['message'] },
+    check: { stale_exempt_stages: ['merged'] },
+    memory: { remember: { extra_tags: ['gw'] } },
+    vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'] },
+  });
+  for (const key of ['policy.triage_required_for', 'guard.exempt_paths', 'check.stale_exempt_stages', 'memory.remember.extra_tags']) {
+    execFileSync(process.execPath, [BIN, 'config', key, '[]'], { cwd: root, encoding: 'utf8' });
+  }
+  const saved = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+  assert.deepEqual(saved.policy.triage_required_for, []);
+  assert.deepEqual(saved.guard.exempt_paths, []);
+  assert.deepEqual(saved.check.stale_exempt_stages, []);
+  assert.deepEqual(saved.memory.remember.extra_tags, []);
+  for (const key of ['guard.accept', 'vocab.phase', 'vocab.priority', 'vocab.type']) {
+    assert.throws(() => execFileSync(process.execPath, [BIN, 'config', key, '[]'], { cwd: root, encoding: 'utf8' }), /JSON array of non-empty strings/);
+  }
+});

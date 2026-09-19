@@ -195,9 +195,9 @@ test('upsertBlock throws a clear error instead of corrupting a malformed AGENTS.
   );
 });
 
-test('mirror invitation metadata only treats provider-owned directories as evidence', () => {
+test('instruction targets recognize the project signals each agent actually leaves behind', () => {
   assert.deepEqual(
-    Object.fromEntries(BLOCK_TARGETS.map((target) => [target.name, target.parent])),
-    { claude: null, cursor: '.cursor/rules', copilot: null },
+    Object.fromEntries(BLOCK_TARGETS.map((target) => [target.name, target.signals])),
+    { claude: ['CLAUDE.md', '.claude'], cursor: ['.cursor', '.cursorrules'], copilot: ['.github/copilot-instructions.md'] },
   );
 });

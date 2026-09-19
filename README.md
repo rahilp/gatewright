@@ -164,7 +164,7 @@ gw config runner.enabled true
 
 Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
 
-Work created by an agent is held with `needs-triage` by default. Held work is invisible to the scheduler until a human approves it with `gw triage <id> --approve`. This prevents a run from filing three items, each of which starts a run that files three more. Use `gw triage <id> --drop` to discard held work.
+Work created by an agent is held with `needs-triage` by default. A different agent or any human can approve it with `gw triage <id> --approve`; its creator can only drop it. This prevents a run from filing three items, each of which starts a run that files three more. Identity is declared, not authenticated.
 
 `max_children_per_item`, `max_depth`, `max_concurrent`, and `run_timeout_min` are enforced before a run starts. The runner also has three kill switches: per-run stop, `gw stop --all`, and global pause. `gw stop --all` works from any terminal with no browser and no `serve` process running, including after `serve` has crashed.
 
@@ -261,7 +261,7 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 - Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked. Plan steps are items, never notes — `gw note <id>` is only for progress remarks on an existing item.
 - **Exception:** if you are working on gatewright itself, or you have otherwise been told not to write to a particular board, do not write to it — that board is the user's live tracker, not your scratchpad. Create a scratch board instead: `D=$(mktemp -d) && cd "$D" && gw init`, and prefix every `gw` command with `cd "$D" && ` (`cd` does not persist between your tool calls). Or keep the plan in your reply and let the human running you track it.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage. The DEFAULT pipeline is backlog → building → built → in_review → reviewed → merged → verified, but a board may define its own — `gw next <id>` names the real, legal moves for the board you are on. No board yet? `gw init` creates one.
-- Items created by an agent may be held with a `needs-triage` flag until reviewed. The creator cannot lift it: someone else runs `gw triage <id> --approve` (you may `--drop` your own item). NEEDS TRIAGE rows in `gw brief` name the command.
+- Agent-created items may be held with `needs-triage`. A different agent or any human may approve; creators may only `--drop`. Identity is declared, not authenticated.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
 - If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.

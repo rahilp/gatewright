@@ -270,7 +270,7 @@ test('a gw list --json dump round-trips through import into a fresh board', () =
   const target = mkdtempSync(join(tmpdir(), 'gw-reimport-'));
   const run = (cwd, ...args) => execFileSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, GW_ROOT: '' } });
 
-  run(source, 'init');
+  run(source, 'init', '--pipeline', 'team');
   run(source, 'add', 'round trip', '--scope', 's', '--by', 'agent:roundtrip');
   // T-0068 — agent-created capture is held for triage and the hold now gates
   // pipeline advancement; the round trip lifts it before working the item.
@@ -280,7 +280,7 @@ test('a gw list --json dump round-trips through import into a fresh board', () =
   run(source, 'move', 'T-0001', 'built', '--evidence', 'commit abc', '--by', 'agent:roundtrip');
   const dump = run(source, 'list', '--json');
 
-  run(target, 'init');
+  run(target, 'init', '--pipeline', 'team');
   writeFileSync(join(target, 'dump.json'), dump);
   const out = run(target, 'import', 'dump.json');
   assert.match(out, /imported 1, skipped 0/);
@@ -299,7 +299,7 @@ test('a verified item with four evidence entries across three stages round-trips
   const target = mkdtempSync(join(tmpdir(), 'gw-reimport-'));
   const run = (cwd, ...args) => execFileSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, GW_ROOT: '' } });
 
-  run(source, 'init');
+  run(source, 'init', '--pipeline', 'team');
   run(source, 'add', 'deep', '--scope', 'what done looks like', '--by', 'agent:roundtrip');
   run(source, 'triage', 'T-0001', '--approve', '--force', '--by', 'human:reviewer');
   run(source, 'claim', 'T-0001', '--by', 'agent:roundtrip');
@@ -311,7 +311,7 @@ test('a verified item with four evidence entries across three stages round-trips
   run(source, 'move', 'T-0001', 'verified', '--evidence', 'checked on staging', '--evidence', 'VALIDATION log', '--by', 'agent:roundtrip');
   const dump = run(source, 'list', '--json');
 
-  run(target, 'init');
+  run(target, 'init', '--pipeline', 'team');
   writeFileSync(join(target, 'dump.json'), dump);
   const out = run(target, 'import', 'dump.json');
   assert.match(out, /imported 1, skipped 0/);

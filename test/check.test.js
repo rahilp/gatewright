@@ -96,14 +96,17 @@ test('check reports an untriaged item, naming the triage fix that actually works
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'reported, but capturing an idea is not a violation');
   assert.match(result.output(), /INBOX/);
-  assert.match(result.output(), /To clear a hold, run `gw triage <id> --approve`; to discard it, run `gw triage <id> --drop`/);
-  assert.match(result.output(), /^  P1-01$/m);
+  assert.match(result.output(), /P1-01: run `gw triage P1-01 --approve` to clear the hold, or `gw triage P1-01 --drop` to discard it/);
+  assert.match(result.output(), /^  P1-01:/m);
   assert.doesNotMatch(result.output(), /gw edit P1-01|gw claim P1-01/, 'the dead-end advice must be gone');
 });
 
-test('following the printed triage command ends the report', () => {
+test('following the exact printed triage command ends the report', () => {
   const b = board([item({ id: 'T-0001', flag: 'needs-triage', updated: new Date().toISOString() })]);
-  execFileSync(process.execPath, [BIN, 'triage', 'T-0001', '--approve'], { cwd: b.root });
+  const before = ctx(b); run(before.ctx);
+  const command = before.output().match(/`(gw triage T-0001 --approve)`/)?.[1];
+  assert.ok(command, before.output());
+  execFileSync(process.execPath, [BIN, ...command.split(' ').slice(1)], { cwd: b.root });
   const after = ctx(b);
   assert.equal(run(after.ctx), 0);
   assert.equal(after.output(), 'Board is clean.\n', 'the advice check prints must leave the board clean when followed');
@@ -271,8 +274,8 @@ test('a freshly captured untriaged item is reported but does not fail the check'
   const result = ctx(b);
   assert.equal(run(result.ctx), 0, 'capturing an idea must not break a build');
   assert.match(result.output(), /INBOX — 1 item not classified yet/);
-  assert.match(result.output(), /To clear a hold, run `gw triage <id> --approve`/);
-  assert.match(result.output(), /^  T-0001$/m);
+  assert.match(result.output(), /T-0001: run `gw triage T-0001 --approve`/);
+  assert.match(result.output(), /^  T-0001:/m);
   assert.doesNotMatch(result.output(), /NEEDS TRIAGE/, 'a fresh capture is not a violation');
 });
 
@@ -288,9 +291,18 @@ test('check bounds a large inbox and states the repeated triage instruction once
   const out = result.output();
   assert.match(out, /INBOX — 60 items not classified yet/);
   assert.match(out, /\(\+35 more\)/, 'only the first 25 rows are shown');
-  assert.equal((out.match(/^  T-\d{4}$/gm) || []).length, 25, out);
-  assert.equal((out.match(/gw triage <id> --approve/g) || []).length, 1, 'the shared remedy is not repeated per item');
-  assert.doesNotMatch(out, /gw triage T-0001 --approve/, 'per-item rows stay compact');
+  assert.equal((out.match(/^  T-\d{4}:/gm) || []).length, 25, out);
+  assert.equal((out.match(/gw triage T-\d{4} --approve/g) || []).length, 25, 'every listed item carries an exact, runnable remedy');
+});
+
+test('check never tells an agent creator to self-approve a held item', () => {
+  const b = board([item({ flag: 'needs-triage', created_by: 'agent:maker' })]);
+  const result = ctx(b);
+  result.ctx.actor = 'agent:maker';
+  assert.equal(run(result.ctx), 0);
+  assert.doesNotMatch(result.output(), /--approve/);
+  assert.match(result.output(), /gw triage P1-01 --drop/);
+  assert.match(result.output(), /ask a human or a different agent/);
 });
 
 // A rotting inbox is a different thing.

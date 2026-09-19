@@ -26,9 +26,9 @@ function board(items = [item()]) {
   store.rebaselineDigest();
   return { root, store };
 }
-function ctx(b, positionals, flags = {}) {
+function ctx(b, positionals, flags = {}, actor = 'human:test') {
   let out = '';
-  return { flags, positionals, store: b.store, root: b.root, actor: 'human:test', env: {}, stdout: { write: (s) => { out += s; } }, stderr: { write() {} }, get out() { return out; } };
+  return { flags, positionals, store: b.store, root: b.root, actor, env: {}, stdout: { write: (s) => { out += s; } }, stderr: { write() {} }, get out() { return out; } };
 }
 
 test('gw next rejects an unknown item', () => {
@@ -91,12 +91,13 @@ test('gw next stays quiet about dependencies when none is in the way', () => {
   assert.doesNotMatch(c.out, /waiting on/);
 });
 
-test('gw next names a triage hold before its generic unmet gate reasons', () => {
+test('gw next names a triage hold before its generic unmet gate reasons without telling its creator to self-approve', () => {
   const b = board([item({ stage: 'specified', flag: 'needs-triage', created_by: 'agent:maker' })]);
-  const c = ctx(b, ['P1-01']);
+  const c = ctx(b, ['P1-01'], {}, 'agent:maker');
   run(c);
   assert.match(c.out, /next: building \(blocked\)/);
-  assert.match(c.out, /  - held for triage: someone other than its creator must run `gw triage P1-01 --approve` before it can advance/);
+  assert.match(c.out, /  - held for triage: you cannot approve your own item; run `gw triage P1-01 --drop`/);
+  assert.doesNotMatch(c.out, /--approve/);
   assert.ok(c.out.indexOf('held for triage') < c.out.indexOf('Someone must have claimed it'), 'the actual policy blocker is named first');
 });
 
