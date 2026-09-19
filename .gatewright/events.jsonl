@@ -1342,3 +1342,20 @@
 {"ts":"2026-09-19T14:07:22.911Z","type":"move","item":"T-0104","from":"building","to":"built","by":"human:rahil","evidence":["Installed PRETOOL_COMMAND driven under sh: stale gw (guard exits 2) -> rc 0, edits not blocked; current gw -> PreToolUse deny JSON for unclaimed edit (test/hook.test.js runs it on win32 via gw.cmd shim, no skips)"]}
 {"ts":"2026-09-19T14:07:22.973Z","type":"move","item":"T-0101","from":"building","to":"built","by":"human:rahil","evidence":["scripts/test.mjs gives each run its own TMPDIR/TEMP/TMP dir, sweeps it on exit and SIGINT/SIGTERM, reclaims >24h scratch at startup; two concurrent npm test runs both 772/772 (test/test-runner.test.js)"]}
 {"ts":"2026-09-19T14:12:03.307Z","type":"sync","pulled":1,"pushed":0,"conflicts":0}
+{"ts":"2026-09-19T14:31:03.785Z","type":"add","item":"T-0112","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:31:03.842Z","type":"claim","item":"T-0112","by":"human:rahil"}
+{"ts":"2026-09-19T14:31:08.651Z","type":"flag","item":"T-0112","flag":null,"by":"human:rahil","approved_by":"human:rahil","reason":"triage approved by human:rahil"}
+{"ts":"2026-09-19T14:31:08.714Z","type":"move","item":"T-0112","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:39:34.359Z","type":"add","item":"T-0113","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:39:34.422Z","type":"add","item":"T-0114","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:39:34.487Z","type":"add","item":"T-0115","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T14:39:34.613Z","type":"claim","item":"T-0113","by":"human:rahil"}
+{"ts":"2026-09-19T14:39:34.676Z","type":"move","item":"T-0113","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:39:34.805Z","type":"claim","item":"T-0114","by":"human:rahil"}
+{"ts":"2026-09-19T14:39:34.872Z","type":"move","item":"T-0114","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:39:34.995Z","type":"claim","item":"T-0115","by":"human:rahil"}
+{"ts":"2026-09-19T14:39:35.057Z","type":"move","item":"T-0115","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T14:51:13.508Z","type":"move","item":"T-0113","from":"building","to":"built","by":"human:rahil","evidence":["Scratch team board: human bare add -> flag unclassified -> claim -> move building succeeds; agent:codex add stays needs-triage and move refused; check INBOX splits the two (test/unclassified.test.js)"]}
+{"ts":"2026-09-19T14:51:13.568Z","type":"move","item":"T-0114","from":"building","to":"built","by":"human:rahil","evidence":["claim hold message matches move/next per creator; check 'finished item still carries' singular/plural and repair counts fixed (test/check.test.js, test/repair.test.js)"]}
+{"ts":"2026-09-19T14:51:13.632Z","type":"move","item":"T-0115","from":"building","to":"built","by":"human:rahil","evidence":["scripts/preflight.mjs parses only the usage block of gw --help; full preflight help check passes (test/preflight.test.js)"]}
+{"ts":"2026-09-19T14:53:17.147Z","type":"move","item":"T-0112","from":"building","to":"built","by":"human:rahil","evidence":["package.json 0.13.0; README v0.13 paragraph, init/config/triage text verified on scratch boards incl. quickstart line by line; npm test 799/799, preflight:ci passed"]}
