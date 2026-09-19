@@ -136,14 +136,14 @@ test('T-0090: a triage self-approval refusal survives three browser poll cycles'
       await page.waitForSelector('#panel-triage-approve');
       const started = Date.now();
       await page.click('#panel-triage-approve');
-      await page.waitForFunction(() => document.querySelector('#panel-error')?.textContent.includes('different human'));
+      await page.waitForFunction(() => document.querySelector('#panel-error')?.textContent.includes('different agent'));
       const samples = [];
       for (let cycle = 1; cycle <= 3; cycle += 1) {
         await new Promise((resolve) => setTimeout(resolve, 2100));
         samples.push(await page.$eval('#panel-error', (el) => el.textContent.trim()));
       }
       const elapsed = Date.now() - started;
-      assert.ok(samples.every((text) => /different human/.test(text)), `refusal vanished during polling: ${JSON.stringify(samples)}`);
+      assert.ok(samples.every((text) => /different agent/.test(text)), `refusal vanished during polling: ${JSON.stringify(samples)}`);
       assert.ok(elapsed >= 6300, `measured only ${elapsed}ms across three polls`);
       t.diagnostic(`triage refusal remained in #panel-error for ${elapsed}ms across three 2.1s samples`);
     } finally { await browser.close(); }

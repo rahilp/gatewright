@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, chmodSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync, renameSync, rmSync, existsSync, chmodSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,66 @@ test('a write leaves no temp files behind', () => {
   store.writeItems([item()]);
   const strays = readdirSync(store.dir).filter((f) => f.includes('.tmp'));
   assert.deepEqual(strays, []);
+});
+
+test('atomic writes retry transient Windows rename failures and complete', () => {
+  let attempts = 0;
+  const store = createStore(mkdtempSync(join(tmpdir(), 'gw-')), {
+    rename(from, to) {
+      attempts += 1;
+      if (attempts <= 3) {
+        const error = new Error('file is in use');
+        error.code = 'EPERM';
+        throw error;
+      }
+      return renameSync(from, to);
+    },
+  });
+  store.ensure();
+
+  store.writeItems([item()]);
+
+  assert.equal(attempts, 5, 'three retries for items, then items and digest succeed');
+  assert.deepEqual(store.readItems(), [item()]);
+});
+
+test('atomic writes explain a persistently held Windows file and preserve its cause', () => {
+  let attempts = 0;
+  const heldOpen = new Error('file is in use');
+  heldOpen.code = 'EBUSY';
+  const store = createStore(mkdtempSync(join(tmpdir(), 'gw-')), {
+    rename() {
+      attempts += 1;
+      throw heldOpen;
+    },
+  });
+  store.ensure();
+
+  assert.throws(
+    () => store.writeItems([item()]),
+    (error) => error instanceof IOError
+      && error.exitCode === 3
+      && /held open by another process/i.test(error.message)
+      && /gw serve.*gw open --watch/i.test(error.message)
+      && error.cause === heldOpen,
+  );
+  assert.equal(attempts, 6, 'initial attempt plus five bounded retries');
+});
+
+test('atomic writes do not retry non-transient rename failures', () => {
+  let attempts = 0;
+  const failure = new Error('invalid path');
+  failure.code = 'EINVAL';
+  const store = createStore(mkdtempSync(join(tmpdir(), 'gw-')), {
+    rename() {
+      attempts += 1;
+      throw failure;
+    },
+  });
+  store.ensure();
+
+  assert.throws(() => store.writeItems([item()]), (error) => error === failure);
+  assert.equal(attempts, 1);
 });
 
 test('appendEvent stamps ts and preserves order', () => {

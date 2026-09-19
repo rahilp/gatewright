@@ -38,22 +38,22 @@ function write(url, path, body) {
 
 async function cliStderr(root, args) {
   let stderr = '';
-  await runRouter(args, { cwd: root, env: { GW_ACTOR: 'human:tester' }, stdout: { write() {} }, stderr: { write: (text) => { stderr += text; } } });
+  await runRouter(args, { cwd: root, env: { GW_ACTOR: 'agent:tester' }, stdout: { write() {} }, stderr: { write: (text) => { stderr += text; } } });
   return stderr;
 }
 
 test('the board triage refusal names the decision, never a CLI command', async () => {
   await withServer(async ({ root, url }) => {
-    const response = await write(url, '/api/items/P1-01/triage', { action: 'approve', by: 'human:tester' });
+    const response = await write(url, '/api/items/P1-01/triage', { action: 'approve', by: 'agent:tester' });
     assert.equal(response.status, 409);
     const body = await response.json();
     assert.match(body.error, /needs-triage/, 'the refusal still names the hold');
-    assert.match(body.error, /different human/, 'it names the required human review boundary');
+    assert.match(body.error, /different agent/, 'it names the required independent review boundary');
     assert.doesNotMatch(body.error, /gw triage/, 'and never a command a browser reader cannot run');
     assert.doesNotMatch(body.error, /`/, 'no backticks, no command syntax at all');
     // The terminal keeps its runnable advice -- the same refusal, audience split.
     const stderr = await cliStderr(root, ['triage', 'P1-01', '--approve']);
-    assert.match(stderr, /gw triage P1-01 --approve/, 'the CLI wording is untouched');
+    assert.match(stderr, /gw triage P1-01 --drop/, 'the CLI gives the creator a command it can actually run');
   }, { item: item({ created_by: 'agent:tester' }) });
 });
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,7 @@ import { run as check } from '../lib/commands/check.js';
 import { run as claim } from '../lib/commands/claim.js';
 import { run as triage } from '../lib/commands/triage.js';
 import { RuleError, UsageError } from '../lib/cli/errors.js';
+import { runPrintedCommand } from './helpers/printed-command.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const stages = {
@@ -205,13 +206,9 @@ test('the shipped pipeline refuses the verified gate without fresh, distinct evi
   // T-0087 — execute the exact command we displayed, rather than rebuilding
   // the flags in this test. This is the only shape that catches advice whose
   // number of evidence flags is too small (or whose values de-duplicate).
-  symlinkSync(BIN, join(b.root, 'gw'));
-  execFileSync(printed[1], {
-    cwd: b.root,
-    encoding: 'utf8',
-    shell: '/bin/bash',
-    env: { ...process.env, PATH: `${b.root}:${process.env.PATH}` },
-  });
+  const recovered = runPrintedCommand(b.root, printed[1]);
+  assert.equal(recovered.error, undefined, recovered.error?.message);
+  assert.equal(recovered.status, 0, recovered.stderr);
   assert.equal(b.store.readItems()[0].stage, 'verified', 'the copied command clears the gate it names');
 
   // A string already on the item is not fresh evidence.

@@ -534,6 +534,14 @@ test('brief --json buckets agree with the rendered text, bucket for bucket', asy
   });
 });
 
+test('brief never tells an agent creator to self-approve a held item', () => {
+  const held = { ...makeItems(1)[0], id: 'T-1', stage: 'backlog', flag: 'needs-triage', created_by: 'agent:maker', deps: [] };
+  const out = renderBrief({ items: [held], events: [], stages, config: { brief: { max_lines: 25 } }, git: null }, { actor: 'agent:maker' });
+  assert.doesNotMatch(out, /--approve/);
+  assert.match(out, /gw triage T-1 --drop/);
+  assert.match(out, /ask a human or a different agent/);
+});
+
 test('brief --json applies --me exactly as the text does', async () => {
   const parsed = await bucketJson({ json: true, me: 'human:rahil' });
   assert.deepEqual(parsed.dispatched, [], 'a dispatch by someone else is not dispatched to me');

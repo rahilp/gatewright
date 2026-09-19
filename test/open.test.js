@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { readStages } from '../lib/config.js';
 import { describeStage } from '../lib/gates/describe.js';
+import { run as open } from '../lib/commands/open.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 
@@ -129,6 +130,19 @@ test('gw open exits 0 and prints the board path on stdout', () => {
   store.writeItems([item()]);
   const out = execFileSync(process.execPath, [BIN, 'open', '--no-browser'], { cwd: root, encoding: 'utf8' });
   assert.match(out.trim(), /board\.html$/);
+});
+
+test('gw open prefers a reachable live board only when its complete state matches this project', async () => {
+  const { store } = freshRoot();
+  store.writeItems([item()]);
+  const state = {
+    items: store.readItems().map((entry) => ({ ...entry, can_release: false })),
+    events: store.readEvents(), stages: readStages(store), config: (await import('../lib/config.js')).readConfig(store),
+  };
+  let output = '';
+  await open({ store, flags: { port: '8123', 'no-browser': true }, stdout: { write(value) { output += value; } }, fetch: async () => ({ ok: true, json: async () => state }) });
+  assert.equal(output, 'Gatewright live board: http://127.0.0.1:8123/\n');
+  assert.ok(!existsSync(store.paths.board), 'a matching live board wins over a new snapshot');
 });
 
 test('gw open --watch rebuilds after a store change', async () => {
