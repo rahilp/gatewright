@@ -5,6 +5,7 @@
 // play the parts `taskkill`/`Get-Process` would in production — their exact
 // argv is asserted per §10.2, and { timedOut } lets tests simulate a wedged
 // utility without ever shelling out to a real one (see P6-06).
+import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';

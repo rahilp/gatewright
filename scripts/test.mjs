@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { withoutCallerState } from '../test/helpers/isolate-env.js';
 
 const dir = 'test';
 // Test-only injection lets the runner's own signal and cleanup path be
@@ -83,7 +84,12 @@ const runTmp = mkdtempSync(join(tmpdir(), 'gw-test-run-'));
 // Windows env names are case-insensitive, so drop any `Temp`/`tmp` spelling
 // first; a duplicate key would leave which one wins up to the OS.
 const TEMP_VARS = ['TMPDIR', 'TEMP', 'TMP'];
-const childEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !TEMP_VARS.includes(key.toUpperCase())));
+// T-0123 — nor may the caller's board or identity: a GW_ROOT exported in this
+// shell would otherwise receive every fixture item the suite writes. Each
+// test file also scrubs these on import, for a bare `node --test`, and so
+// does importing the helper here; filtering the child's copy keeps that
+// explicit rather than resting on an import's side effect.
+const childEnv = Object.fromEntries(Object.entries(withoutCallerState(process.env)).filter(([key]) => !TEMP_VARS.includes(key.toUpperCase())));
 for (const key of TEMP_VARS) childEnv[key] = runTmp;
 const child = spawn(process.execPath, ['--test', ...backstop, ...process.argv.slice(2), ...files], {
   stdio: 'inherit',
