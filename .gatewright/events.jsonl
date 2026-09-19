@@ -1304,3 +1304,12 @@
 {"ts":"2026-09-19T02:08:22.916Z","type":"add","item":"T-0106","by":"human:rahil","parent":null}
 {"ts":"2026-09-19T02:08:22.974Z","type":"claim","item":"T-0106","by":"human:rahil"}
 {"ts":"2026-09-19T02:08:23.033Z","type":"move","item":"T-0106","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T02:21:39.709Z","type":"move","item":"T-0106","from":"building","to":"built","by":"human:rahil","evidence":["gatewright@0.12.0 on npm, tag v0.12.0; fresh registry install ran init and walked an item to done"]}
+{"ts":"2026-09-19T13:31:01.303Z","type":"claim","item":"P0-08","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.367Z","type":"move","item":"P0-08","from":"backlog","to":"building","by":"human:rahil","evidence":[],"queued_comment":true}
+{"ts":"2026-09-19T13:31:01.484Z","type":"claim","item":"T-0104","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.545Z","type":"move","item":"T-0104","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:31:01.655Z","type":"claim","item":"T-0103","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.712Z","type":"move","item":"T-0103","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T13:31:01.828Z","type":"claim","item":"T-0101","by":"human:rahil"}
+{"ts":"2026-09-19T13:31:01.888Z","type":"move","item":"T-0101","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
