@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
-import { run } from '../lib/commands/hook.js';
+import { defaultProbe, PRETOOL_COMMAND, run } from '../lib/commands/hook.js';
+import { runPrintedCommand, withGwShim } from './helpers/printed-command.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 const stages = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'verified' }], terminal: ['verified'], extra: [] };
@@ -156,6 +157,60 @@ test('--agent adds the pre-edit guard to project settings without disturbing wha
   assert.deepEqual(removed.permissions.allow, ['Bash(npm test:*)']);
 });
 
+test('--agent upgrades the old pre-edit command without losing a neighboring user hook', () => {
+  const r = repo();
+  const settingsPath = join(r.root, '.claude', 'settings.json');
+  mkdirSync(join(r.root, '.claude'), { recursive: true });
+  writeFileSync(settingsPath, JSON.stringify({
+    hooks: { PreToolUse: [{ matcher: 'Edit|Write', hooks: [
+      { type: 'command', command: 'their-own-check' },
+      { type: 'command', command: 'gw guard --pretool' },
+    ] }] },
+  }, null, 2));
+
+  run(ctx(r, { agent: true }, ['install']).ctx);
+  const entries = JSON.parse(readFileSync(settingsPath, 'utf8')).hooks.PreToolUse;
+  assert.equal(entries[0].hooks[0].command, 'their-own-check');
+  const commands = entries.flatMap((entry) => entry.hooks.map((hook) => hook.command));
+  assert.equal(commands.filter((command) => command === 'gw guard --pretool').length, 0, 'the stale command is replaced');
+  assert.equal(commands.filter((command) => command.includes('gw guard --pretool')).length, 1, 'exactly one current command is installed');
+});
+
+test('the installed pre-edit command steps aside for a stale gw and still denies with a current gw', () => {
+  const r = repo();
+  run(ctx(r, { agent: true }, ['install']).ctx);
+  const command = JSON.parse(readFileSync(join(r.root, '.claude', 'settings.json'), 'utf8')).hooks.PreToolUse.at(-1).hooks[0].command;
+  assert.match(command, /^node -e /, 'the command is shell-neutral');
+  const input = JSON.stringify({ tool_name: 'Edit', tool_input: { file_path: join(r.root, 'lib', 'a.js') } });
+
+  // runPrintedCommand supplies gw.cmd on Windows and a sh executable on
+  // POSIX, exercising the exact settings command through each platform's
+  // shell. The stale form also supplies a stale npx so fallback cannot mask it.
+  const staleResult = runPrintedCommand(r.root, command, process.env, { stale: true, input });
+  assert.equal(staleResult.status, 0, staleResult.stderr);
+  assert.equal(staleResult.stdout, '', 'a stale usage exit 2 must not block the edit');
+
+  const currentResult = runPrintedCommand(r.root, command, { ...process.env, GW_ACTOR: 'agent:test' }, { input });
+  assert.equal(currentResult.status, 0, currentResult.stderr);
+  assert.match(currentResult.stdout, /"permissionDecision":"deny"/, 'a capable gw still enforces the pre-edit gate');
+});
+
+// CI has no PowerShell leg, so the property that makes one settings string
+// safe under sh, Git Bash, PowerShell and cmd.exe is pinned here instead: a
+// single double-quoted argument whose body none of those shells rewrites.
+test('the pre-edit command carries no shell-significant characters inside its one quoted argument', () => {
+  assert.match(PRETOOL_COMMAND, /^node -e "[^"]*"$/);
+  const body = PRETOOL_COMMAND.slice('node -e "'.length, -1);
+  assert.doesNotMatch(body, /[$`\\%!^]/);
+  assert.doesNotThrow(() => new Function(body), 'the body is valid JavaScript');
+  assert.equal(JSON.parse(JSON.stringify({ command: PRETOOL_COMMAND })).command, PRETOOL_COMMAND);
+  for (const probe of ['gw guard --help', 'npx --no-install gw guard --help']) assert.ok(body.includes(`'${probe}'`), probe);
+});
+
+test('defaultProbe finds the current gw shim through the platform shell', () => {
+  withGwShim((env) => assert.equal(defaultProbe(env), true));
+});
+
 test('status reports all three gates', () => {
   const r = repo();
   const before = ctx(r, {}, ['status']);
@@ -237,7 +292,7 @@ test('install and status warn loudly when the guard probe fails, and stay exit 0
   const status = ctx(r, {}, ['status']);
   assert.equal(run(status.ctx, { probe: () => false }), 0);
   assert.match(status.out(), /commit-msg hook: installed/);
-  assert.match(status.out(), /guard probe: FAILED/);
+  assert.match(status.out(), /WARNING/);
   assert.match(status.out(), /passes unguarded/i);
 });
 
@@ -254,28 +309,20 @@ test('a passing probe is silent: no warning about a condition the machine is not
 // The defect was found on a real machine: a global gw 0.7.0 with no `guard`.
 // Driven through the real binary with a stale shim on PATH, the way the hook
 // itself would meet it.
-test('a real guardless gw on PATH is announced at install and status time', {
-  skip: process.platform === 'win32' && 'defaultProbe() deliberately returns true on win32, keeping hook status silent rather than warning on a guess',
-}, () => {
+test('a real guardless gw on PATH is announced at install and status time', () => {
   const r = repo();
-  const stale = mkdtempSync(join(tmpdir(), 'gw-stale-'));
-  writeFileSync(join(stale, 'gw'), '#!/bin/sh\nexit 2\n');
-  chmodSync(join(stale, 'gw'), 0o755);
-  const capable = mkdtempSync(join(tmpdir(), 'gw-capable-'));
-  writeFileSync(join(capable, 'gw'), `#!/bin/sh\nexec "${process.execPath}" "${BIN}" "$@"\n`);
-  chmodSync(join(capable, 'gw'), 0o755);
-  const env = (dir) => ({ ...process.env, PATH: `${dir}:${process.env.PATH}` });
-
-  const installed = spawnSync(process.execPath, [BIN, 'hook', 'install'], { cwd: r.root, env: env(stale), encoding: 'utf8' });
-  assert.equal(installed.status, 0, installed.stderr);
-  assert.match(installed.stdout, /WARNING/);
-  assert.match(installed.stdout, /will not fire/);
-
-  const status = spawnSync(process.execPath, [BIN, 'hook', 'status'], { cwd: r.root, env: env(stale), encoding: 'utf8' });
-  assert.equal(status.status, 0, status.stderr);
-  assert.match(status.stdout, /guard probe: FAILED/);
-
-  const fixed = spawnSync(process.execPath, [BIN, 'hook', 'install'], { cwd: r.root, env: env(capable), encoding: 'utf8' });
-  assert.equal(fixed.status, 0, fixed.stderr);
-  assert.doesNotMatch(fixed.stdout, /WARNING/, 'once a guard-capable gw is on PATH the warning is gone');
+  withGwShim((env) => {
+    const installed = spawnSync(process.execPath, [BIN, 'hook', 'install'], { cwd: r.root, env, encoding: 'utf8' });
+    assert.equal(installed.status, 0, installed.stderr);
+    assert.match(installed.stdout, /WARNING/);
+    assert.match(installed.stdout, /will not fire/);
+    const status = spawnSync(process.execPath, [BIN, 'hook', 'status'], { cwd: r.root, env, encoding: 'utf8' });
+    assert.equal(status.status, 0, status.stderr);
+    assert.match(status.stdout, /WARNING/);
+  }, process.env, { stale: true });
+  withGwShim((env) => {
+    const fixed = spawnSync(process.execPath, [BIN, 'hook', 'install'], { cwd: r.root, env, encoding: 'utf8' });
+    assert.equal(fixed.status, 0, fixed.stderr);
+    assert.doesNotMatch(fixed.stdout, /WARNING/, 'a current gw must not warn on any platform');
+  });
 });
