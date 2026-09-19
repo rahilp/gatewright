@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import {
-  confirmModel, createPrompter, createTheme, multiSelectModel, parseKeys, renderScreen,
+  confirmModel, createPrompter, createTheme, eraseRest, multiSelectModel, parseKeys, renderScreen,
   selectModel, stripAnsi, supportsRich, terminalCaps, textModel,
 } from '../lib/tui/prompt.js';
 
@@ -288,4 +288,78 @@ test('a plain stream keeps the numbered prompt and never receives escapes', asyn
   prompt.close();
   assert.match(text, /1\) Solo/);
   assert.doesNotMatch(text, /\x1b\[\?1049h/);
+});
+
+// The title bar: dark text on bright cyan, readable in light and dark themes.
+// Contrast is WCAG's formula over each palette's actual colours for black and
+// bright cyan; 4.5:1 is the AA minimum for normal text.
+test('the title bar is black on bright cyan, at least 4.5:1 in common terminal palettes', () => {
+  const colour = theme({ env: {} });
+  const bar = renderScreen(colour, { title: 'gw init', step: 'Step 1 of 3', body: [], hints: [] })[0];
+  assert.match(bar, /^\x1b\[30;46;106m/, 'black text; cyan first as the fallback, then bright cyan');
+  assert.doesNotMatch(bar, /\x1b\[[0-9;]*\b(1|37)\b[0-9;]*m/, 'no bold and no white: bold can render black as grey');
+  const palettes = {
+    xterm: ['#000000', '#00ffff'],
+    'VGA / Linux console': ['#000000', '#55ffff'],
+    'GNOME Tango': ['#2e3436', '#34e2e2'],
+    'macOS Terminal': ['#000000', '#14f0f0'],
+    'Windows Terminal Campbell': ['#0c0c0c', '#61d6d6'],
+    'VS Code dark': ['#000000', '#29b8db'],
+    'VS Code light': ['#000000', '#0598bc'],
+    iTerm2: ['#000000', '#60fdff'],
+    Solarized: ['#073642', '#93a1a1'],
+    'One Half Light': ['#383a42', '#56b6c2'],
+    Dracula: ['#21222c', '#a4ffff'],
+  };
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255)
+      .map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  for (const [name, [text, background]] of Object.entries(palettes)) {
+    const [light, dark] = [luminance(text), luminance(background)].sort((a, b) => b - a);
+    const ratio = (light + 0.05) / (dark + 0.05);
+    assert.ok(ratio >= 4.5, `${name}: ${ratio.toFixed(2)}:1`);
+  }
+});
+
+test('the title bar spans the full width, and NO_COLOR draws it exactly as before', () => {
+  for (const columns of [80, 60, 100]) {
+    const lines = renderScreen(theme({ env: {}, columns }), { title: 'gw config', step: 'Settings', body: ['x'], hints: ['h'] });
+    assert.equal([...stripAnsi(lines[0])].length, columns, `the bar fills ${columns} columns`);
+    assert.equal([...stripAnsi(lines.at(-2))].length, columns, 'as wide as the rule above the hints');
+  }
+  const plain = renderScreen(theme({ columns: 80 }), { title: 'gw init', step: 'Step 1 of 3', body: [], hints: [] });
+  assert.equal(plain[0], ` ◆ Gatewright  ·  gw init${' '.repeat(43)}Step 1 of 3 `);
+  assert.equal(plain[1], '─'.repeat(80), 'without colour a rule still marks the end of the bar');
+});
+
+test('nothing is drawn in the bottom-right cell, so the terminal never scrolls the screen', () => {
+  const hints = Array.from({ length: 20 }, (_, index) => `hint number ${index}`);
+  for (const columns of [24, 60, 80]) {
+    const lines = renderScreen(theme({ columns }), { body: [], hints });
+    assert.ok([...stripAnsi(lines.at(-1))].length < columns, `bottom row stops short of column ${columns}`);
+  }
+});
+
+test('a full-width line is not followed by erase-to-end-of-line, which would blank its last cell', () => {
+  assert.equal(eraseRest('x'.repeat(80), 80), 'x'.repeat(80));
+  assert.equal(eraseRest('\x1b[30;46;106m' + ' '.repeat(80) + '\x1b[0m', 80), '\x1b[30;46;106m' + ' '.repeat(80) + '\x1b[0m', 'measured without its colour codes');
+  assert.equal(eraseRest('short', 80), 'short\x1b[K');
+});
+
+test('a drawn frame erases after short lines only', async () => {
+  const tty = rawTty({ columns: 80, rows: 24 });
+  const prompt = createPrompter({ input: tty.input, output: tty.output, env: { TERM: 'xterm' }, platform: 'linux', title: 'gw init' });
+  const answer = prompt.select('Pick', CHOICES, { step: 'Step 1 of 3' });
+  tty.input.write('\r');
+  await answer;
+  prompt.close();
+  const frame = tty.text().slice(tty.text().indexOf('\x1b[H', tty.text().indexOf('\x1b[2J')));
+  const rows = frame.slice(3, frame.lastIndexOf('\x1b[J')).split('\r\n');
+  assert.equal(rows.length, 24);
+  for (const row of rows) {
+    const full = [...stripAnsi(row.replace(/\x1b\[K$/, ''))].length === 80;
+    assert.equal(row.endsWith('\x1b[K'), !full, `${full ? 'full' : 'short'} row: ${JSON.stringify(stripAnsi(row))}`);
+  }
 });
