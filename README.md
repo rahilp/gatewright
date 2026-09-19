@@ -14,25 +14,25 @@ Install once, then use `gw` from anywhere:
 
 ```sh
 npm install -g gatewright        # puts `gw` on PATH
-gw init
-gw add "Wire the scheduler tick loop"
+gw init --pipeline solo
+gw add "Wire the scheduler tick loop" --phase P1 --type feature --priority P1
 gw claim T-0001
 gw move T-0001 building
 gw edit T-0001 --scope "Scheduler tick fires once per tick_s and never overlaps a run in flight"
-gw move T-0001 built --evidence abc1234 --evidence test/scheduler.test.js
+gw move T-0001 done --evidence abc1234 --evidence test/scheduler.test.js
 gw brief
-gw open
+gw serve
 ```
 
-Capture is one command with no required flags: `phase`, `type` and `priority` start out null, because at the moment you write a title down you genuinely may not know them yet, and guessing is worse than leaving them unset. `add` → `claim` → `move … building` is the whole path to "I am working on this" — no mandatory edit stands in the way. Rigor still applies; it just applies where a claim of completion is made. Reaching `built` needs a scope (what "done" means) and evidence, because that is the step where the claim needs to hold up, not the step where the idea got written down.
+Capture is one command with no required flags: `phase`, `type` and `priority` start out null, because at the moment you write a title down you genuinely may not know them yet, and guessing is worse than leaving them unset. `add` → `claim` → `move … building` is the whole path to "I am working on this" — no mandatory edit stands in the way. Rigor still applies; it just applies where a claim of completion is made. In the solo pipeline, reaching `done` needs a scope (what "done" means) and evidence, because that is the step where the claim needs to hold up, not the step where the idea got written down.
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
-In a terminal, `init` then asks a few questions — how work reaches main, how items are numbered, which phases you use, and whether to enable the runner — and writes the answers. Anywhere without a terminal, and with `--yes`, `GW_NO_INPUT` or `CI` set, it skips all of that and installs the defaults unchanged, so agents and CI see exactly what they always did.
+In a terminal, `init` asks one question: solo or team. Solo installs `backlog → building → done`, with no PR stage or policy hold for agent-created work. Team installs `backlog → building → built → in_review → reviewed → merged → verified`, with PR review and triage. With `--yes`, a GitHub origin selects team; otherwise it selects solo.
 
-The first question is the one that matters most. If you commit straight to main, the pipeline ends at **Built**, and Built is the finish line. If you work through pull requests, it continues into In review, Reviewed, Merged and Verified, and advancing past Built needs a PR URL as evidence. Choosing the wrong one is not fatal — a tracker whose last stage is never reachable simply reports finished work as though it were still in flight.
+In a Git repository, `init` installs the commit hook unless you pass `--no-hook`. It finishes by pointing at `gw serve` for the live board.
 
-`init` creates `.gatewright/` (items, events, stages, config, prompt) and writes an instruction block to `AGENTS.md`. The first store write — your first `gw add` or `gw move` — creates `.digest`. `gw open` writes `board.html`. The CLI and the live board's write API are the only write paths; the snapshot board is written on demand.
+`init` creates `.gatewright/` (items, events, stages, config, prompt), writes an instruction block to `AGENTS.md`, and baselines `.digest`. `gw open` writes `board.html`. The CLI and the live board's write API are the only write paths; the snapshot board is written on demand.
 
 ## The refusal
 
@@ -41,8 +41,8 @@ A card in Built has evidence because it could not have got there without it. `gw
 ```
 $ gw move T-0001 built
 target stage requirements are not met
-needs a scope: run `gw edit T-0001 --scope "<what done looks like>"`
-needs at least 1 evidence entry: run `gw move T-0001 built --evidence <e>`
+built: needs a scope: run `gw edit T-0001 --scope "<what done looks like>"`
+built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move T-0001 built --evidence "new evidence 1"`
 $ echo $?
 1
 ```
@@ -94,8 +94,8 @@ gw: this change is not on the board.
   config.json    vocab, labels, policy, runner, memory
   prompt.md      dispatch prompt template
 
-created on the first store write (first add or move):
-  .digest        SHA-256 of items.jsonl after each gw write
+baselined by `gw init` and after each gw write:
+  .digest        SHA-256 of items.jsonl
 
 created by `gw open`:
   board.html     viewer snapshot with the data inlined
@@ -106,7 +106,7 @@ A change to one item is a one-line diff. `grep P2-01 .gatewright/events.jsonl` i
 Three rules keep the data trustworthy:
 
 - Gatewright is the only write path. The CLI, the `serve` API, `sync`, and the scheduler all call the same `store` module, so every stage move evaluates the same exit rules whether a human dragged a card or an agent ran a command.
-- Agents never edit files in `.gatewright/` directly. `store` writes a hash of `items.jsonl` to `.gatewright/.digest` after every successful write; `gw check` reports a mismatch and re-baselines so the same edit is reported once, not on every run.
+- Agents never edit files in `.gatewright/` directly. `store` writes a hash of `items.jsonl` to `.gatewright/.digest` after every successful write; `gw check` reports a mismatch, and `gw repair --write --force` is the deliberate way to re-baseline it after review.
 - The board is a snapshot, not a live page. `gw open` takes the pinned `viewer/board.html`, injects the current data as `<script type="application/json">` blocks, and writes `.gatewright/board.html`. A `file://` page cannot fetch its own data because Chrome and Firefox give it an opaque origin; inlining works in every browser with no server and no flags.
 
 ## The board
@@ -164,7 +164,7 @@ gw config runner.enabled true
 
 Or run `gw config` with no arguments in a terminal to be walked through every setting. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
 
-Work created by an agent is held with `needs-triage` by default. A different agent or any human can approve it with `gw triage <id> --approve`; its creator can only drop it. This prevents a run from filing three items, each of which starts a run that files three more. Identity is declared, not authenticated.
+Agent-created work is held with `needs-triage` in the team pipeline. An agent may approve another agent's item but never its own; a human may approve their own item. Use `gw config policy.triage_required_for none` to turn holds off and release existing ones. Identity is declared, not authenticated. This prevents a run from filing three items, each of which starts a run that files three more.
 
 `max_children_per_item`, `max_depth`, `max_concurrent`, and `run_timeout_min` are enforced before a run starts. The runner also has three kill switches: per-run stop, `gw stop --all`, and global pause. `gw stop --all` works from any terminal with no browser and no `serve` process running, including after `serve` has crashed.
 
@@ -219,12 +219,12 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 
 | Command | What it does |
 | --- | --- |
-| `gw init [--gh] [--repo owner/name] [--force]` | Create `.gatewright/` and write the instruction block to `AGENTS.md`; `--gh` enables GitHub sync, and `--repo` supplies the repository when no GitHub origin is available |
+| `gw init [--force] [--mirror claude,cursor,copilot\|all] [--gh] [--repo owner/name] [--pipeline solo\|team] [--no-hook] [--yes] [--no-input]` | Create `.gatewright/` and write agent instructions. `--pipeline` selects the workflow explicitly; otherwise `--yes` selects team for a GitHub origin and solo elsewhere. `--no-hook` skips the commit hook in a Git repository. `--gh` enables GitHub sync, and `--repo` supplies the repository when no GitHub origin is available |
 | `gw init --mirror claude,cursor,copilot` | Also write the instruction block to `CLAUDE.md`, `.cursor/rules/gatewright.mdc`, and `.github/copilot-instructions.md` |
 | `gw brief [--me <owner>] [--json] [--recall]` | Print in-flight, blocked, owned, and next-unblocked items in 25 lines or fewer. `--json` returns that digest structured (buckets with id, title, stage, owner, waiting-on), not the raw board. `--recall` is accepted but has no effect until the v0.5 memory backend is enabled. |
 | `gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--scope "..."] [--by <who>]` | Create an item; print its id |
-| `gw claim <id> [--by <who>]` | Take ownership |
-| `gw release <id>` | Drop ownership |
+| `gw claim <id> [--force] [--by <who>]` | Take ownership |
+| `gw release <id> [--force] [--by <who>]` | Drop ownership |
 | `gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]` | Advance a stage; refused if its exit rule is unmet |
 | `gw next <id> [--json]` | Show the stage(s) an item can move to right now, and the unmet conditions in plain English for the rest |
 | `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--deps a,b\|""] [--refs a,b\|""] [--force] [--by <who>]` | Change non-stage, non-evidence, non-notes fields. An empty `--deps ""` or `--refs ""` clears the list; a forced `--scope` edit on finished work is recorded in the item's notes |
@@ -232,25 +232,26 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw show <id> [--json]` | Print one item and its events |
 | `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
 | `gw check [--json]` | Report rule violations, vocabulary drift, and out-of-band writes; exit 1 on any report |
-| `gw guard [--message-file F] [--range A..B] [--pretool] [--warn] [--json]` | Refuse a change no board item accounts for: a commit (via the hook), every commit in a range (via CI), or an agent's edit before it happens |
+| `gw repair [--write] [--force]` | Inspect corrupt item and event lines without changing them by default. `--write` moves unparseable lines to `.gatewright/quarantine.jsonl`; after review, `--force` re-baselines a stale digest |
+| `gw guard [--message-file F] [--message M] [--branch B] [--range A..B] [--pretool] [--tool T] [--file F] [--warn] [--json]` | Refuse a change no board item accounts for: a commit (via the hook), every commit in a range (via CI), or an agent's edit before it happens |
 | `gw hook install [--ci] [--agent] [--force]` | Install the enforcement points: a `commit-msg` hook, a pull-request workflow, and the agent pre-edit guard. Also `gw hook status` and `gw hook uninstall` |
 | `gw help <command>`, `gw <command> --help` | Print that command's own usage and flags |
-| `gw config [<key> [<value>]] [--list]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script |
+| `gw config [<key> [<value>]] [--list] [--yes] [--no-input]` | Show or change a setting. With no arguments in a terminal it walks every setting; anywhere else it lists them, so it never blocks a script. List settings that allow an empty value accept `none` (or `[]`) |
 | `gw import <file> [--format md\|csv\|json] [--dry-run]` | Ingest a task list. The format is inferred from the extension. CSV needs `id` and `title` columns and understands common aliases; JSON takes a bare array or an `items` wrapper. A source stage is honoured only if the item's evidence actually earns it, and every downgrade is reported |
-| `gw open [--no-browser] [--watch]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
+| `gw open [--no-browser] [--watch] [--port P]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
-| `gw serve [--port 7777] [--host H] [--open]` | Serve the live board; loopback unless `--host` says otherwise, with its write API and, when explicitly enabled and configured, its scheduler |
+| `gw serve [--port 7777] [--host H] [--open] [--no-browser]` | Serve the live board; loopback unless `--host` says otherwise, with its write API and, when explicitly enabled and configured, its scheduler |
 | `gw sync [--dry-run]` | Pull linked GitHub issues through `gh`; `--dry-run` previews synchronization |
 | `gw stop <id> \| --all` | Stop one recorded run, or all recorded runs from any terminal |
 | `gw resume <id>` | Resume a paused item in its existing worktree with the previous log tail |
-| `gw triage <id> --approve \| --drop` | Approve or drop an agent-created item held for review |
+| `gw triage <id> [--approve] [--drop] [--by <who>] [--force]` | Approve or drop an item held for review |
 | `gw gc [--dry-run] [--force]` | Remove terminal-stage worktrees; dry-run previews and force permits dirty worktrees |
 
 The full contract, including field ownership, the move algorithm, and the brief layout, is in `specs.md`.
 
 ## Using it with agents
 
-`gw init` writes a fenced block into `AGENTS.md`. Every mainstream agent reads it. Claude Code, Codex, Cursor, and GitHub Copilot all read their own rules file, so the same content lands in the right place for each: `CLAUDE.md`, `.cursor/rules/gatewright.mdc`, and `.github/copilot-instructions.md`. `init` writes to whichever of those files already exists.
+`gw init` always writes a fenced block into `AGENTS.md`, then detects the agent tools a project uses and writes the same block where each reads it. Claude is detected by `CLAUDE.md` or `.claude/`, Cursor by `.cursor/` or `.cursorrules`, and Copilot by `.github/copilot-instructions.md`; their instruction files are `CLAUDE.md`, `.cursor/rules/gatewright.mdc`, and `.github/copilot-instructions.md`. Use `--mirror` to write a block without a detected signal.
 
 ```
 <!-- gatewright:start -->
@@ -261,7 +262,7 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 - Before your first edit of a task, put the plan on the board yourself: `gw add "<step>"` for each step you intend to take (`--parent <id>` for sub-steps). Do not wait to be asked. Plan steps are items, never notes — `gw note <id>` is only for progress remarks on an existing item.
 - **Exception:** if you are working on gatewright itself, or you have otherwise been told not to write to a particular board, do not write to it — that board is the user's live tracker, not your scratchpad. Create a scratch board instead: `D=$(mktemp -d) && cd "$D" && gw init`, and prefix every `gw` command with `cd "$D" && ` (`cd` does not persist between your tool calls). Or keep the plan in your reply and let the human running you track it.
 - `gw claim <id>` before changing code for an item. `gw move <id> <stage> --evidence <commit|test|PR>` when you reach a stage. The DEFAULT pipeline is backlog → building → built → in_review → reviewed → merged → verified, but a board may define its own — `gw next <id>` names the real, legal moves for the board you are on. No board yet? `gw init` creates one.
-- Agent-created items may be held with `needs-triage`. A different agent or any human may approve; creators may only `--drop`. Identity is declared, not authenticated.
+- Agent-created items may be held with `needs-triage`. An agent may approve another agent's item but never its own; a human may approve their own. An agent creator may only `--drop`. Run `gw config policy.triage_required_for none` to turn holds off and release existing ones. Identity is declared, not authenticated.
 - Work you discover that someone else could pick up: `gw add "<title>" --parent <id>`.
 - If a commit is refused because it is not on the board, add or claim the item it belongs to — never `git commit --no-verify`.
 - If `gw move` refuses, fix the reason it names. `--force` is only ever for pipeline order — reopening finished work, re-entering from paused — and only when the refusal itself prints it; never to get past a gate. Unsure what's next? `gw next <id>`.
@@ -276,13 +277,13 @@ Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code
 
 ## Choosing a workflow shape
 
-A stage may declare `"role": "done"`, which marks it as the finish line: work standing there is finished, and `gw brief` stops counting it as in flight. The shipped pipeline ends at Verified and does not need it. A trunk pipeline that ends at Built does, and `gw init` writes it for you when you say you commit straight to main.
+A stage may declare `"role": "done"`, which marks it as the finish line: work standing there is finished, and `gw brief` stops counting it as in flight. The solo pipeline ends at Done and uses that role; the team pipeline ends at Verified. Only an explicit role counts — a final stage is not assumed to be an ending.
 
 To move an existing board, truncate `stages.json` after the stage you actually finish at and give that stage `"role": "done"`. Without it every completed item is reported as still in flight forever, which is how `gw brief` degrades from a digest into a list of everything ever done. Only an explicit role counts — the last stage in a pipeline is not assumed to be an ending, because plenty of pipelines end in a waiting room.
 
 ## Stages and gates
 
-`.gatewright/stages.json` defines the pipeline. The default is:
+`.gatewright/stages.json` defines the pipeline. The team pipeline is:
 
 ```
 backlog → building → built → in_review → reviewed → merged → verified
@@ -310,7 +311,7 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 ## Status
 
-Gatewright is at v0.11.0.
+Gatewright is at v0.12.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only at the time; CSV and JSON arrived in v0.9), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
@@ -339,6 +340,8 @@ Shipped in v0.11, and it breaks things on purpose. Capturing work costs one comm
 The `Specified` stage is gone and its scope rule moved to `Built`, beside the evidence rule: rigor belongs where completion is claimed, not where an idea is written down. Five commands became three.
 
 The item field `gate` was deleted rather than renamed. It was read by no rule, and its vocabulary duplicated `priority` — `G0` "the phase cannot be called done while this is open" against `P1` "do it in this phase". What remains is `requires` on a stage, which is what actually gates and is now the only thing the word means.
+
+Shipped in v0.12, and it breaks things on purpose. Evidence gates can fail now: `evidence_min` used to count an item's lifetime evidence, so the team pipeline's final Verified gate had already been paid for before the move. A move now counts distinct evidence supplied with that move, and each entry records the stage it paid for; old evidence migrates on the next write. Onboarding is one choice, a pipeline that fits, instructions where an agent reads them, a hook in a Git repository, and a first task with no dead end. An agent can approve another agent's held work but not its own; a human can approve their own, and `policy.triage_required_for none` releases holds for an all-agent team. Refusals print commands that run as printed. `gw repair` replaces hand-editing a corrupt board: dry run first, quarantine with `--write`, then use `--force` only after review to accept a stale digest. Windows now gets advice `cmd.exe` can run, portable paths, and writes that tolerate a live board holding the file open. This changes the evidence data shape, makes `GW_ROOT` the project root rather than `.gatewright/`, and changes triage policy.
 
 Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 
