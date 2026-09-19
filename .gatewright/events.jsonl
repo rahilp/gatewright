@@ -1299,3 +1299,5 @@
 {"ts":"2026-09-19T01:55:44.442Z","type":"add","item":"T-0105","by":"human:rahil","parent":null}
 {"ts":"2026-09-19T01:55:44.499Z","type":"claim","item":"T-0105","by":"agent:winfs"}
 {"ts":"2026-09-19T02:02:23.166Z","type":"claim","item":"T-0105","by":"human:rahil"}
+{"ts":"2026-09-19T02:04:44.598Z","type":"move","item":"T-0105","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T02:04:44.658Z","type":"move","item":"T-0105","from":"building","to":"built","by":"human:rahil","evidence":["f092151: rename retry on EPERM/EACCES/EBUSY with a clear IOError on exhaustion; windows-latest 22 and 24 green"]}
