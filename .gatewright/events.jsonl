@@ -1404,3 +1404,6 @@
 {"ts":"2026-09-19T19:55:31.650Z","type":"move","item":"T-0126","from":"building","to":"built","by":"human:rahil","evidence":["Driven: GW_ROOT to another board prints 'gw: using the board at <root> (from GW_ROOT)' on stderr; silent for same board and with GW_ITEM; gw add stdout still only the id (test/root-env.test.js)"]}
 {"ts":"2026-09-19T20:00:33.753Z","type":"move","item":"T-0124","from":"building","to":"built","by":"human:rahil","evidence":["Light theme white surfaces on cool slate, blue accent, amber-on-white warnings; no warm hue (test/viewer.test.js palette check); before/after in /tmp/gw-theme light+dark, 1440 and 390"]}
 {"ts":"2026-09-19T20:00:33.817Z","type":"move","item":"T-0125","from":"building","to":"built","by":"human:rahil","evidence":["278-item board at 2000px: Built/Dropped/Paused 280px, empty Backlog/Building 200px, counts and Show all never clipped (/tmp/gw-theme/after-light-large-board-2000.png, test/viewer.browser.test.js)"]}
+{"ts":"2026-09-19T23:19:47.720Z","type":"add","item":"T-0127","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T23:19:47.777Z","type":"claim","item":"T-0127","by":"human:rahil"}
+{"ts":"2026-09-19T23:19:47.839Z","type":"move","item":"T-0127","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
