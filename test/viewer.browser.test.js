@@ -383,3 +383,104 @@ test('T-0117..T-0120: overview rows, board columns, stage strip and bars at 1440
     } finally { await browser.close(); }
   }, { items: SCREENSHOT_ITEMS, stages: SCREENSHOT_STAGES });
 });
+
+// T-0124 / T-0125 in a laid-out page: the board the column bug was reported
+// on (278 items, nearly all finished, some dropped) at 2000px, in both colour
+// schemes. The widths, the untruncated counts and the cool surfaces are read
+// off the rendered page, not the stylesheet.
+const TRUNK_STAGES = {
+  stages: [
+    { id: 'backlog', label: 'Backlog' },
+    { id: 'building', label: 'Building', requires: { owner: true } },
+    { id: 'built', label: 'Built', requires: { evidence_min: 1 }, role: 'done' },
+  ],
+  terminal: ['dropped'],
+  extra: [{ id: 'dropped', label: 'Dropped' }, { id: 'paused', label: 'Paused' }],
+};
+const LARGE_ITEMS = Array.from({ length: 278 }, (_, i) => {
+  const n = i + 1;
+  const stage = n <= 263 ? 'built' : n <= 277 ? 'dropped' : 'paused';
+  return item({ id: `T-${String(n).padStart(4, '0')}`, title: `Finished item ${n}`, stage, evidence: stage === 'built' ? ['abc1234'] : [],
+    updated: new Date(Date.UTC(2026, 5, 1) + n * 3600e3).toISOString() });
+});
+
+test('T-0124/T-0125: a 278-item board at 2000px -- widths, counts and a cool palette in both schemes', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 2000, height: 1000 });
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: scheme }]);
+        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.click('[data-view="board"]');
+        await page.waitForSelector('.column[data-stage="built"] .card');
+        const board = await page.evaluate(() => {
+          const rgb = (css) => (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+          const columns = [...document.querySelectorAll('.column')].map((c) => {
+            const box = c.getBoundingClientRect();
+            const main = c.querySelector('.column-head-main');
+            const count = c.querySelector('.count');
+            const toggle = c.querySelector('.column-toggle');
+            const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= box.left - 0.5 && r.right <= box.right + 0.5; };
+            return {
+              stage: c.dataset.stage, width: box.width, height: box.height, cards: c.querySelectorAll('.card').length,
+              count: count.textContent, countWhole: count.scrollWidth <= count.clientWidth + 0.5 && inside(count),
+              headClipped: !c.classList.contains('column-folded') && main.scrollWidth > main.clientWidth + 0.5,
+              toggleWhole: !toggle || (toggle.scrollWidth <= toggle.clientWidth + 0.5 && inside(toggle)),
+              empty: c.classList.contains('column-empty'), folded: c.classList.contains('column-folded'),
+            };
+          });
+          const style = (sel) => getComputedStyle(document.querySelector(sel));
+          return {
+            columns,
+            surfaces: {
+              bgVar: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+              card: rgb(style('.card').backgroundColor),
+              header: rgb(style('#gw-header').backgroundColor),
+              tabs: rgb(style('#gw-tabs').backgroundColor),
+              banner: rgb(style('#gw-pause-banner').backgroundColor),
+            },
+          };
+        });
+        const by = Object.fromEntries(board.columns.map((c) => [c.stage, c]));
+        assert.equal(by.built.count, '263');
+        assert.equal(by.dropped.count, '14');
+        for (const c of board.columns) {
+          assert.ok(c.countWhole, `${scheme}: the ${c.stage} count "${c.count}" is shown whole`);
+          assert.ok(c.toggleWhole, `${scheme}: the ${c.stage} "Show all" is not clipped`);
+          assert.equal(c.headClipped, false, `${scheme}: the ${c.stage} header is not clipped`);
+        }
+        const withCards = board.columns.filter((c) => c.cards > 0);
+        const empties = board.columns.filter((c) => c.cards === 0 && !c.folded);
+        assert.deepEqual(empties.map((c) => c.stage), ['backlog', 'building'], 'the empty working stages stay open lanes');
+        assert.ok(empties.every((c) => c.empty), 'and are marked as empty');
+        const narrowest = Math.min(...withCards.map((c) => c.width));
+        const widestEmpty = Math.max(...empties.map((c) => c.width));
+        assert.ok(narrowest >= widestEmpty, `${scheme}: every column with cards (narrowest ${narrowest}px) is at least as wide as every empty one (widest ${widestEmpty}px)`);
+        assert.ok(by.built.width > 200 && by.dropped.width > 200, `Built and Dropped are no longer squeezed (${by.built.width}px, ${by.dropped.width}px; were 160px)`);
+        for (const c of empties) {
+          assert.ok(c.width >= 144, `${c.stage} is still a usable drop target (${c.width}px)`);
+          assert.ok(c.height > 300, `${c.stage} is still a full-height lane`);
+        }
+
+        // Every surface is cool: blue >= red. Light is white where it is a
+        // surface; dark keeps its dark look.
+        const bg = board.surfaces.bgVar.slice(1).match(/../g).map((h) => parseInt(h, 16));
+        assert.ok(bg[2] >= bg[0], `${scheme}: --bg ${board.surfaces.bgVar} is warm`);
+        for (const [name, [r, , b]] of Object.entries(board.surfaces).filter(([name]) => name !== 'bgVar')) {
+          assert.ok(b >= r, `${scheme}: ${name} rgb(${r}, _, ${b}) is warm`);
+        }
+        if (scheme === 'light') {
+          assert.deepEqual(board.surfaces.card, [255, 255, 255], 'a light card is pure white');
+          assert.deepEqual(board.surfaces.tabs, [255, 255, 255], 'the tab bar is pure white');
+          assert.deepEqual(board.surfaces.banner, [255, 255, 255], 'the scheduler-off banner is amber on white, not a beige fill');
+          assert.equal(board.surfaces.bgVar, '#eef2f7');
+        } else {
+          assert.ok(board.surfaces.tabs.every((v) => v < 60), 'dark keeps its dark surfaces');
+        }
+      }
+    } finally { await browser.close(); }
+  }, { items: LARGE_ITEMS, stages: TRUNK_STAGES });
+});

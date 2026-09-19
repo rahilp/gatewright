@@ -7,46 +7,48 @@
 <title>gatewright</title>
 <!-- T-0082: a data URI, not a file request -- the only favicon the file://
      snapshot can ever load without a 404 in the console. -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='3.5' fill='%23297ab6'/%3E%3Crect x='4' y='4' width='3.4' height='8' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3Crect x='8.6' y='4' width='3.4' height='5' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='3.5' fill='%232563eb'/%3E%3Crect x='4' y='4' width='3.4' height='8' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3Crect x='8.6' y='4' width='3.4' height='5' rx='0.8' fill='%23ffffff' fill-opacity='0.92'/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f5f5f3;
+    --bg: #eef2f7;
     --bg-raised: #ffffff;
-    --bg-sunken: #ececea;
-    --border: #d8d8d4;
-    --text: #1a1a18;
-    --text-dim: #63635c;
-    --text-faint: #93938a;
-    --accent: #1c5d8c;
-    --accent-bg: #e4eef6;
-    --danger: #9c3b28;
-    --danger-bg: #f6e6e2;
-    --warn: #8a6a1d;
-    --warn-bg: #f6efdd;
-    --ok: #2c6e3f;
-    --ok-bg: #e5f1e8;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+    --bg-sunken: #f4f6fa;
+    --border: #d9e0ea;
+    --text: #0f172a;
+    --text-dim: #475569;
+    --text-faint: #5f6b7e;
+    --accent: #2563eb;
+    --accent-bg: #edf3ff;
+    --on-accent: #ffffff;
+    --danger: #c81e1e;
+    --danger-bg: #fff1f2;
+    --warn: #a14a06;
+    --warn-bg: #ffffff;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #17181a;
-      --bg-raised: #1f2124;
-      --bg-sunken: #131415;
-      --border: #33363a;
-      --text: #e7e7e4;
-      --text-dim: #a3a39c;
-      --text-faint: #6e6e68;
-      --accent: #6badde;
-      --accent-bg: #1d3245;
-      --danger: #e0806e;
-      --danger-bg: #3a231f;
-      --warn: #d8b458;
-      --warn-bg: #3a3220;
-      --ok: #7fc394;
-      --ok-bg: #1f3527;
+      --bg: #14171c;
+      --bg-raised: #1b1f26;
+      --bg-sunken: #11141a;
+      --border: #2e3440;
+      --text: #e6e9ef;
+      --text-dim: #a3abba;
+      --text-faint: #8690a2;
+      --accent: #6ea8ff;
+      --accent-bg: #172a48;
+      --on-accent: #0b1220;
+      --danger: #f47c7c;
+      --danger-bg: #3a1c22;
+      --warn: #f5b93a;
+      --warn-bg: #1b1f26;
+      --ok: #5fd08e;
+      --ok-bg: #12291e;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
     }
   }
@@ -268,10 +270,17 @@
     flex-direction: column;
     min-height: 0;
   }
-  /* A terminal column collapsed to its recent handful gets its width back to
-     the non-terminal columns that matter -- see terminalStageIds() and
-     renderBoard(). Never so narrow the count or the toggle wrap. */
-  .column.collapsed { min-width: 150px; max-width: 170px; flex: 0 1 160px; }
+  /* T-0125: a collapsed terminal column used to be pinned at 150-170px, so a
+     263-card Built and a 14-card Dropped were squeezed beside empty Backlog
+     and Building lanes at 280px, and "14" clipped to "1.". A collapsed column
+     still has cards, so it has no width rule of its own any more: it shares
+     width like any column with cards (the preview is what keeps it short, not
+     a narrow lane), and the 11rem floor holds the label, the count and
+     "Show all" side by side. */
+  /* T-0125: an EMPTY working stage gives its width to the columns with cards:
+     it grows at half their rate and stops at 200px. It stays a full-height
+     lane, never below 9rem, so it is still an easy drop target. */
+  .column.column-empty { flex: 0.5 1 150px; min-width: 9rem; max-width: 200px; }
   /* T-0118: an empty terminal or side column (Dropped, Paused) has nothing
      to show but its name, so it folds to a narrow strip with the name read
      sideways. It is still a whole-height .column with its data-stage, so it
@@ -295,8 +304,11 @@
     background: var(--bg-raised);
     border-radius: 0.5rem 0.5rem 0 0;
   }
-  .column-head .column-head-main { display: flex; gap: 0.4rem; align-items: baseline; overflow: hidden; text-overflow: ellipsis; }
-  .column-head .count { color: var(--text-faint); font-weight: 400; }
+  /* T-0125: only the stage LABEL may give way (ellipsis, full name in the
+     title attribute); the count and the toggle never shrink or truncate. */
+  .column-head .column-head-main { display: flex; gap: 0.4rem; align-items: baseline; min-width: 0; }
+  .column-head .column-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .column-head .count { color: var(--text-faint); font-weight: 400; flex-shrink: 0; }
   .column-toggle {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -306,6 +318,7 @@
     font-size: 0.68rem;
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
   }
   /* T-0059: the lane body is what scrolls now, so a long column never grows
      the page. The header stays pinned above it because it is outside this
@@ -457,7 +470,7 @@
 
   /* Export */
   .export-panel { max-width: 40rem; }
-  .export-panel button { background: var(--accent); color: #fff; border: none; padding: 0.5rem 0.9rem; border-radius: 0.4rem; cursor: pointer; font-size: 0.85rem; }
+  .export-panel button { background: var(--accent); color: var(--on-accent); border: none; padding: 0.5rem 0.9rem; border-radius: 0.4rem; cursor: pointer; font-size: 0.85rem; }
 
   /* Empty state */
   #gw-empty {
@@ -472,7 +485,7 @@
   #gw-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(15, 23, 42, 0.38);
     display: none;
     z-index: 100;
   }
@@ -539,7 +552,7 @@
     cursor: not-allowed;
   }
   #gw-panel .stage-buttons button:not([disabled]) {
-    color: #fff;
+    color: var(--on-accent);
     background: var(--accent);
     border-color: var(--accent);
     cursor: pointer;
@@ -609,7 +622,7 @@
   }
   #gw-panel .evidence-add button, #gw-panel .note-add button, #gw-panel #save-fields-btn {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     border: none;
     border-radius: 0.35rem;
     padding: 0.3rem 0.6rem;
@@ -645,7 +658,7 @@
   }
   .create-form button[type="submit"] {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     border: none;
     border-radius: 0.4rem;
     padding: 0.5rem 0.8rem;
@@ -675,7 +688,7 @@
   }
   /* Running must be visually distinct from queued: one is costing money right
      now, the other is waiting for a scheduler tick. */
-  .tag.badge-running { color: #7ee787; border-color: #2ea043; background: rgba(46,160,67,0.15); }
+  .tag.badge-running { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); font-weight: 600; }
   .tag.owner-chip { white-space: nowrap; }
   #gw-pause-btn {
     border: 1px solid var(--border);
@@ -745,7 +758,7 @@
   .editor-grid input[type="checkbox"] { justify-self: start; }
   .editor-note { grid-column: 1 / -1; color: var(--text-faint); font-size: 0.74rem; }
   .editor-actions { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
-  .editor-actions button.primary { background: var(--accent); color: #fff; border: none; border-radius: 0.35rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; }
+  .editor-actions button.primary { background: var(--accent); color: var(--on-accent); border: none; border-radius: 0.35rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; }
   .gate-readback { background: var(--bg-sunken); border-radius: 0.35rem; padding: 0.4rem 0.6rem; margin: 0.4rem 0 0; }
   .gate-readback h4 { margin: 0 0 0.2rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
   .gate-readback ul { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; }
@@ -765,7 +778,7 @@
   }
   .setting-row .setting-value { font-family: var(--mono); font-size: 0.8rem; }
   .settings-save { position: sticky; bottom: 0; background: var(--bg); padding: 0.6rem 0; }
-  .settings-save button { background: var(--accent); color: #fff; border: none; border-radius: 0.4rem; padding: 0.45rem 0.9rem; font-size: 0.85rem; cursor: pointer; }
+  .settings-save button { background: var(--accent); color: var(--on-accent); border: none; border-radius: 0.4rem; padding: 0.45rem 0.9rem; font-size: 0.85rem; cursor: pointer; }
 
   /* Glossary legend, shown wherever codes are aggregated into a chart. */
   .glossary-legend { margin: 0.6rem 0 0; padding: 0.45rem 0 0; border-top: 1px solid var(--border); font-size: 0.74rem; color: var(--text-dim); }
@@ -786,6 +799,11 @@
     clip: rect(0 0 0 0);
     white-space: nowrap;
   }
+  /* T-0124: one accent for every keyboard focus ring. */
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .card:focus-visible, .brief-row:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
@@ -805,7 +823,7 @@
      T-0060 — glass treatment (Rahil's reference dashboard)
      One material, laid over the existing rules so the tags, stage
      colours and every queried class are untouched. The glass is a
-     background treatment: translucent panel fills over a warm
+     background treatment: translucent panel fills over a cool
      dark-to-darker gradient, a hairline top edge highlight, layered
      shadows for depth, 14-18px corners.
      Fallback contract: every glass surface first gets a solid-ish
@@ -817,43 +835,52 @@
   :root {
     --glass-radius-panel: 16px;
     --glass-radius-card: 14px;
-    --glass-edge: rgba(255, 255, 255, 0.17);
-    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-edge: rgba(148, 170, 210, 0.16);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.10);
     --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.22);
     /* Solid-ish base: high enough alpha to carry text on its own. */
-    --glass-base: rgba(34, 36, 40, 0.93);
-    --glass-base-head: rgba(28, 30, 33, 0.97);
-    --glass-fill: rgba(40, 42, 47, 0.46);
-    --glass-fill-head: rgba(26, 28, 31, 0.72);
-    --glass-sunken: rgba(18, 19, 21, 0.55);
+    --glass-base: rgba(29, 33, 41, 0.93);
+    --glass-base-head: rgba(24, 27, 34, 0.97);
+    --glass-fill: rgba(34, 39, 49, 0.46);
+    --glass-fill-head: rgba(22, 25, 32, 0.72);
+    --glass-sunken: rgba(15, 18, 24, 0.55);
+    /* A board lane; in dark it is the same material as every other panel. */
+    --glass-lane-base: var(--glass-base);
+    --glass-lane: var(--glass-fill);
     --glass-backdrop: blur(18px) saturate(150%);
   }
+  /* T-0124: the light theme is white and cool, never cream: white panels and
+     cards with a slate hairline, lanes a breath of blue-grey so a white card
+     still reads as a card, and every surface keeps blue >= red. */
   @media (prefers-color-scheme: light) {
     :root {
-      --glass-edge: rgba(255, 255, 255, 0.85);
+      --glass-edge: rgba(148, 163, 184, 0.38);
       --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-      --glass-shadow: 0 8px 24px rgba(64, 54, 36, 0.14), 0 2px 6px rgba(64, 54, 36, 0.08);
-      --glass-base: rgba(252, 251, 248, 0.94);
-      --glass-base-head: rgba(250, 248, 244, 0.97);
-      --glass-fill: rgba(252, 251, 248, 0.62);
-      --glass-fill-head: rgba(250, 248, 244, 0.78);
-      --glass-sunken: rgba(238, 235, 228, 0.6);
+      --glass-shadow: 0 6px 20px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.06);
+      --glass-base: rgba(255, 255, 255, 0.96);
+      --glass-base-head: rgba(255, 255, 255, 0.98);
+      --glass-fill: rgba(255, 255, 255, 0.82);
+      --glass-fill-head: rgba(255, 255, 255, 0.9);
+      --glass-sunken: #ffffff;
+      --glass-lane-base: rgba(246, 248, 252, 0.96);
+      --glass-lane: rgba(246, 248, 252, 0.8);
     }
   }
   body {
-    /* Warm-to-dark gradient backdrop, not flat black; fixed so the panels
-       blur one steady scene instead of resampling on every scroll. */
+    /* A cool slate-to-ink backdrop with a faint blue bloom, not flat black;
+       fixed so the panels blur one steady scene instead of resampling on
+       every scroll. */
     background:
-      radial-gradient(120% 90% at 18% 0%, rgba(128, 94, 52, 0.26) 0%, rgba(128, 94, 52, 0) 58%),
-      radial-gradient(90% 70% at 85% 100%, rgba(96, 74, 52, 0.16) 0%, rgba(96, 74, 52, 0) 60%),
-      linear-gradient(168deg, #2c2925 0%, #1e1f21 48%, #141517 100%);
+      radial-gradient(120% 90% at 18% 0%, rgba(56, 96, 178, 0.20) 0%, rgba(56, 96, 178, 0) 58%),
+      radial-gradient(90% 70% at 85% 100%, rgba(76, 70, 160, 0.12) 0%, rgba(76, 70, 160, 0) 60%),
+      linear-gradient(168deg, #1d2330 0%, #171b22 48%, #111419 100%);
     background-attachment: fixed;
   }
   @media (prefers-color-scheme: light) {
     body {
       background:
-        radial-gradient(120% 90% at 18% 0%, rgba(196, 156, 96, 0.18) 0%, rgba(196, 156, 96, 0) 55%),
-        linear-gradient(168deg, #f7f4ee 0%, #f0ede6 55%, #e7e3da 100%);
+        radial-gradient(120% 90% at 18% 0%, rgba(37, 99, 235, 0.07) 0%, rgba(37, 99, 235, 0) 55%),
+        linear-gradient(168deg, #f6f8fc 0%, #eef2f8 55%, #e8edf5 100%);
       background-attachment: fixed;
     }
   }
@@ -870,7 +897,7 @@
   }
   header#gw-header { border-radius: 0; border-width: 0 0 1px; }
   #gw-panel { border-width: 1px 0 0; }
-  .column { border-radius: var(--glass-radius-panel); }
+  .column { border-radius: var(--glass-radius-panel); background: var(--glass-lane-base); }
   .overview-card { border-radius: var(--glass-radius-card); }
   .stage-rule { border-radius: var(--glass-radius-card); }
   table.gw-table { border-radius: var(--glass-radius-card); }
@@ -882,9 +909,9 @@
     border-radius: calc(var(--glass-radius-panel) - 1px) calc(var(--glass-radius-panel) - 1px) 0 0;
   }
   .card { background: var(--glass-sunken); border-radius: 10px; }
-  table.gw-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+  table.gw-table tbody tr:hover { background: rgba(148, 170, 210, 0.06); }
   @media (prefers-color-scheme: light) {
-    table.gw-table tbody tr:hover { background: rgba(38, 36, 30, 0.05); }
+    table.gw-table tbody tr:hover { background: rgba(37, 99, 235, 0.05); }
   }
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     header#gw-header,
@@ -898,6 +925,7 @@
       -webkit-backdrop-filter: var(--glass-backdrop);
       backdrop-filter: var(--glass-backdrop);
     }
+    .column { background: var(--glass-lane); }
     .column-head { background: var(--glass-fill-head); -webkit-backdrop-filter: var(--glass-backdrop); backdrop-filter: var(--glass-backdrop); }
   }
   @media (prefers-reduced-transparency: reduce) {
@@ -1875,9 +1903,15 @@
     return count === 0 && (isTerminal || pipelineIndex(stageId) < 0);
   }
 
+  // T-0125: an empty working stage (never folded) narrows -- see
+  // .column.column-empty -- so the columns holding cards get the width.
+  function columnEmpty(count, folded) {
+    return count === 0 && !folded;
+  }
+
   function columnHeadHtml(s, count, isTerminal, expanded) {
     const toggle = columnToggleNeeded(count, isTerminal, expanded) ? columnToggleHtml(s, expanded) : '';
-    return '<div class="column-head"><span class="column-head-main"><span>' + escapeHtml(s.label) + '</span><span class="count">' + count + '</span></span>' + toggle + '</div>';
+    return '<div class="column-head"><span class="column-head-main"><span class="column-label" title="' + escapeHtml(s.label) + '">' + escapeHtml(s.label) + '</span><span class="count">' + count + '</span></span>' + toggle + '</div>';
   }
 
   function renderBoard(container) {
@@ -1890,7 +1924,7 @@
       const expanded = !isTerminal || State.expandedStages.has(s.id);
       const shown = columnBodyItems(s.id, inCol, expanded);
       const folded = columnFolded(s.id, inCol.length, isTerminal);
-      return '<div class="column' + (isTerminal && !expanded ? ' collapsed' : '') + (folded ? ' column-folded' : '') + '" data-stage="' + escapeHtml(s.id) + '"' +
+      return '<div class="column' + (isTerminal && !expanded ? ' collapsed' : '') + (columnEmpty(inCol.length, folded) ? ' column-empty' : '') + (folded ? ' column-folded' : '') + '" data-stage="' + escapeHtml(s.id) + '"' +
         (folded ? ' title="' + escapeHtml(s.label + ' is empty.') + '"' : '') + '>' +
         columnHeadHtml(s, inCol.length, isTerminal, expanded) +
         '<div class="column-body">' + (shown.map(cardMarkup).join('') || '') + '</div></div>';
@@ -3428,6 +3462,7 @@
       column.classList.toggle('collapsed', isTerminal && !expanded);
       const folded = columnFolded(stage.id, inCol.length, isTerminal);
       column.classList.toggle('column-folded', folded);
+      column.classList.toggle('column-empty', columnEmpty(inCol.length, folded));
       if (folded) column.title = stage.label + ' is empty.'; else column.removeAttribute('title');
       const toggleBtn = column.querySelector('[data-toggle-stage]');
       const wantToggle = columnToggleNeeded(inCol.length, isTerminal, expanded);

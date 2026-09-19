@@ -1617,3 +1617,122 @@ test('T-0118: the rendered card wears a "waits on" chip only while a dependency 
   assert.doesNotMatch(free, /dep-wait/, 'once the dependency catches up the chip is gone');
   assert.match(free, /data-waits=""/);
 });
+
+// T-0124: the owner asked for whites and cool, tech-forward colours, never
+// beige or cream. A warm neutral is one whose red channel beats its blue
+// (#f5f5f3, #ececea, rgba(252, 251, 248)), so every surface the page is built
+// from -- in both themes -- must keep blue >= red, and so must every other
+// colour literal in the stylesheet except the status hues themselves, whose
+// meaning (red for danger, amber for warning, green for ok) is the point.
+const STYLE = SHELL.match(/<style>([\s\S]*?)<\/style>/)[1];
+function rgbOf(literal) {
+  const hex = literal.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].replace(/./g, (c) => c + c) : hex[1];
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  }
+  const fn = literal.match(/^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+  assert.ok(fn, `unparsed colour ${literal}`);
+  return fn.slice(1, 4).map(Number);
+}
+function varsIn(block) {
+  return Object.fromEntries([...block.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+}
+const LIGHT_VARS = varsIn(STYLE.match(/:root \{\n    color-scheme: light dark;[\s\S]*?\n  \}/)[0]);
+const DARK_VARS = varsIn(STYLE.match(/@media \(prefers-color-scheme: dark\) \{\n    :root \{[\s\S]*?\n    \}/)[0]);
+const GLASS_LIGHT_VARS = varsIn(STYLE.match(/@media \(prefers-color-scheme: light\) \{\n    :root \{\n      --glass-edge[\s\S]*?\n    \}/)[0]);
+const SURFACES = ['--bg', '--bg-raised', '--bg-sunken', '--border', '--warn-bg'];
+const GLASS_SURFACES = ['--glass-edge', '--glass-base', '--glass-base-head', '--glass-fill', '--glass-fill-head', '--glass-sunken', '--glass-lane-base', '--glass-lane'];
+
+test('T-0124: the light palette has no warm hue -- every background and surface keeps blue >= red', () => {
+  for (const name of SURFACES) {
+    const [r, , b] = rgbOf(LIGHT_VARS[name]);
+    assert.ok(b >= r, `light ${name} ${LIGHT_VARS[name]} is warm (red ${r} > blue ${b})`);
+  }
+  assert.equal(LIGHT_VARS['--bg-raised'], '#ffffff', 'cards, header and panels are pure white');
+  const [bgR, , bgB] = rgbOf(LIGHT_VARS['--bg']);
+  assert.ok(bgB > bgR, `the page background has a cool tint, not a neutral grey (${LIGHT_VARS['--bg']})`);
+  for (const name of GLASS_SURFACES) {
+    const [r, , b] = rgbOf(GLASS_LIGHT_VARS[name]);
+    assert.ok(b >= r, `light glass ${name} ${GLASS_LIGHT_VARS[name]} is warm`);
+  }
+  assert.equal(GLASS_LIGHT_VARS['--glass-sunken'], '#ffffff', 'a board card is white, not cream');
+  const body = STYLE.match(/@media \(prefers-color-scheme: light\) \{\n    body \{[\s\S]*?\n    \}/)[0];
+  for (const literal of body.match(/#[0-9a-f]{6}\b|rgba\([^)]*\)/gi)) {
+    const [r, , b] = rgbOf(literal);
+    assert.ok(b >= r, `the light page gradient carries a warm stop ${literal}`);
+  }
+});
+
+test('T-0124: the dark theme shares the cool family -- no warm surface or backdrop there either', () => {
+  for (const name of SURFACES) {
+    const [r, , b] = rgbOf(DARK_VARS[name]);
+    assert.ok(b >= r, `dark ${name} ${DARK_VARS[name]} is warm`);
+  }
+  // Everything outside the status hues: the glass layer, the gradients, the
+  // overlay, the hover tints. The old warm-brown bloom (rgba(128, 94, 52))
+  // and cream glass (rgba(252, 251, 248)) were both caught here.
+  const STATUS = /^\s*--(danger|danger-bg|warn|ok|ok-bg)\s*:/;
+  const offenders = [];
+  for (const line of STYLE.split('\n')) {
+    if (STATUS.test(line)) continue;
+    for (const literal of line.match(/#[0-9a-f]{6}\b|#[0-9a-f]{3}\b|rgba?\([^)]*\)/gi) || []) {
+      const [r, , b] = rgbOf(literal);
+      if (r > b) offenders.push(`${literal} in: ${line.trim()}`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'no warm colour literal survives anywhere in the stylesheet');
+  const favicon = SHELL.match(/<link rel="icon"[^>]*>/)[0];
+  assert.match(favicon, /fill='%232563eb'/, 'the favicon uses the same accent as the page');
+});
+
+test('T-0124: one accent, with readable text on it in both themes, for tabs, links, primary buttons and focus', () => {
+  assert.equal(LIGHT_VARS['--accent'], '#2563eb');
+  assert.doesNotMatch(STYLE, /color: #fff;/, 'no hard-coded white on the accent: the dark accent is light, so its text is dark');
+  assert.equal(LIGHT_VARS['--on-accent'], '#ffffff');
+  assert.equal(DARK_VARS['--on-accent'], '#0b1220');
+  const lum = (hex) => {
+    const c = rgbOf(hex).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  for (const [theme, vars] of [['light', LIGHT_VARS], ['dark', DARK_VARS]]) {
+    const pairs = [['--text', '--bg'], ['--text-dim', '--bg'], ['--text-faint', '--bg'], ['--text-faint', '--bg-raised'], ['--accent', '--bg'], ['--accent', '--bg-raised'],
+      ['--on-accent', '--accent'], ['--accent', '--accent-bg'], ['--danger', '--danger-bg'], ['--warn', '--warn-bg'], ['--warn', '--bg'], ['--ok', '--ok-bg']];
+    for (const [fg, bg] of pairs) {
+      const ratio = contrast(vars[fg], vars[bg]);
+      assert.ok(ratio >= 4.5, `${theme} ${fg} on ${bg} is ${ratio.toFixed(2)}:1, below WCAG AA`);
+    }
+  }
+  assert.match(STYLE, /nav#gw-tabs button\.active \{ color: var\(--accent\); border-bottom-color: var\(--accent\);/);
+  assert.match(STYLE, /a \{ color: var\(--accent\); \}/);
+  assert.match(STYLE, /button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-visible \{\n    outline: 2px solid var\(--accent\);/);
+  assert.match(STYLE, /\.tag\.badge-running \{ color: var\(--ok\); border-color: var\(--ok\); background: var\(--ok-bg\);/, 'the running badge was a fixed light green, unreadable on white');
+  assert.equal(LIGHT_VARS['--warn-bg'], '#ffffff', 'a warning is clean amber on white, not a beige fill');
+});
+
+// T-0125: on a 278-item board at ~2000px the empty Backlog and Building lanes
+// were 280px while Built (263 cards) and Dropped (14) were pinned at 160px,
+// and Dropped's count clipped to "1.".
+test('T-0125: columns with cards get at least the width of empty ones, and a count never truncates', () => {
+  const empty = new Function('count', 'folded', `${liftHelper('columnEmpty')}; return columnEmpty(count, folded);`);
+  assert.equal(empty(0, false), true, 'an empty working stage narrows');
+  assert.equal(empty(0, true), false, 'a folded strip is already narrow; it does not also get the empty width');
+  assert.equal(empty(3, false), false);
+
+  assert.doesNotMatch(STYLE, /\.column\.collapsed \{[^}]*max-width/, 'a collapsed column with cards is no longer capped narrower than an empty lane');
+  const emptyRule = STYLE.match(/\.column\.column-empty \{([^}]*)\}/);
+  assert.ok(emptyRule, 'an empty column has a rule of its own');
+  assert.match(emptyRule[1], /flex: 0\.5 1 150px;/, 'it grows at half the rate of a column with cards');
+  assert.match(emptyRule[1], /max-width: 200px;/, 'and stops well short of their 280px');
+  assert.match(emptyRule[1], /min-width: 9rem;/, 'but stays wide enough to be a drop target');
+  assert.match(STYLE, /\.column-head \.count \{[^}]*flex-shrink: 0;/, 'the count never shrinks');
+  assert.match(STYLE, /\.column-toggle \{[^}]*flex-shrink: 0;/s, '"Show all" never shrinks');
+  assert.match(STYLE, /\.column-head \.column-label \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/, 'only the label may give way');
+  assert.match(liftHelper('columnHeadHtml'), /<span class="column-label" title="' \+ escapeHtml\(s\.label\) \+ '">/, 'and a truncated label keeps its full name');
+
+  const renderBoard = SHELL.match(/function renderBoard\(container\) \{[\s\S]*?\n  \}/)[0];
+  assert.match(renderBoard, /\(columnEmpty\(inCol\.length, folded\) \? ' column-empty' : ''\)/);
+  const update = SHELL.match(/function updateBoardInPlace\([\s\S]*?\n  \}/)[0];
+  assert.match(update, /column\.classList\.toggle\('column-empty', columnEmpty\(inCol\.length, folded\)\);/, 'the poll path keeps it in step as cards come and go');
+});
