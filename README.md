@@ -30,6 +30,14 @@ No global install? Use `npx gatewright <command>` for each command instead. The 
 
 In a terminal, `init` walks you through three screens driven by the arrow keys, and each one explains its question and every option in plain English: how you want to work (Solo or Team), what to set up (instruction files for your AI tools and a commit check, ticked with Space; `AGENTS.md` is always written, and a tool already found in the project starts ticked), and a review listing every file that will be written. Nothing is written until you confirm the review; Esc or Ctrl-C at any screen leaves the directory untouched. Terminals that cannot run a full-screen picker (`TERM=dumb`, a legacy Windows console, or `GW_TUI=0`) get the same workflow question as a numbered prompt instead. Solo installs `backlog → building → done`, with no PR stage or policy hold for agent-created work. Team installs `backlog → building → built → in_review → reviewed → merged → verified`, with PR review and triage. With `--yes`, a GitHub origin selects team; otherwise it selects solo.
 
+![gw init step 1 of 3 in a terminal: a welcome line, the question "How do you want to work?" with an explanation, and two choices, Solo (highlighted) and Team, each listing its stages and what it means](docs/img/gw-init-step1.png)
+
+*Step 1 of `gw init`: choose how you want to work. Each option lists its stages and says what choosing it means.*
+
+![gw init step 2 of 3: the question "What should be set up?" with AGENTS.md always included, CLAUDE.md ticked because the project already uses Claude Code, Cursor and Copilot instruction files unticked, and the commit check ticked, each with a one-line explanation](docs/img/gw-init-step2.png)
+
+*Step 2: pick what to set up. A tool already found in the project starts ticked; Space toggles the rest.*
+
 In a Git repository, `init` installs the commit hook unless you pass `--no-hook`. It finishes by pointing at `gw serve` for the live board.
 
 `init` creates `.gatewright/` (items, events, stages, config, prompt), writes an instruction block to `AGENTS.md`, and baselines `.digest`. `gw open` writes `board.html`. The CLI and the live board's write API are the only write paths; the snapshot board is written on demand.
@@ -111,13 +119,23 @@ Three rules keep the data trustworthy:
 
 ## The board
 
-Board view:
+The screenshots below are of a demo board for a small uptime-monitor project, worked by two people and two coding agents on the team pipeline. `docs/img/regenerate.sh` rebuilds it with the CLI and retakes every screenshot.
 
-![Board](docs/img/board.png)
+Board view: every stage is a column, and each card shows its type, owner and parent, and work in progress shows its evidence count. The yellow chips mark an agent's item held for approval and a quick capture that has not been classified yet.
 
-Overview view:
+![Board view with nine columns from Backlog to Paused. Backlog holds six cards, including one flagged needs-triage and one flagged unclassified; Building holds four, among them a child card indented under its parent; the later columns hold built, in-review, reviewed, merged and verified items owned by human:maya, human:jonas, agent:claude and agent:codex](docs/img/board.png)
 
-![Overview](docs/img/overview.png)
+Overview: what is in flight, what is blocked, what waits for triage, and what can be picked up next, above a count of items by stage, phase and type.
+
+![Overview with five cards: In flight (8), Stranded (none), Blocked (1, waiting on a dependency), Needs triage (2) and Next unblocked (4), above bar charts of items by stage, phase and type with a plain-English line for each phase and type](docs/img/overview.png)
+
+Item detail: the evidence recorded at each gate, the editable fields including dependencies, who owns and created the item, and its running notes.
+
+![Detail panel for "Email an alert when a check fails twice in a row", open over the table view: three pieces of evidence recorded at Built (a commit and two test files), fields with priority P0 and a dependency on T-0002.1, owner and creator agent:claude, and three timestamped notes](docs/img/item-detail.png)
+
+Stages & rules: each stage's gate in plain English, with a form to change it that reads the rule back the same way.
+
+![Stages and rules view listing Backlog, Building and Built with their gates in English. The Built editor is open, showing a label, a role, checkboxes for scope, owner and finished children, a minimum evidence of 1, an evidence pattern, a dependency stage, and a "Reads back as" box repeating the three rules](docs/img/stages.png)
 
 The board is read-only when opened from a snapshot. `gw serve` makes it live, with editors, live run logs, triage and resume controls, global pause, and a 2-second poll for new events.
 
@@ -163,6 +181,10 @@ gw config runner.enabled true
 ```
 
 Or run `gw config` with no arguments in a terminal for the settings screen: every setting grouped by section with its current value, ↑/↓ (or j/k) to move, Enter to edit the highlighted one, `s` to review and save, `q` to quit. Each setting's editor says what the setting does, gives one line for each value it can take, marks the default, and states the allowed range for a number, refusing one outside it before anything is saved. Changes are marked until saved, and nothing is written until the review is confirmed; Esc in an editor goes back to the list, and Ctrl-C cancels without writing. In a terminal without full-screen support it walks every setting as numbered prompts instead. `gw config --list` prints the current values. The vocabularies are settable as comma-separated lists (`gw config vocab.phase "P0,P1,P2"`); `runner.providers` and the stage pipeline are structures rather than values and are still edited in `.gatewright/config.json` and `stages.json` directly.
+
+![The gw config settings screen in a terminal: settings grouped under "AI agents" and "Limits on agent work" with their current values, runner.enabled highlighted, and below the list its explanation and a yellow warning that turning it on lets the board start programs that change files and may cost money](docs/img/gw-config.png)
+
+*`gw config` with no arguments: every setting with its current value, and an explanation of the highlighted one.*
 
 Agent-created work is held with `needs-triage` in the team pipeline. An agent may approve another agent's item but never its own; a human may approve their own item. Use `gw config policy.triage_required_for none` to turn holds off and release existing ones. Identity is declared, not authenticated. This prevents a run from filing three items, each of which starts a run that files three more. A human's `gw add` with no phase, type or priority is not held: it is flagged `unclassified`, can be claimed and moved at once, and only the scheduler waits until it is classified or approved.
 
