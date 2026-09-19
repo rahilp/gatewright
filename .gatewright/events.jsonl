@@ -1295,3 +1295,4 @@
 {"ts":"2026-09-19T00:14:38.445Z","type":"claim","item":"T-0102","by":"human:rahil"}
 {"ts":"2026-09-19T00:14:38.505Z","type":"move","item":"T-0102","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-19T00:14:38.565Z","type":"move","item":"T-0102","from":"building","to":"built","by":"human:rahil","evidence":["all five children T-0102.1-.5 verified by driving the product; fresh-repo walk backlog to done with no dead end"]}
+{"ts":"2026-09-19T01:53:42.602Z","type":"add","item":"T-0104","by":"human:rahil","parent":null}
