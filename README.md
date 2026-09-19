@@ -293,6 +293,8 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 
 Every command that writes records who did it: `--by <who>` if given, else `$GW_ACTOR`, else `human:<user>`. Agents must identify as `agent:<name>` — a bare `agent` names nobody and is refused, and anything else without the prefix is recorded as a human.
 
+Every command finds its board by walking up from the current directory, unless `GW_ROOT` names a project root (the directory holding `.gatewright/`). When `GW_ROOT` picks a different board than the walk would, or the walk would find none, gw prints one line to stderr naming the board it is using, so a stray export cannot quietly send work to the wrong board; stdout is unchanged, and agents the runner launches are not told.
+
 The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, and `edit`. It never reads the JSONL directly or GitHub. `brief` is capped at 25 lines so an agent's first action costs under 500 tokens; `show <id>` is the way to get detail on one item. `brief --json` returns the same digest structured — bucket membership, titles, stage, owner, and what each blocked item waits on — not the raw board, so a polling agent pays for the answer, not for the database.
 
 Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that first verifies a guard-capable `gw`, then runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.

@@ -1,8 +1,8 @@
 import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -82,4 +82,87 @@ test('the global help documents what GW_ROOT names', async () => {
   await runRouter(['--help'], { env: {}, stdout: { write: (s) => { out += s; } }, stderr: { write: () => {} } });
   assert.match(out, /GW_ROOT names the project root/);
   assert.match(out, /deprecation warning/);
+  assert.match(out, /names it on stderr/);
+});
+
+// T-0126 — a board chosen by GW_ROOT used to be followed silently, and a
+// suite run from a shell that exported it filled a real board with fixtures.
+// The notice is the fix; these pin when it speaks, when it stays quiet, and
+// that it never touches stdout. getGitRoot is injected so no test depends on
+// whether tmpdir happens to sit inside a repository.
+const noGit = () => null;
+const NOTICE = /^gw: using the board at .* \(from GW_ROOT\)\n$/;
+
+function twoBoards(prefix) {
+  const base = mkdtempSync(join(tmpdir(), prefix));
+  const here = join(base, 'here');
+  const there = join(base, 'there');
+  mkdirSync(join(here, '.gatewright', 'x'), { recursive: true });
+  mkdirSync(join(there, '.gatewright'), { recursive: true });
+  return { base, here, there };
+}
+
+test('GW_ROOT naming a different board than the cwd would find is announced on stderr', () => {
+  const { here, there } = twoBoards('gw-rootnotice-');
+  const streams = capture();
+  assert.equal(findRoot(join(here, '.gatewright', 'x'), { GW_ROOT: there }, { stderr: streams.stderr, getGitRoot: noGit }), there);
+  assert.match(streams.err, NOTICE);
+  assert.ok(streams.err.includes(there), 'the notice names the board in use');
+});
+
+test('GW_ROOT used from a directory with no board of its own is announced on stderr', () => {
+  const { base, there } = twoBoards('gw-rootnotice-');
+  const nowhere = join(base, 'scratch');
+  mkdirSync(nowhere);
+  const streams = capture();
+  assert.equal(findRoot(nowhere, { GW_ROOT: there }, { stderr: streams.stderr, getGitRoot: noGit, stopAt: base }), there);
+  assert.match(streams.err, NOTICE);
+});
+
+test('GW_ROOT naming the board the cwd would find anyway says nothing', () => {
+  const { here } = twoBoards('gw-rootsame-');
+  const streams = capture();
+  assert.equal(findRoot(join(here, '.gatewright', 'x'), { GW_ROOT: here }, { stderr: streams.stderr, getGitRoot: noGit }), here);
+  // A second spelling of the same directory is still the same board.
+  const alias = `${here}-link`;
+  symlinkSync(here, alias, 'dir');
+  assert.equal(findRoot(here, { GW_ROOT: alias }, { stderr: streams.stderr, getGitRoot: noGit }), alias);
+  assert.equal(streams.err, '');
+});
+
+test('a runner-launched agent (GW_ITEM set) is not told about the board the runner chose', () => {
+  const { here, there } = twoBoards('gw-rootitem-');
+  const streams = capture();
+  assert.equal(findRoot(here, { GW_ROOT: there, GW_ITEM: 'T-0001' }, { stderr: streams.stderr, getGitRoot: noGit }), there);
+  assert.equal(streams.err, '');
+});
+
+test('a GW_ROOT board outside the git repository gets the existing warning and not a second line', () => {
+  const { here, there } = twoBoards('gw-rootgit-');
+  const streams = capture();
+  assert.equal(findRoot(here, { GW_ROOT: there }, { stderr: streams.stderr, getGitRoot: () => here }), there);
+  assert.equal(streams.err, `gw: warning: using .gatewright root outside this git repository: ${there}\n`);
+});
+
+test('the GW_ROOT notice goes to stderr and leaves stdout byte-identical', () => {
+  const base = mkdtempSync(join(tmpdir(), 'gw-rootstdout-'));
+  const project = join(base, 'proj');
+  const scratch = join(base, 'scratch');
+  mkdirSync(project);
+  mkdirSync(scratch);
+  const gw = (cwd, env, ...args) => spawnSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, ...env } });
+  assert.equal(gw(project, {}, 'init').status, 0);
+
+  const added = gw(scratch, { GW_ROOT: project }, 'add', 'notice fixture', '--by', 'agent:rootstdout');
+  assert.equal(added.status, 0, added.stderr);
+  assert.match(added.stdout, /^\S+\n$/, 'add still prints only the id');
+  assert.match(added.stderr, NOTICE);
+  assert.ok(added.stderr.includes(project));
+
+  const local = gw(project, {}, 'list');
+  const remote = gw(scratch, { GW_ROOT: project }, 'list');
+  assert.equal(local.stderr, '');
+  assert.match(remote.stderr, NOTICE);
+  assert.equal(remote.stdout, local.stdout);
+  assert.match(local.stdout, /notice fixture/);
 });
