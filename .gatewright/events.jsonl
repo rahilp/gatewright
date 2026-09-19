@@ -1397,3 +1397,10 @@
 {"ts":"2026-09-19T19:46:20.269Z","type":"claim","item":"T-0125","by":"human:rahil"}
 {"ts":"2026-09-19T19:46:20.333Z","type":"move","item":"T-0125","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
 {"ts":"2026-09-19T19:47:10.339Z","type":"move","item":"T-0123","from":"building","to":"built","by":"human:rahil","evidence":["GW_ROOT/GW_ACTOR pointed at a sentinel board: node --test test/add.test.js and full npm test (816/816) leave it byte-identical (test/env-isolation.test.js)"]}
+{"ts":"2026-09-19T19:47:22.660Z","type":"add","item":"T-0126","by":"human:rahil","parent":null}
+{"ts":"2026-09-19T19:52:28.303Z","type":"claim","item":"T-0126","by":"human:rahil"}
+{"ts":"2026-09-19T19:52:28.370Z","type":"move","item":"T-0126","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-19T19:53:20.268Z","type":"sync","pulled":1,"pushed":0,"conflicts":0}
+{"ts":"2026-09-19T19:55:31.650Z","type":"move","item":"T-0126","from":"building","to":"built","by":"human:rahil","evidence":["Driven: GW_ROOT to another board prints 'gw: using the board at <root> (from GW_ROOT)' on stderr; silent for same board and with GW_ITEM; gw add stdout still only the id (test/root-env.test.js)"]}
+{"ts":"2026-09-19T20:00:33.753Z","type":"move","item":"T-0124","from":"building","to":"built","by":"human:rahil","evidence":["Light theme white surfaces on cool slate, blue accent, amber-on-white warnings; no warm hue (test/viewer.test.js palette check); before/after in /tmp/gw-theme light+dark, 1440 and 390"]}
+{"ts":"2026-09-19T20:00:33.817Z","type":"move","item":"T-0125","from":"building","to":"built","by":"human:rahil","evidence":["278-item board at 2000px: Built/Dropped/Paused 280px, empty Backlog/Building 200px, counts and Show all never clipped (/tmp/gw-theme/after-light-large-board-2000.png, test/viewer.browser.test.js)"]}
