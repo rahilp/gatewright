@@ -198,10 +198,11 @@ test('gw hook outside a git repository reports the problem in gw\'s voice at exi
 
 // The hook has to survive the CLI it calls being absent or out of date: an
 // installed gatewright is not a promise about what is on PATH a year later.
-test('the hook steps aside rather than blocking commits when gw cannot answer', (t) => {
+test('the hook steps aside rather than blocking commits when gw cannot answer', {
+  skip: process.platform === 'win32' && 'the installed hook is POSIX shell and Git for Windows uses its bundled sh, not /bin/sh',
+}, (t) => {
   // The hook is a POSIX shell script. Git for Windows runs it through its own
   // bundled sh, which this test cannot assume is on PATH as /bin/sh.
-  if (process.platform === 'win32') { t.skip('no POSIX shell at /bin/sh'); return; }
   const probe = spawnSync('/bin/sh', ['-c', 'true']);
   if (probe.error) { t.skip('no POSIX shell'); return; }
   const r = repo();
@@ -253,7 +254,9 @@ test('a passing probe is silent: no warning about a condition the machine is not
 // The defect was found on a real machine: a global gw 0.7.0 with no `guard`.
 // Driven through the real binary with a stale shim on PATH, the way the hook
 // itself would meet it.
-test('a real guardless gw on PATH is announced at install and status time', () => {
+test('a real guardless gw on PATH is announced at install and status time', {
+  skip: process.platform === 'win32' && 'defaultProbe() deliberately returns true on win32, keeping hook status silent rather than warning on a guess',
+}, () => {
   const r = repo();
   const stale = mkdtempSync(join(tmpdir(), 'gw-stale-'));
   writeFileSync(join(stale, 'gw'), '#!/bin/sh\nexit 2\n');

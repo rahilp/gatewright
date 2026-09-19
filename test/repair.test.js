@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
+import { runPrintedCommand } from './helpers/printed-command.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
 
@@ -33,27 +34,6 @@ function runCli(root, args) {
   const child = spawn(process.execPath, [BIN, ...args], {
     cwd: root,
     env: { ...process.env, GW_ACTOR: 'human:tester' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let stdout = ''; let stderr = '';
-  child.stdout.on('data', (chunk) => { stdout += chunk; });
-  child.stderr.on('data', (chunk) => { stderr += chunk; });
-  return new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('close', (code) => resolve({ code, stdout, stderr }));
-  });
-}
-
-// Follow a command exactly as repair printed it. The test supplies a temporary
-// `gw` executable on PATH, but does not edit, reinterpret, or reconstruct the
-// captured command string -- this is the contract a user follows at a shell.
-function runPrintedCommand(root, command) {
-  const binDir = mkdtempSync(join(tmpdir(), 'gw-repair-bin-'));
-  symlinkSync(BIN, join(binDir, 'gw'));
-  const child = spawn(command, {
-    cwd: root,
-    env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, GW_ACTOR: 'human:tester' },
-    shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stdout = ''; let stderr = '';
@@ -148,8 +128,9 @@ test('the re-baseline command repair prints runs verbatim from that state and le
 
   const printed = repair.stdout.match(/After deliberate review, run `([^`]+)` to re-baseline\./);
   assert.ok(printed, 'repair prints one follow-up command');
-  const forced = await runPrintedCommand(root, printed[1]);
-  assert.equal(forced.code, 0, forced.stdout + forced.stderr);
+  const forced = runPrintedCommand(root, printed[1], { ...process.env, GW_ACTOR: 'human:tester' });
+  assert.equal(forced.error, undefined, forced.error?.message);
+  assert.equal(forced.status, 0, forced.stdout + forced.stderr);
   assert.match(forced.stdout, /Digest re-baselined by explicit recovery/);
 
   const finalCheck = await runCli(root, ['check']);
