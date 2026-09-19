@@ -58,11 +58,36 @@ test('select: arrows and j/k wrap, digits jump without choosing, Enter chooses',
   assert.equal(drive(selectModel('Pick', CHOICES, { fallback: 1 }), '\r').done, 'team');
 });
 
-test('select: the view highlights one row and describes it', () => {
+test('select: every option shows its description under it, and only the focused one is highlighted', () => {
   const view = selectModel('Pick', CHOICES).view({ focus: 1 }, theme());
-  assert.deepEqual(view.body, ['  Solo', '❯ Team', '  Big']);
-  assert.equal(view.description, 'Review through pull requests.');
+  assert.deepEqual(view.body, [
+    '  Solo', '    No pull requests.',
+    '❯ Team', '    Review through pull requests.',
+    '  Big', '    Many people.',
+  ]);
+  assert.equal(view.focusLine, 2, 'the focused block starts at its label');
+  assert.equal(view.focusSpan, 2, 'and includes its description');
   assert.ok(view.hints.includes('Enter choose'));
+});
+
+test('select: a long description wraps under its option instead of being cut', () => {
+  const long = 'This description is long enough that it has to wrap onto a second line in a narrow terminal.';
+  const view = selectModel('Pick', [{ value: 'a', label: 'A', detail: long }]).view({ focus: 0 }, theme({ columns: 40 }));
+  assert.ok(view.body.length > 2);
+  assert.equal(view.body.slice(1).map((line) => line.trim()).join(' '), long, 'every word survives the wrap');
+  assert.ok(view.body.every((line) => [...line].length <= 40));
+});
+
+test('confirm: Yes and No are options that each say what they do', () => {
+  const model = confirmModel('Create?', {
+    details: ['  plan line'],
+    yes: { label: 'Yes, create it', detail: 'Writes the files.' },
+    no: { label: 'No, stop here', detail: 'Nothing is written.' },
+  });
+  const view = model.view({ value: true }, theme());
+  assert.deepEqual(view.body, ['  plan line', '', '❯ Yes, create it', '    Writes the files.', '  No, stop here', '    Nothing is written.']);
+  assert.equal(view.focusLine, 2);
+  assert.equal(model.view({ value: false }, theme()).focusLine, 4);
 });
 
 test('multi-select: Space toggles, locked rows stay on, Enter returns the checked values', () => {
@@ -108,7 +133,27 @@ test('renderScreen fits the terminal, pins the hints to the bottom, and scrolls 
   assert.ok(lines.every((line) => [...stripAnsi(line)].length <= 30), lines.join('\n'));
   assert.ok(lines.some((line) => line.includes('row 25')), 'the focused row is on screen');
   assert.match(lines.at(-1), /a {2}· {2}b/);
-  assert.ok(lines.some((line) => /↑ \d+ more/.test(line)) && lines.some((line) => /↓ \d+ more/.test(line)));
+  assert.ok(lines.some((line) => /↑ more above/.test(line)) && lines.some((line) => /↓ more below/.test(line)));
+});
+
+test('renderScreen keeps a focused option and its whole description on screen, and marks only sides with hidden rows', () => {
+  const small = theme({ columns: 60, rows: 14 });
+  const body = [];
+  for (let index = 0; index < 8; index++) body.push(`option ${index}`, `  detail ${index} line 1`, `  detail ${index} line 2`);
+  const at = (focus) => renderScreen(small, { question: 'Q', body, focusLine: focus * 3, focusSpan: 3, hints: ['h'] }).map(stripAnsi);
+  for (let focus = 0; focus < 8; focus++) {
+    const lines = at(focus);
+    assert.equal(lines.length, 14);
+    for (const part of [`option ${focus}`, `detail ${focus} line 1`, `detail ${focus} line 2`]) assert.ok(lines.some((line) => line.includes(part)), `${part} visible when focused:\n${lines.join('\n')}`);
+  }
+  assert.ok(!at(0).some((line) => /more above/.test(line)), 'nothing is hidden above the first option');
+  assert.ok(!at(7).some((line) => /more below/.test(line)), 'nothing is hidden below the last option');
+});
+
+test('renderScreen shows the explanation under the question', () => {
+  const lines = renderScreen(theme(), { question: 'How do you want to work?', explain: 'This sets the steps.', body: ['x'], hints: [] }).map(stripAnsi);
+  const question = lines.findIndex((line) => line.includes('How do you want to work?'));
+  assert.equal(lines[question + 1].trim(), 'This sets the steps.');
 });
 
 test('colour follows NO_COLOR and FORCE_COLOR; old Windows consoles get ASCII', () => {

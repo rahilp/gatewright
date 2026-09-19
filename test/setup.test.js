@@ -59,6 +59,10 @@ test('interactive init asks exactly one workflow question and can choose team', 
   assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
 });
 
+// Screen text with escape sequences and box edges removed and whitespace
+// collapsed, so wording can be asserted whatever width it wrapped at.
+function flat(text) { return text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[│|]/g, ' ').replace(/\s+/g, ' '); }
+
 // Keys are written one per tick, as a terminal would deliver them, so each
 // screen is drawn before its answer arrives.
 async function keys(tty, ...sequence) {
@@ -80,14 +84,29 @@ test('rich init asks the workflow once, then options and a review, and never wri
   await keys(tty, '\r');
   assert.equal(await run, 0);
   const screen = tty.read();
-  assert.equal(screen.match(/How does work reach main\?/g)?.length > 0, true);
+  assert.match(screen, /How do you want to work\?/);
+  assert.match(screen, /This sets the steps an item goes through before it is done/, 'the question explains what it decides');
   assert.doesNotMatch(screen, /Choose a workflow/, 'the workflow is asked once, in one wording');
   assert.match(screen, /Step 1 of 3/);
-  assert.match(screen, /What should init set up\?/);
+  assert.match(screen, /What should be set up\?/);
+  // Every option carries its own description, whether or not it is focused.
+  for (const text of [
+    'You finish work on your own. No review step, and nothing waits for approval.',
+    'Each change is reviewed in a GitHub pull request. Work an AI agent adds waits for your OK.',
+    'Tells AI agents how to use the board.',
+    'Claude Code reads this file, so it will track its work on the board too.',
+    'Cursor reads this file, so it will track its work on the board too.',
+    'GitHub Copilot reads this file, so it will track its work on the board too.',
+    'Nothing has been written yet.',
+    'Writes the files listed above.',
+    'Nothing is written. Your project stays exactly as it is.',
+  ]) assert.ok(flat(screen).includes(text), text);
   assert.match(screen, /Create the board\?/);
   assert.match(screen, /CLAUDE\.md/);
   assert.match(screen, /Board ready/);
   assert.doesNotMatch(screen, /\x1b\[[0-9;]*m/, 'NO_COLOR suppresses every colour sequence');
+  // Written for someone new to Gatewright, git and AI agents.
+  assert.doesNotMatch(flat(screen).replace(/`[^`]*`/g, ''), /\b(triage|pipeline|evidence|gate|scheduler|worktree|commit-msg|instruction block|signal)\b/i);
   assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
   assert.ok(existsSync(join(cwd, 'CLAUDE.md')), 'ticking Claude with Space mirrors the block into CLAUDE.md');
   assert.deepEqual(tty.raw, [true, false], 'raw mode is entered once and given back before init writes');
@@ -119,17 +138,19 @@ test('after the full-screen walkthrough the Board ready box is the whole report'
   const run = init({ ...ctxFor(cwd, { stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color', NO_COLOR: '1' } }), hookRun });
   await keys(tty, '\x1b[B', '\r', '\r', '\r');
   assert.equal(await run, 0);
+  assert.ok(flat(tty.read()).includes('Commit check Git refuses a commit unless it names a board item or you have claimed one. To skip once: `git commit --no-verify`. To remove: `gw hook uninstall`.'), 'in a git project the commit check is offered with what it does');
   const report = afterScreens(tty.read());
   assert.doesNotMatch(report, /^gw: /m, 'no log line is printed alongside the box');
   assert.doesNotMatch(report, /^Next: `gw add/m);
   assert.equal(report.match(/Board ready/g)?.length, 1);
-  assert.match(report, /Team pipeline: backlog → building → built → in review → reviewed → merged/);
-  assert.match(report, /PR review and triage are on/);
-  assert.match(report, /Commit hook installed at \.git\/hooks\/commit-msg/);
-  assert.match(report, /`git commit --no-verify` bypasses it; `gw hook uninstall` removes it/);
-  assert.match(report, /gw open {4}a snapshot instead/);
+  assert.match(report, /Workflow: Team \(backlog → building → built → in review → reviewed → merged/);
+  assert.ok(flat(report).includes('Changes are reviewed in a pull request; work an AI agent adds waits for your OK'));
+  assert.match(report, /Commit check added \(\.git\/hooks\/commit-msg\)/);
+  assert.ok(flat(report).includes('To skip once: `git commit --no-verify`. To remove: `gw hook uninstall`'));
+  assert.match(report, /gw serve {19}start the live board \(a web page\)/, 'the Next column stays aligned');
+  assert.match(report, /gw open {20}or open a read-only copy of it/);
   assert.match(report, /Notes:[\s\S]*WARNING — the guard probe failed/, 'a line the box does not summarise is carried into it');
-  assert.match(report, /no Claude, Cursor and Copilot project signal/);
+  assert.ok(flat(report).includes('to add the instruction file for Claude, Cursor or Copilot later, run `gw init --mirror claude,cursor,copilot`'));
   const lines = report.split('\n').filter(Boolean);
   assert.ok(lines.every((line) => [...line].length <= 80), `the box fits 80 columns:\n${report}`);
   assert.ok(lines.every((line) => /^[┌│└]/.test(line)), `only the box is printed:\n${report}`);
@@ -249,7 +270,7 @@ test('a rich terminal with --pipeline skips the workflow screen but still review
   const run = init(ctxFor(cwd, { stdin: tty.input, stdout: tty.output, flags: { pipeline: 'team' }, env: { TERM: 'xterm-256color' } }));
   await keys(tty, '\r', '\r');
   assert.equal(await run, 0);
-  assert.doesNotMatch(tty.read(), /How does work reach main/);
+  assert.doesNotMatch(tty.read(), /How do you want to work/);
   assert.match(tty.read(), /Step 2 of 2/);
   assert.equal(isTerminalStage('verified', read(cwd, 'stages.json')), true);
 });

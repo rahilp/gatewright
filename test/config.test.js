@@ -220,9 +220,9 @@ test('the rich settings screen shows sections, values and the danger note, and E
   // Nine runner settings and four policy settings precede guard.enabled.
   await keys(tty, ...Array(13).fill('\x1b[B'), '\x1b');
   assert.equal(await run, 1);
-  assert.match(tty.read(), /COMMIT GUARD/);
+  assert.match(tty.read(), /COMMIT CHECK/);
   assert.match(tty.read(), /runner\.max_concurrent\s+1/);
-  assert.match(tty.read(), /Warning: This is the only check that a commit is accounted for on the board/);
+  assert.match(tty.read(), /Warning: This is the only check that each commit belongs to an item on the/);
   assert.match(tty.read(), /Cancelled; nothing was changed/);
   assert.deepEqual(tty.raw, [true, false], 'raw mode is restored after cancelling the settings screen');
   assert.equal(readFileSync(store.paths.config, 'utf8'), before);
@@ -248,6 +248,61 @@ test('the rich settings screen edits a value, reviews it, and saves through the 
   assert.equal(saved.runner.max_concurrent, 3);
   assert.equal(saved.runner.enabled, true);
   checkClean(root);
+});
+
+// Screen text with escapes removed and whitespace collapsed, so wording can be
+// asserted whatever width it wrapped at.
+function flat(text) { return text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\s+/g, ' '); }
+
+// The last frame drawn, as the 24 rows a person would see.
+function lastFrame(text) {
+  return text.slice(text.lastIndexOf('\x1b[H')).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').split('\r\n');
+}
+
+test('each config editor explains the setting, and each value says what it does', async () => {
+  const { store } = board();
+  const tty = rawTty();
+  tty.output.columns = 80;
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color', NO_COLOR: '1' } }));
+  // guard.mode (row 15): an enum, one line per value.
+  await keys(tty, ...Array(14).fill('j'), '\r');
+  const mode = flat(tty.read().slice(tty.read().lastIndexOf('\x1b[H')));
+  assert.ok(mode.includes('What happens to a commit that is not tied to any item on the board.'));
+  assert.ok(mode.includes('block (default) The commit is refused.'));
+  assert.ok(mode.includes('warn The commit goes through, with a warning printed.'));
+  assert.ok(mode.includes('Warning: With warn, commits that belong to no item still go through.'));
+  // runner.enabled (row 1): on/off, each described, the default marked.
+  await keys(tty, '\x1b', 'g', '\r');
+  const enabled = flat(tty.read().slice(tty.read().lastIndexOf('\x1b[H')));
+  assert.ok(enabled.includes('On The board can start agents here.'));
+  assert.ok(enabled.includes('Off (default) Nothing is started.'));
+  // runner.max_concurrent (row 3): a number, with its range, unit and default.
+  await keys(tty, '\x1b', 'g', 'j', 'j', '\r');
+  const number = flat(tty.read().slice(tty.read().lastIndexOf('\x1b[H')));
+  assert.ok(number.includes('The most agents that may work at the same time.'));
+  assert.ok(number.includes('Allowed: 1–64 agents.'));
+  await keys(tty, '\x1b', 'q');
+  assert.equal(await run, 0);
+});
+
+test('every config editor fits 80x24 without cutting its explanations', async () => {
+  const { store } = board();
+  const tty = rawTty();
+  tty.output.columns = 80;
+  tty.output.rows = 24;
+  const run = config(ctxFor({ store, stdin: tty.input, stdout: tty.output, env: { TERM: 'xterm-256color' } }));
+  const { SETTINGS } = await import('../lib/settings.js');
+  for (let index = 0; index < SETTINGS.length; index++) {
+    await keys(tty, 'g', ...Array(index).fill('j'), '\r');
+    const rows = lastFrame(tty.read());
+    assert.equal(rows.length, 24, `${SETTINGS[index].key}: one screen`);
+    assert.ok(rows.every((row) => [...row].length <= 80), `${SETTINGS[index].key} fits 80 columns`);
+    assert.ok(rows.every((row) => !/…\s*$/.test(row)), `${SETTINGS[index].key}: nothing is cut off:\n${rows.join('\n')}`);
+    assert.ok(rows.some((row) => row.includes(SETTINGS[index].key)), `${SETTINGS[index].key} editor is showing`);
+    await keys(tty, '\x1b');
+  }
+  await keys(tty, 'q');
+  assert.equal(await run, 0);
 });
 
 test('quitting the settings screen with unsaved edits asks before discarding them', async () => {
