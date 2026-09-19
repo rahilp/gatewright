@@ -147,6 +147,30 @@ test('a clean board has nothing for repair to do', async () => {
   assert.match(result.stdout, /Nothing to repair/);
 });
 
+test('repair --write clears stale terminal triage holds and records each flag event', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-repair-triage-'));
+  const store = createStore(root); store.ensure();
+  writeFileSync(store.paths.stages, JSON.stringify({ stages: [{ id: 'backlog' }, { id: 'done', role: 'done' }], terminal: [], extra: [{ id: 'dropped', role: 'dropped' }] }));
+  store.writeItems([
+    { ...good1, id: 'T-0109', stage: 'done', flag: 'needs-triage' },
+    { ...good3, id: 'T-0110', stage: 'backlog', flag: 'needs-triage' },
+  ]);
+
+  const dry = await runCli(root, ['repair']);
+  assert.equal(dry.code, 0, dry.stderr);
+  assert.match(dry.stdout, /T-0109 is finished in done but still has needs-triage/);
+  assert.match(dry.stdout, /Dry run — nothing changed/);
+  assert.equal(store.readItems().find((entry) => entry.id === 'T-0109')?.flag, 'needs-triage');
+
+  const write = await runCli(root, ['repair', '--write']);
+  assert.equal(write.code, 0, write.stderr);
+  assert.match(write.stdout, /cleared 1 stale triage hold.*recorded flag events/);
+  assert.equal(store.readItems().find((entry) => entry.id === 'T-0109')?.flag, null);
+  assert.equal(store.readItems().find((entry) => entry.id === 'T-0110')?.flag, 'needs-triage', 'open triage work is untouched');
+  const event = store.readEvents().find((entry) => entry.item === 'T-0109' && entry.reason === 'stale triage hold cleared from finished item');
+  assert.deepEqual({ type: event?.type, flag: event?.flag, by: event?.by }, { type: 'flag', flag: null, by: 'human:tester' });
+});
+
 // T-0071 — repair used to quarantine only unparseable lines, then re-baseline
 // the digest: a line of VALID JSON with an invalid stage became permanent
 // truth, and check blessed it. Now repair reports content-invalid lines

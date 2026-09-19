@@ -57,12 +57,13 @@ const STAGES = {
   extra: [{ id: 'dropped', label: 'Dropped' }, { id: 'paused', label: 'Paused' }],
 };
 
-async function withServer(fn, { items, env } = {}) {
+async function withServer(fn, { items, events = [], config = {}, stages = STAGES, env } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gw-viewer-browser-'));
   const store = createStore(root); store.ensure();
   store.writeItems(items ?? [item(), item({ id: 'P1-02', title: 'Second unowned item' })]);
-  writeFileSync(store.paths.config, JSON.stringify({ version: 1, vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'] }, runner: { paused: false } }));
-  writeFileSync(store.paths.stages, JSON.stringify(STAGES));
+  for (const event of events) store.appendEvent(event);
+  writeFileSync(store.paths.config, JSON.stringify({ version: 1, vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'] }, runner: { paused: false }, ...config }));
+  writeFileSync(store.paths.stages, JSON.stringify(stages));
   store.rebaselineDigest();
   const server = createServeServer({ store, ...(env ? { env } : {}) });
   const address = await listen(server, { port: 0 });
@@ -116,6 +117,71 @@ test('the table scrolls in its container and the Title column shows words at 390
       assert.ok(measured.titleCellHeight < measured.titleLineHeight * 6, `the title wraps words, not characters (height ${measured.titleCellHeight} at ${measured.titleLineHeight}/line)`);
     } finally { await browser.close(); }
   });
+});
+
+// T-0107/T-0108/T-0109: an external agent's ownership is the useful live
+// signal when the built-in runner is disabled. The runner's idle assertion and
+// queue affordance must disappear, while a pre-existing dispatch remains
+// cancellable; finished holds are intentionally excluded from the header.
+test('runner-off cards show owners and queued state without pretending the built-in runner is the work', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  const stages = { ...STAGES, stages: STAGES.stages.map((stage) => stage.id === 'built' ? { ...stage, role: 'done' } : stage) };
+  const cards = [
+    item({ id: 'T-0107', stage: 'building', owner: 'agent:codex', title: 'Externally worked building item' }),
+    item({ id: 'T-0108', owner: null, title: 'Unowned backlog item' }),
+    item({ id: 'T-0109', owner: 'human:rahil', title: 'Queued item' }),
+    item({ id: 'T-0110', stage: 'built', flag: 'needs-triage', owner: 'agent:old-run', title: 'Finished stale hold' }),
+  ];
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 390, height: 844 });
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.click('[data-view="board"]');
+      await page.waitForSelector('.card[data-id="T-0107"]');
+      const mobile = await page.evaluate(() => {
+        const card = (id) => document.querySelector(`.card[data-id="${id}"]`);
+        const owner = card('T-0107')?.querySelector('.owner-chip');
+        return {
+          boardText: document.querySelector('#gw-view')?.textContent || '',
+          ownerText: owner?.textContent || '', ownerTitle: owner?.getAttribute('title') || '',
+          queuedText: card('T-0109')?.textContent || '',
+          queuedCancel: Boolean(card('T-0109')?.querySelector('[data-stop="T-0109"]')),
+          totals: document.querySelector('#gw-totals')?.textContent || '',
+          cardWidth: Math.round(card('T-0107')?.getBoundingClientRect().width || 0),
+        };
+      });
+      assert.doesNotMatch(mobile.boardText, /no agent run|Queue for an agent/, mobile.boardText);
+      assert.equal(mobile.ownerText, 'agent · codex');
+      assert.equal(mobile.ownerTitle, 'agent:codex');
+      assert.match(mobile.queuedText, /queued/);
+      assert.equal(mobile.queuedCancel, true, 'an already queued dispatch still has its Cancel control');
+      assert.match(mobile.totals, /4 items/);
+      assert.match(mobile.totals, /3 open/);
+      assert.match(mobile.totals, /0 flagged/, 'the finished needs-triage hold is not actionable header work');
+      assert.ok(mobile.cardWidth > 0 && mobile.cardWidth <= 390, `the owner chip fits the phone card (${mobile.cardWidth}px)`);
+
+      await page.setViewport({ width: 1280, height: 800 });
+      assert.equal(await page.$eval('.card[data-id="T-0107"]', (el) => Math.round(el.getBoundingClientRect().width) > 0), true, 'the same card remains visible at desktop width');
+    } finally { await browser.close(); }
+  }, { items: cards, events: [{ type: 'dispatch', item: 'T-0109', by: 'human:rahil' }], stages });
+});
+
+test('runner-on cards restore the built-in runner status and Play control', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      await page.click('[data-view="board"]');
+      await page.waitForSelector('.card[data-id="P1-01"]');
+      const state = await page.$eval('.card[data-id="P1-01"]', (card) => ({ text: card.textContent || '', play: card.querySelector('[data-play="P1-01"]')?.textContent }));
+      assert.match(state.text, /no agent run/);
+      assert.equal(state.play, 'Play');
+    } finally { await browser.close(); }
+  }, { config: { runner: { enabled: true, provider: 'stub', providers: { stub: { cmd: ['stub'] } }, paused: false } } });
 });
 
 // T-0090 — a failed drawer write is an outcome a human must be able to read,

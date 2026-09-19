@@ -639,6 +639,7 @@
   /* Running must be visually distinct from queued: one is costing money right
      now, the other is waiting for a scheduler tick. */
   .tag.badge-running { color: #7ee787; border-color: #2ea043; background: rgba(46,160,67,0.15); }
+  .tag.owner-chip { white-space: nowrap; }
   #gw-pause-btn {
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -1292,6 +1293,20 @@
     return { kind: 'idle' };
   }
 
+  // The runner only knows about runs it started itself. On a board where it
+  // is disabled, "no agent run" says nothing about people or external agents
+  // who own and are doing the work, and inviting another queue is misleading.
+  // A dispatch that already exists is real state, however, so it remains
+  // visible and cancellable until its matching cancel event arrives.
+  function showRunnerControls(action) {
+    return !schedulerIsOff() || action.kind === 'queued' || action.kind === 'running';
+  }
+
+  function ownerLabel(owner) {
+    const match = /^(agent|human):(.+)$/.exec(String(owner || ''));
+    return match ? match[1] + ' · ' + match[2] : String(owner || '');
+  }
+
   function isDispatched(id) {
     const relevant = State.events.filter((e) => e.item === id && (e.type === 'dispatch' || e.type === 'cancel'));
     if (!relevant.length) return false;
@@ -1436,10 +1451,10 @@
     document.getElementById('gw-snapshot-meta').innerHTML = State.live
       ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>' + syncPill
       : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>' + syncPill;
-    const total = State.items.length;
-    const flagged = State.items.filter((i) => i.flag).length;
     const terminal = terminalStageIds();
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
+    const flagged = State.items.filter((i) => i.flag && !terminal.has(i.stage)).length;
+    const total = State.items.length;
     document.getElementById('gw-totals').innerHTML =
       '<span><b>' + total + '</b> items</span><span><b>' + open + '</b> open</span><span><b>' + flagged + '</b> flagged</span>';
     renderPauseUI();
@@ -1668,20 +1683,6 @@
   // and Evidence sections -- they just stop being printed when they add
   // nothing.
 
-  // The owner most items already have. Only worth omitting when it really is
-  // the common case; a board split roughly evenly between owners has no
-  // "obvious" one to leave off.
-  function defaultOwner() {
-    const counts = new Map();
-    for (const it of State.items) {
-      if (!it.owner) continue;
-      counts.set(it.owner, (counts.get(it.owner) || 0) + 1);
-    }
-    let top = null; let max = 0;
-    for (const [owner, n] of counts) { if (n > max) { max = n; top = owner; } }
-    return (State.items.length && max > State.items.length / 2) ? top : null;
-  }
-
   // Whether this item's evidence is short of what its OWN next stage
   // requires -- read straight off the stage the server already sent, the
   // same way the panel's stage buttons and depsSelect already read
@@ -1712,11 +1713,11 @@
     const parentState = it.parent && !parent ? 'orphaned parent' : parent && terminalStageIds().has(parent.stage) ? 'parent terminal' : null;
     const action = actionFor(it);
     var actionHtml = '';
-    if (action.kind === 'running') {
+    if (showRunnerControls(action) && action.kind === 'running') {
       actionHtml = '<button data-stoprun="' + escapeHtml(it.id) + '" title="Stops the agent process for this run.">Stop run</button>';
-    } else if (action.kind === 'queued') {
+    } else if (showRunnerControls(action) && action.kind === 'queued') {
       actionHtml = '<button data-stop="' + escapeHtml(it.id) + '" title="Cancels the queued dispatch before it starts.">Cancel</button>';
-    } else if (action.kind === 'idle') {
+    } else if (showRunnerControls(action) && action.kind === 'idle') {
       actionHtml = '<button data-play="' + escapeHtml(it.id) + '"' + (schedulerIsOff() ? ' class="secondary"' : '') +
         ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }
@@ -1725,14 +1726,12 @@
     // button cannot answer "is it actually doing the work?" -- a card sitting
     // in Building, owned by a human, with nothing running, used to look
     // identical to one an agent was burning money on.
-    const owner = defaultOwner();
-    const ownerIsDefault = Boolean(it.owner) && it.owner === owner;
-    const runStatus = action.kind === 'running'
+    const runStatus = action.kind === 'running' && showRunnerControls(action)
       ? '<span class="tag badge-running" data-run-id="' + escapeHtml(action.run.run) + '" data-run-started="' + escapeHtml(action.run.started || '') + '">' + escapeHtml(runLabel(action.run)) + '</span>'
       : action.kind === 'queued'
-        ? '<span class="tag badge-queued">queued · no agent run yet</span>'
-        : action.kind === 'idle'
-          ? '<span class="tag badge-idle">no agent run' + (it.owner && !ownerIsDefault ? ' · ' + escapeHtml(it.owner) : (it.owner ? '' : ' · unowned')) + '</span>'
+        ? '<span class="tag badge-queued">queued</span>'
+        : action.kind === 'idle' && showRunnerControls(action)
+          ? '<span class="tag badge-idle">no agent run' + (it.owner ? '' : ' · unowned') + '</span>'
           : '';
     // action.kind === 'none' is a finished item: no button, because there is
     // nothing left to start, queue or stop.
@@ -1761,9 +1760,7 @@
       (it.parent ? '<span class="tag">child of ' + escapeHtml(it.parent) + '</span>' : '') +
       (parentState ? '<span class="tag">' + escapeHtml(parentState) + '</span>' : '') +
       runStatus +
-      // The idle chip already names the owner when it is worth naming; do not
-      // say it twice, and never print the owner every other card already has.
-      (it.owner && action.kind !== 'idle' && !ownerIsDefault ? '<span class="tag" title="owner">' + escapeHtml(it.owner) + '</span>' : '') +
+      (it.owner ? '<span class="tag owner-chip" title="' + escapeHtml(it.owner) + '">' + escapeHtml(ownerLabel(it.owner)) + '</span>' : '') +
       // A count only means something next to the gate it is judged against --
       // see evidenceGateUnmet(). The number is still in the panel's Evidence
       // section regardless.
@@ -2757,11 +2754,11 @@
     const dispatched = isDispatched(it.id);
     const panelAction = actionFor(it);
     var panelButton = '';
-    if (panelAction.kind === 'running') {
+    if (showRunnerControls(panelAction) && panelAction.kind === 'running') {
       panelButton = '<button id="panel-stoprun" title="Stops the agent process for this run.">Stop run</button>';
-    } else if (panelAction.kind === 'queued') {
+    } else if (showRunnerControls(panelAction) && panelAction.kind === 'queued') {
       panelButton = '<button id="panel-stop" title="Cancels the queued dispatch before it starts.">Cancel dispatch</button>';
-    } else if (panelAction.kind === 'idle') {
+    } else if (showRunnerControls(panelAction) && panelAction.kind === 'idle') {
       panelButton = '<button id="panel-play"' + (schedulerIsOff() ? ' class="secondary"' : '') +
         ' title="' + escapeHtml(playTitle()) + '">' + escapeHtml(playLabel()) + '</button>';
     }

@@ -159,6 +159,19 @@ test('check does not report a terminal merged item as stale', () => {
   assert.match(customResult.output(), /STALE OWNER[\s\S]*P1-01/);
 });
 
+test('check reports a terminal needs-triage hold as a tidy-up note, never a violation', () => {
+  const b = board([item({ id: 'T-0109', stage: 'verified', flag: 'needs-triage', owner: 'human:test', evidence: ['abc123', 'https://github.com/a/b/pull/1'] })]);
+  const result = ctx(b);
+  assert.equal(run(result.ctx), 0, 'finished work with an old hold is not open triage work');
+  assert.match(result.output(), /STALE TRIAGE HOLD — 1 finished item still carry a needs-triage hold\. Not a violation/);
+  assert.match(result.output(), /T-0109: finished in verified[\s\S]*gw repair --write/);
+  assert.doesNotMatch(result.output(), /INBOX|NEEDS TRIAGE/);
+
+  const json = ctx(b, { json: true });
+  assert.equal(run(json.ctx), 0);
+  assert.deepEqual(JSON.parse(json.output()).notes.map((note) => note.type), ['stale triage hold']);
+});
+
 test('check catches a hand-edited merged item that skipped the built evidence gate', () => {
   const b = board([item({ stage: 'merged' })]);
   const result = ctx(b);

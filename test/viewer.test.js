@@ -57,54 +57,33 @@ test('terminal-ness is decided in exactly one place in the viewer', () => {
     /const terminal = terminalStageIds\(\);\n\s*const open = State\.items\.filter\(\(i\) => !terminal\.has\(i\.stage\)\)\.length;/,
     'the header open count must be derived from terminalStageIds()',
   );
+  assert.match(
+    SHELL,
+    /const flagged = State\.items\.filter\(\(i\) => i\.flag && !terminal\.has\(i\.stage\)\)\.length;/,
+    'the header flagged count excludes terminal items because no one can act on their holds',
+  );
 });
 
-// P8-09: a card in Building owned by a human with nothing running looked
-// identical to one an agent was burning money on.
-test('a card reports the run axis as well as the stage axis', () => {
+// P8-09/T-0107: the built-in run axis remains useful only while its scheduler
+// is on. With it disabled, ownership is the truthful in-flight signal.
+test('cards gate built-in run UI on scheduler state and render compact owners', () => {
   assert.match(SHELL, /no agent run/, 'an idle card must say that nothing is running');
-  assert.match(SHELL, /queued · no agent run yet/, 'a queued card must not read as a running one');
+  assert.match(SHELL, /<span class="tag badge-queued">queued<\/span>/, 'a queued card remains a real queued state without claiming no agent runs');
   assert.match(SHELL, /data-run-started=/, 'a running card must carry the run start so its age can be ticked');
   assert.match(SHELL, /function runLabel\(run\) \{[\s\S]*?'running · ' \+ run\.run/, 'a running card names the run');
   assert.match(SHELL, /return schedulerIsOff\(\) \? 'Queue for an agent' : 'Play';/, 'Play must read as queueing when the scheduler cannot start anything');
   assert.match(SHELL, /schedulerIsOff\(\) \? ' class="secondary"' : ''/, 'and it must not look like a button that starts work');
-  // P8-16: the idle chip still names an owner when that is informative -- when
-  // it differs from the board's obvious default -- and still says "unowned"
-  // when there is none, but stops repeating the one owner every other idle
-  // card already carries.
   assert.match(
     SHELL,
-    /it\.owner && !ownerIsDefault \? ' · ' \+ escapeHtml\(it\.owner\) : \(it\.owner \? '' : ' · unowned'\)/,
-    'the idle chip omits the owner only when it is the board\'s obvious default',
+    /function showRunnerControls\(action\) \{[\s\S]*?!schedulerIsOff\(\) \|\| action\.kind === 'queued' \|\| action\.kind === 'running'/,
+    'runner-off cards keep real queued/running state but hide idle runner-only UI',
   );
+  assert.match(SHELL, /class="tag owner-chip" title="' \+ escapeHtml\(it\.owner\)/, 'every claimed card renders an owner chip with the full identity as its title');
+  assert.match(SHELL, /function ownerLabel\(owner\) \{[\s\S]*?match\[1\] \+ ' · ' \+ match\[2\]/, 'agent/human owners have a compact readable label');
 });
 
 // --------------------------------------------------------------------------
-// P8-16: `ev:0` and the same owner on a hundred cards were both true and
-// neither told a first-time reader anything. An evidence count is now shown
-// only when it is short of what the item's own next stage requires, and an
-// owner only when it is not the one most items already carry.
-
-test('defaultOwner names the owner most items already have, and only when it really is the common case', () => {
-  const defaultOwner = new Function('State', `${liftFunction('defaultOwner')}\nreturn defaultOwner();`);
-
-  assert.equal(defaultOwner({ items: [] }), null, 'no items, no default');
-  assert.equal(
-    defaultOwner({ items: [{ owner: 'human:rahil' }, { owner: 'human:rahil' }, { owner: null }] }),
-    'human:rahil',
-    'an owner held by more than half the items is the obvious default',
-  );
-  assert.equal(
-    defaultOwner({ items: [{ owner: 'human:rahil' }, { owner: 'human:alice' }, { owner: null }] }),
-    null,
-    'a board split between owners, or mostly unowned, has no obvious default to omit',
-  );
-  assert.equal(
-    defaultOwner({ items: [{ owner: 'human:rahil' }, { owner: 'human:alice' }, { owner: 'human:alice' }] }),
-    'human:alice',
-    'the most common owner wins even when it is not the first one seen',
-  );
-});
+// P8-16: `ev:0` is only useful when it names a next-stage shortfall.
 
 test('evidenceGateUnmet fires only when the item\'s own next stage is short on evidence', () => {
   const stages = {
@@ -957,9 +936,9 @@ test('a page only goes live when a server actually answered /api/state', () => {
 
 const CARD_HELPERS = [
   'escapeHtml', 'stageList', 'nextStageId', 'glossaryFor', 'describeTerm', 'termTitle',
-  'ageLabel', 'runLabel', 'evidenceGateUnmet', 'runFor', 'isDispatched', 'isTerminalItem', 'actionFor',
+  'ageLabel', 'runLabel', 'evidenceGateUnmet', 'runFor', 'isDispatched', 'isTerminalItem', 'actionFor', 'showRunnerControls', 'ownerLabel',
 ].map(liftHelper).join('\n');
-const CARD_ZERO_ARG = ['terminalStageIds', 'schedulerIsOff', 'playLabel', 'playTitle', 'defaultOwner']
+const CARD_ZERO_ARG = ['terminalStageIds', 'schedulerIsOff', 'playLabel', 'playTitle']
   .map(liftFunction).join('\n');
 
 function renderCardWith(State, it) {
@@ -984,7 +963,7 @@ test('a board card is a focusable button named after the item it opens', () => {
   assert.match(snapshot, /aria-label="Open item T-0001: Build the thing"/, 'its name says which item it opens');
   assert.doesNotMatch(snapshot, /class="card-actions"/, 'a snapshot card has no nested action buttons');
 
-  const live = renderCardWith({ ...CARD_STATE(), live: true }, CARD_STATE().items[0]);
+  const live = renderCardWith({ ...CARD_STATE(), live: true, scheduler: { status: 'idle' } }, CARD_STATE().items[0]);
   assert.match(live, /role="button" tabindex="0"/, 'live cards are buttons too');
   assert.match(live, /data-play="T-0001"/, 'the live card still carries its Play action');
   assert.match(live, /draggable="true"/, 'drag and drop is not regressed');
@@ -1148,7 +1127,7 @@ function renderPanelHtml(State, it) {
     ${liftObjectConst('FIELD_LABELS')}
     ${liftFunction('terminalStageIds')}
     ${['escapeHtml', 'evidenceText', 'evidenceStage', 'stageList', 'nextStageId', 'fmtDate',
-      'isDispatched', 'runFor', 'isTerminalItem', 'actionFor', 'activeRunFor', 'schedulerIsOff',
+      'isDispatched', 'runFor', 'isTerminalItem', 'actionFor', 'activeRunFor', 'schedulerIsOff', 'showRunnerControls',
       'playTitle', 'playLabel', 'gateFor', 'sentenceList', 'machineRule', 'pipelineIndex',
       'isBackwardTarget', 'ownerGateUnmet', 'claimActionHtml', 'stageLabel', 'glossaryFor',
       'describeTerm', 'termTitle', 'fieldLabel', 'capturePanelBaseline', 'wirePanelActions',
