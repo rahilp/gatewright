@@ -44,8 +44,11 @@ function rawTty() {
   return { input, output, raw, read: () => text };
 }
 
-function ctxFor({ store, positionals = [], flags = {}, env = {}, stdin, stdout = capture() }) {
-  return { store, positionals, flags, env, stdin, stdout };
+// The platform is pinned so the full-screen tests draw the same glyphs on
+// every CI runner; Windows console detection is tested on its own, with
+// explicit capabilities, in test/tui-prompt.test.js and test/setup.test.js.
+function ctxFor({ store, positionals = [], flags = {}, env = {}, stdin, stdout = capture(), platform = 'linux' }) {
+  return { store, positionals, flags, env, stdin, stdout, platform };
 }
 
 // Runs the real binary. A digest test that only asked store.verifyDigest()

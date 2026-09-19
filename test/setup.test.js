@@ -12,8 +12,11 @@ import shipped from '../templates/stages.json' with { type: 'json' };
 
 function root() { return mkdtempSync(join(tmpdir(), 'gw-setup-')); }
 function read(cwd, name) { return JSON.parse(readFileSync(join(cwd, '.gatewright', name), 'utf8')); }
-function ctxFor(cwd, { stdin, stdout, flags = {}, env = {} } = {}) {
-  return { cwd, flags, positionals: [], env, stdin: stdin ?? new PassThrough(), stdout: stdout ?? { write() {} }, stderr: { write() {} } };
+// The platform is pinned so a full-screen test draws the same glyphs on every
+// CI runner. The Windows console cases inject their own platform, release and
+// environment below and assert the glyph set each one should get.
+function ctxFor(cwd, { stdin, stdout, flags = {}, env = {}, platform = 'linux', osRelease } = {}) {
+  return { cwd, flags, positionals: [], env, platform, osRelease, stdin: stdin ?? new PassThrough(), stdout: stdout ?? { write() {} }, stderr: { write() {} } };
 }
 
 function rawTty({ columns = 88 } = {}) {
@@ -142,6 +145,43 @@ test('the Board ready box wraps inside its border on a narrow terminal', async (
   assert.ok(lines.every((line) => [...line].length <= 50), lines.join('\n'));
   assert.ok(lines.every((line) => /^[┌│└]/.test(line) && /[┐│┘]$/.test(line)), lines.join('\n'));
   assert.ok(lines.some((line) => /^│ {3}in review → reviewed/.test(line)), `continuations hang under the item text:\n${lines.join('\n')}`);
+});
+
+// Windows: every console the detection distinguishes, on every host OS.
+const WINDOWS_CONSOLES = [
+  { name: 'Windows Terminal', env: { WT_SESSION: 'a1b2' }, release: '10.0.22631', box: '┌─ Board ready', item: '✓ wrote AGENTS.md' },
+  { name: 'VS Code terminal', env: { TERM_PROGRAM: 'vscode' }, release: '10.0.22631', box: '┌─ Board ready', item: '✓ wrote AGENTS.md' },
+  { name: 'ConEmu', env: { ConEmuANSI: 'ON' }, release: '10.0.19045', box: '┌─ Board ready', item: '✓ wrote AGENTS.md' },
+  { name: 'mintty / Git Bash', env: { TERM: 'xterm-256color' }, release: '10.0.19045', box: '┌─ Board ready', item: '✓ wrote AGENTS.md' },
+  { name: 'bare Windows 10+ console host', env: {}, release: '10.0.19045', box: '+- Board ready', item: '* wrote AGENTS.md' },
+];
+
+for (const host of WINDOWS_CONSOLES) {
+  test(`Windows, ${host.name}: the full screen runs and the box uses the expected glyphs`, async () => {
+    const cwd = gitRoot();
+    const tty = rawTty({ columns: 80 });
+    const run = init({ ...ctxFor(cwd, { stdin: tty.input, stdout: tty.output, env: { ...host.env, NO_COLOR: '1' }, platform: 'win32', osRelease: host.release }), hookRun });
+    await keys(tty, '\x1b[B', '\r', '\r', '\r');
+    assert.equal(await run, 0);
+    const report = afterScreens(tty.read());
+    assert.ok(report.includes(host.box), report);
+    assert.ok(report.includes(host.item), report);
+    const lines = report.split('\n').filter(Boolean);
+    const edge = host.box.startsWith('┌') ? /^[┌│└].*[┐│┘]$/ : /^[+|].*[+|]$/;
+    assert.ok(lines.every((line) => edge.test(line) && [...line].length <= 80), report);
+  });
+}
+
+test('Windows, legacy console host (before Windows 10 1511): the numbered prompt, no escapes', async () => {
+  const cwd = root();
+  const tty = rawTty();
+  const run = init(ctxFor(cwd, { stdin: tty.input, stdout: tty.output, env: {}, platform: 'win32', osRelease: '6.3.9600' }));
+  await new Promise((resolve) => setImmediate(resolve));
+  tty.input.write('2\r');
+  await run;
+  assert.match(tty.read(), /Choose a workflow:\n {2}1\) Solo/);
+  assert.doesNotMatch(tty.read(), /\x1b\[\?(1049h|25l)/, 'no full-screen UI on a console without VT support');
+  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
 });
 
 // Agents, CI and the numbered prompt read these lines. They are pinned

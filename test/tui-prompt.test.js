@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import {
   confirmModel, createPrompter, createTheme, multiSelectModel, parseKeys, renderScreen,
-  selectModel, stripAnsi, supportsRich, textModel,
+  selectModel, stripAnsi, supportsRich, terminalCaps, textModel,
 } from '../lib/tui/prompt.js';
 
 // A terminal double: PassThrough streams that claim to be a TTY and record
@@ -117,6 +117,22 @@ test('colour follows NO_COLOR and FORCE_COLOR; old Windows consoles get ASCII', 
   assert.equal(theme({ env: { FORCE_COLOR: '0' } }).colour, false);
   assert.equal(theme({ env: {}, platform: 'win32' }).g.cursor, '>');
   assert.equal(theme({ env: { WT_SESSION: '1' }, platform: 'win32' }).g.cursor, '❯');
+  assert.equal(theme({ env: { TERM: 'xterm-256color' }, platform: 'win32' }).g.cursor, '❯', 'the glyphs follow the same detection as the full screen');
+});
+
+test('Windows capabilities: announced terminals get VT and Unicode, a bare modern console VT and ASCII, legacy conhost neither', () => {
+  const caps = (env, release = '10.0.22631') => terminalCaps({ env, platform: 'win32', release });
+  for (const env of [{ WT_SESSION: 'x' }, { TERM_PROGRAM: 'vscode' }, { ConEmuANSI: 'ON' }, { ANSICON: '80x25' }, { TERMINAL_EMULATOR: 'JetBrains-JediTerm' }, { TERM: 'xterm-256color' }]) {
+    assert.deepEqual(caps(env), { vt: true, unicode: true }, JSON.stringify(env));
+    assert.deepEqual(caps(env, '6.1.7601'), { vt: true, unicode: true }, 'an announced terminal is trusted on any Windows');
+  }
+  assert.deepEqual(caps({ ConEmuANSI: 'OFF' }), { vt: true, unicode: false }, 'ConEmu with ANSI off is treated as the bare host it wraps');
+  assert.deepEqual(caps({ TERM: 'dumb' }), { vt: true, unicode: false });
+  assert.deepEqual(caps({}, '10.0.10586'), { vt: true, unicode: false });
+  assert.deepEqual(caps({}, '10.0.10240'), { vt: false, unicode: false }, 'Windows 10 before 1511 has no VT');
+  assert.deepEqual(caps({}, '6.3.9600'), { vt: false, unicode: false });
+  assert.deepEqual(terminalCaps({ env: {}, platform: 'linux', release: '6.0.0' }), { vt: true, unicode: true });
+  assert.deepEqual(terminalCaps({ env: {}, platform: 'darwin', release: '24.0.0' }), { vt: true, unicode: true });
 });
 
 test('rich mode needs raw mode and a capable terminal', () => {
@@ -124,8 +140,9 @@ test('rich mode needs raw mode and a capable terminal', () => {
   assert.equal(supportsRich({ input: tty.input, output: tty.output, env: { TERM: 'xterm' }, platform: 'linux' }), true);
   assert.equal(supportsRich({ input: tty.input, output: tty.output, env: { TERM: 'dumb' }, platform: 'linux' }), false);
   assert.equal(supportsRich({ input: tty.input, output: tty.output, env: { GW_TUI: '0' }, platform: 'linux' }), false);
-  assert.equal(supportsRich({ input: tty.input, output: tty.output, env: {}, platform: 'win32' }), false, 'legacy conhost keeps the numbered prompts');
-  assert.equal(supportsRich({ input: tty.input, output: tty.output, env: { WT_SESSION: 'x' }, platform: 'win32' }), true);
+  assert.equal(supportsRich({ input: tty.input, output: tty.output, env: {}, platform: 'win32', release: '6.3.9600' }), false, 'legacy conhost keeps the numbered prompts');
+  assert.equal(supportsRich({ input: tty.input, output: tty.output, env: {}, platform: 'win32', release: '10.0.19045' }), true, 'a modern console host understands VT');
+  assert.equal(supportsRich({ input: tty.input, output: tty.output, env: { WT_SESSION: 'x' }, platform: 'win32', release: '6.3.9600' }), true);
   assert.equal(supportsRich({ input: { isTTY: true }, output: tty.output, env: {}, platform: 'linux' }), false, 'no setRawMode, no picker');
 });
 
