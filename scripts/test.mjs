@@ -2,7 +2,7 @@
 // PowerShell does not expand globs, and `node --test` only learned to expand
 // them itself in Node 22 — so `node --test test/*.test.js` runs nothing on
 // Windows with Node 18 or 20 and exits 1 having tested precisely zero code.
-import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -93,17 +93,31 @@ let interruptedBy = null;
 function interrupt(signal) {
   if (interruptedBy) return;
   interruptedBy = signal;
-  // The runner owns the child, so stop it before reclaiming its boards.
-  try { child.kill(signal); } catch { /* the child may already be gone */ }
+  // The runner owns the child, so stop it before reclaiming its boards. On
+  // POSIX `node --test` passes the signal on to its per-file processes. On
+  // Windows child.kill() is TerminateProcess on `node --test` alone, which
+  // orphans a hung test file still holding its scratch board, so the whole
+  // tree is ended instead. The exit code below is the runner's own either way.
+  try {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    else child.kill(signal);
+  } catch { /* the child may already be gone */ }
 }
 process.once('SIGINT', () => interrupt('SIGINT'));
 process.once('SIGTERM', () => interrupt('SIGTERM'));
 
 // This is only for the runner's own cross-platform test. Emitting the signal
 // invokes exactly the same handler without relying on CI console semantics.
+// It fires once the fixture writes GW_TEST_INTERRUPT_WHEN, not on a timer, so
+// a slow CI machine cannot interrupt before the child is actually running.
 if (process.env.GW_TEST_INTERRUPT) {
-  const delay = Number(process.env.GW_TEST_INTERRUPT_AFTER_MS ?? 100);
-  setTimeout(() => process.emit(process.env.GW_TEST_INTERRUPT), delay);
+  const ready = process.env.GW_TEST_INTERRUPT_WHEN;
+  const poll = setInterval(() => {
+    if (ready && !existsSync(ready)) return;
+    clearInterval(poll);
+    process.emit(process.env.GW_TEST_INTERRUPT);
+  }, 25);
+  child.once('close', () => clearInterval(poll));
 }
 
 const result = await new Promise((resolve) => {
