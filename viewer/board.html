@@ -113,6 +113,20 @@
     border: 1px solid var(--ok);
     white-space: nowrap;
   }
+  /* T-0135: the same pill geometry, in the neutral surface colours -- history
+     that was left out of this page is a fact about the page, not a warning
+     and not a health signal, so it must not borrow --warn (which is warm, and
+     the light theme is deliberately cool and white) or --ok (which would read
+     as "all good"). */
+  .info-pill {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    background: var(--bg-sunken);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
   nav#gw-tabs {
     display: flex;
     gap: 0.25rem;
@@ -1505,6 +1519,42 @@
     fill(document.getElementById('f-flag'), ['blocked', 'needs-triage', 'unclassified', 'paused', 'conflict'], State.filters.flag);
   }
 
+  // T-0135: how much history this page is NOT carrying. `gw open` inlines
+  // every event of an open item and only the tail of each finished one, and
+  // /api/state caps its first payload the same way, so both put the same two
+  // keys in the config block (lib/viewer/inject.js, lib/serve/server.js).
+  // Reading them in one place is what keeps the snapshot and the live board
+  // from disagreeing about whether the history on screen is all of it.
+  function omittedHistory() {
+    const config = State.config || {};
+    const count = Number(config.eventsOmitted);
+    if (!Number.isFinite(count) || count <= 0) return null;
+    return { count: count, archive: config.eventsArchive || 'events-archive.jsonl' };
+  }
+
+  // A board that quietly shows part of its history looks exactly like a board
+  // that has none: the pill is the difference between the two.
+  //
+  // It says what is true of every board -- these events are not on screen --
+  // and nothing about where they are. `eventsOmitted` is reported whenever
+  // this page caps what it loads, which happens whether or not
+  // `gw gc --events` has ever run: until it does, the "older" events are
+  // still sitting in events.jsonl, and a pill claiming they were in
+  // events-archive.jsonl would be sending someone to a file that does not
+  // exist. Neither producer conditions the field on that file existing (see
+  // lib/viewer/inject.js and the /api/state handler), so presence is no
+  // evidence either. The tooltip carries the precise version, which is true
+  // in both states.
+  function omittedHistoryPill() {
+    const omitted = omittedHistory();
+    if (!omitted) return '';
+    const label = 'history trimmed · ' + omitted.count + ' older event' + (omitted.count === 1 ? '' : 's') + ' not shown';
+    const title = 'This page loads every event of an open item and only the most recent ones for each finished item. '
+      + 'The older ones are still in .gatewright/events.jsonl, and move to .gatewright/' + omitted.archive + ' -- which stays greppable -- '
+      + 'when `gw gc --events` runs. Run `gw open --all-events` for a snapshot with the whole log.';
+    return ' <span class="info-pill" title="' + escapeHtml(title) + '">' + escapeHtml(label) + '</span>';
+  }
+
   function renderHeader() {
     const sync = State.sync || { status: 'off' };
     const syncText = sync.status === 'unscheduled' ? 'github · enabled but not scheduled'
@@ -1513,9 +1563,13 @@
         : sync.status === 'stale' ? 'github · sync stale'
           : sync.status === 'failure' ? 'github · sync failing' : 'github · syncing';
     const syncPill = syncText ? ' <span class="live-pill">' + syncText + '</span>' : '';
-    document.getElementById('gw-snapshot-meta').innerHTML = State.live
-      ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>' + syncPill
-      : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>' + syncPill;
+    // The compacted-history pill qualifies the data itself, so it sits with
+    // the snapshot/live pill that says where the data came from, ahead of the
+    // sync pill. Both modes get it: a live board caps its first payload too.
+    const historyPill = omittedHistoryPill();
+    document.getElementById('gw-snapshot-meta').innerHTML = (State.live
+      ? '<span class="live-pill">' + (State.liveError ? 'live · reconnecting (' + escapeHtml(State.liveError) + ')' : 'live · updated ' + liveAge() + ' ago') + '</span>'
+      : '<span class="snapshot-pill">snapshot · ' + escapeHtml(fmtDate(State.generatedAt)) + '</span>') + historyPill + syncPill;
     const terminal = terminalStageIds();
     const open = State.items.filter((i) => !terminal.has(i.stage)).length;
     const flagged = State.items.filter((i) => i.flag && !terminal.has(i.stage)).length;
@@ -3472,6 +3526,24 @@
     }
   }
 
+  // A `?since` poll answers with the events that are NEW, so it carries no
+  // old history and says nothing about how much of it was left out:
+  // eventsOmitted is absent from every incremental response. Letting that
+  // response replace the config wholesale would blink the compacted-history
+  // pill out two seconds after the board opened, which is worse than never
+  // showing it -- the board would look complete again while still showing
+  // part of the log. The last FULL answer is the one that knows, so it is
+  // carried forward until another full load replaces it.
+  function carryOmittedHistory(next, incremental) {
+    if (!incremental || !next || 'eventsOmitted' in next) return next;
+    const previous = State.config || {};
+    if (!previous.eventsOmitted) return next;
+    const merged = Object.assign({}, next);
+    merged.eventsOmitted = previous.eventsOmitted;
+    merged.eventsArchive = previous.eventsArchive;
+    return merged;
+  }
+
   function mergeEvents(events) {
     const seen = new Set(State.events.map((event) => JSON.stringify(event)));
     State.events.push(...events.filter((event) => !seen.has(JSON.stringify(event))));
@@ -3490,7 +3562,7 @@
       // away whatever the human had typed into it.
       const beforeEditable = JSON.stringify([State.stages, State.config, State.admin]);
       State.items = data.items || []; mergeEvents(data.events || []);
-      State.stages = data.stages || State.stages; State.config = data.config || State.config; State.sync = data.sync || State.sync;
+      State.stages = data.stages || State.stages; State.config = carryOmittedHistory(data.config, Boolean(since)) || State.config; State.sync = data.sync || State.sync;
       State.runs = data.runs || []; State.scheduler = data.scheduler || State.scheduler;
       State.admin = data.admin || { allowed: false };
       State.generatedAt = data.generatedAt || new Date().toISOString();
