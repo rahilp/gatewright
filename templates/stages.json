@@ -21,6 +21,7 @@
       "requires": {
         "scope": true,
         "evidence_min": 1,
+        "evidence_match": "^(?:[0-9a-fA-F]{7,64}|[A-Za-z][A-Za-z0-9+.-]*://\\S+|\\S+/\\S*|\\S+\\.[A-Za-z][A-Za-z0-9_-]*)$",
         "deps_at_least": "built"
       }
     },

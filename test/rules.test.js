@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stageList, stageIndex, nextStage, evaluateRequires, evaluateCumulative, findCycles, missingDeps, stageOrderMessage } from '../lib/rules.js';
+import { ARTIFACT_EVIDENCE } from '../lib/gates/describe.js';
 
 const stages = { stages: [
   { id: 'backlog' }, { id: 'building', requires: { owner: true } },
@@ -61,11 +62,50 @@ test('migrated stage-null entries count for gates up to where the item stands, n
 
 // T-0033 — a gate refusal names the requirement, in the same English the
 // board and `gw next` already use, not just the rule key.
-test('an evidence refusal states the requirement in plain English', () => {
+//
+// T-0129 — and it never prints a value that would clear the gate. `--evidence
+// "new evidence 1"` was literally the string the count gate then accepted, so
+// the evidence rule could be satisfied by pasting the refusal back. Every
+// printed value is now an angle-bracketed placeholder naming the shape.
+test('an evidence refusal states the requirement in plain English, and offers a placeholder rather than a passing value', () => {
   const minimum = evaluateCumulative(item({ owner: 'human:a' }), 'built', { items: [], stages });
-  assert.match(minimum.failures.join('\n'), /built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move A built --evidence "new evidence 1"`/);
+  assert.match(minimum.failures.join('\n'), /built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move A built --evidence "<commit sha, test path, or URL>"`/);
   const match = evaluateCumulative(item({ owner: 'human:a' }), 'review', { items: [], stages });
-  assert.match(match.failures.join('\n'), /review: Evidence supplied with the move must include a link to a pull request: run `gw move A review --evidence <pull-request url>`/);
+  assert.match(match.failures.join('\n'), /review: Evidence supplied with the move must include a link to a pull request: run `gw move A review --evidence "<pull-request url>"`/);
+
+  // Several still-required pieces stay distinct: the gate de-duplicates, so
+  // one placeholder repeated is a command that refuses itself.
+  const two = { stages: [{ id: 'done', requires: { evidence_min: 2 } }], terminal: ['done'], extra: [] };
+  assert.match(
+    evaluateRequires(item({ stage: 'done' }), 'done', { items: [], stages: two }).failures[0],
+    /run `gw move A done --evidence "<commit sha, test path, or URL #1>" --evidence "<commit sha, test path, or URL #2>"`/,
+  );
+
+  // A stage carrying both rules prints one shape, so the filled-in command
+  // clears the count and the pattern in the same move.
+  const both = { stages: [{ id: 'done', requires: { evidence_min: 1, evidence_match: '^https://github.com/.+/pull/\\d+' } }], terminal: ['done'], extra: [] };
+  const printed = evaluateRequires(item({ stage: 'done' }), 'done', { items: [], stages: both }).failures;
+  assert.equal(printed.length, 2);
+  for (const failure of printed) assert.match(failure, /--evidence "<pull-request url>"/);
+});
+
+// T-0129 — the shape gate the shipped boards put on the stage where work is
+// claimed complete. Free text is what an agent pastes when it is answering the
+// refusal rather than doing the work, so free text is exactly what must fail.
+test('the shipped shape gate accepts a commit, a path or a link, and refuses free text', () => {
+  const shape = { stages: [{ id: 'done', requires: { evidence_match: ARTIFACT_EVIDENCE } }], terminal: ['done'], extra: [] };
+  const entered = (text) => evaluateRequires(item({ stage: 'done', evidence: [{ text, stage: 'done' }] }), 'done', { items: [], stages: shape }).ok;
+  for (const good of ['abc1234', 'deadbeefcafe', 'test/rules.test.js', 'lib/gates/describe.js:42', 'README.md', 'https://github.com/a/b/pull/1', 'https://ci.example.test/run/12']) {
+    assert.equal(entered(good), true, `${good} is an artifact reference and must pass`);
+  }
+  for (const bad of ['new evidence 1', 'new evidence 2', 'npm test', 'commit abc', 'it works', 'tests pass', 'abc123', 'done']) {
+    assert.equal(entered(bad), false, `${bad} is free text and must not pass`);
+  }
+  assert.equal(
+    evaluateRequires(item({ stage: 'done' }), 'done', { items: [], stages: shape }).failures[0],
+    'Evidence supplied with the move must look like a commit, a file path, or a link: run `gw move A done --evidence "<commit sha, test path, or URL>"`',
+    'the refusal reads back in English and offers a placeholder, never a value that would pass',
+  );
 });
 
 test('dependency stage requirement accepts its boundary and rejects earlier, missing, and extra stages', () => {

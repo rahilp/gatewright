@@ -2,7 +2,8 @@
   "stages_template": "stages.json",
   "policy": {
     "triage_required_for": [
-      "agent"
+      "agent",
+      "github"
     ]
   }
 }

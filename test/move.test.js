@@ -154,7 +154,7 @@ test('gw move works through the real binary with the expected exit code', () => 
   // The board's owner gate (T-0072) reads the real actor, so the binary run
   // is made as the item's owner, the way a real operator would.
   const env = { ...process.env, GW_ACTOR: 'human:test' };
-  execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'built', '--evidence', 'abc123'], { cwd: b.root, env, encoding: 'utf8' });
+  execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'built', '--evidence', 'abc1234'], { cwd: b.root, env, encoding: 'utf8' });
   assert.equal(b.store.readItems()[0].stage, 'built');
   assert.throws(() => execFileSync(process.execPath, [BIN, 'move', 'P1-01', 'verified'], { cwd: b.root, env, encoding: 'utf8' }), (error) => error.status === 1);
 });
@@ -191,7 +191,7 @@ test('the shipped pipeline refuses the verified gate without fresh, distinct evi
   };
   gw(['claim', 'P1-01']);
   gw(['move', 'P1-01', 'building']);
-  gw(['move', 'P1-01', 'built', '--evidence', 'commit abc']);
+  gw(['move', 'P1-01', 'built', '--evidence', 'abc1234']);
   gw(['move', 'P1-01', 'in_review', '--evidence', 'https://github.com/gw/gw/pull/42']);
   gw(['move', 'P1-01', 'reviewed']);
   gw(['move', 'P1-01', 'merged']);
@@ -214,13 +214,13 @@ test('the shipped pipeline refuses the verified gate without fresh, distinct evi
 
   // A string already on the item is not fresh evidence.
   const duplicateBoard = board([item({ stage: 'merged', scope: 'done means verified behaviour', owner: 'human:test', evidence: [
-    { text: 'commit abc', stage: 'built' }, { text: 'https://github.com/gw/gw/pull/42', stage: 'in_review' },
+    { text: 'abc1234', stage: 'built' }, { text: 'https://github.com/gw/gw/pull/42', stage: 'in_review' },
   ] })], {}, shipped);
   const duplicate = (args) => {
     try { execFileSync(process.execPath, [BIN, ...args], { cwd: duplicateBoard.root, encoding: 'utf8' }); } catch (error) { return error; }
     throw new Error(`gw move ${args.join(' ')} should have refused`);
   };
-  assert.match(duplicate(['move', 'P1-01', 'verified', '--evidence', 'commit abc', '--by', 'human:test']).stderr, /Needs at least two new pieces of evidence/);
+  assert.match(duplicate(['move', 'P1-01', 'verified', '--evidence', 'abc1234', '--by', 'human:test']).stderr, /Needs at least two new pieces of evidence/);
   assert.equal(duplicateBoard.store.readItems()[0].stage, 'merged');
 
   // Two copies of one string are one entry, not two.

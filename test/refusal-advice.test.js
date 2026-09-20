@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from '../lib/store.js';
+import { readPipelinePreset } from '../lib/templates.js';
 import { runPrintedCommand } from './helpers/printed-command.js';
 
 const BIN = fileURLToPath(new URL('../bin/gw.js', import.meta.url));
@@ -33,12 +34,12 @@ const item = (id = 'T-0001', over = {}) => ({
   deps: [], evidence: [], updated: new Date().toISOString(), ...over,
 });
 
-function board(items = [item()], config = {}) {
+function board(items = [item()], config = {}, definition = stages) {
   const root = mkdtempSync(join(tmpdir(), 'gw-refusal-advice-'));
   const store = createStore(root);
   store.ensure();
   store.writeItems(items);
-  writeFileSync(store.paths.stages, JSON.stringify(stages));
+  writeFileSync(store.paths.stages, JSON.stringify(definition));
   writeFileSync(store.paths.config, JSON.stringify(config));
   store.rebaselineDigest();
   return { root, store };
@@ -53,11 +54,21 @@ function printed(output) {
   return [...output.matchAll(/`(gw [^`]+)`/g)].map((match) => match[1]);
 }
 
+// T-0129 — an evidence placeholder names a SHAPE, never a value, because any
+// value a refusal prints is a value that clears the gate it prints it for.
+// The reader fills it in; so does this test, with a distinct artifact per flag
+// because the gate counts distinct evidence and de-duplicates the rest.
+const EVIDENCE_PLACEHOLDER = /<commit sha, test path, or URL(?: #\d+)?>/g;
+let filled = 0;
+function fillEvidence(command) {
+  return command.replace(EVIDENCE_PLACEHOLDER, () => `test/advice-${++filled}.test.js`);
+}
+
 function runAdvice(root, output, substitutions = {}, { reverse = false } = {}) {
   const commands = printed(output);
   assert.ok(commands.length, `refusal printed no gw command:\n${output}`);
   for (const original of (reverse ? [...commands].reverse() : commands)) {
-    const command = Object.entries(substitutions).reduce((text, [from, to]) => text.replaceAll(from, to), original);
+    const command = fillEvidence(Object.entries(substitutions).reduce((text, [from, to]) => text.replaceAll(from, to), original));
     const result = runPrintedCommand(root, command, ACTOR);
     assert.equal(result.error, undefined, `${command}: ${result.error?.message}`);
     assert.equal(result.status, 0, `${command}\n${result.stdout}\n${result.stderr}`);
@@ -140,6 +151,45 @@ test('move gate advice is executable, including documented substitutions', () =>
   }
 });
 
+// T-0129 — the defect in its worst form, on the boards it shipped on: the
+// refusal for the product's own differentiator printed an example, and the
+// example cleared the gate. An agent told "fix the gate error" pasted the
+// refusal back and the board recorded completion it had not been shown. Both
+// shipped pipelines gate the stage that claims completion on the SHAPE of the
+// evidence, and the advice prints a placeholder rather than a value, so there
+// is no longer a string the refusal names that the refusal then accepts.
+test('the shipped pipelines refuse free text as evidence, including the string the old advice printed', () => {
+  for (const [preset, target] of Object.entries({ solo: 'done', team: 'built' })) {
+    const definition = readPipelinePreset(preset).stages;
+    const shape = new RegExp(definition.stages.find((stage) => stage.id === target).requires.evidence_match);
+    const b = board([item('T-0001', { stage: 'building', scope: 'what done looks like', owner: 'human:advice-test' })], {}, definition);
+
+    for (const pasted of ['new evidence 1', 'npm test', 'it works', 'tests pass']) {
+      const attempt = cli(b.root, ['move', 'T-0001', target, '--evidence', pasted]);
+      assert.notEqual(attempt.status, 0, `${preset}: "${pasted}" cleared the ${target} gate`);
+      assert.match(attempt.output, /Evidence supplied with the move must look like a commit, a file path, or a link/,
+        `${preset}: the refusal must read back in English`);
+      assert.equal(stageOf(b.store), 'building', `${preset}: the item did not move`);
+    }
+
+    const out = refusal(b.root, ['move', 'T-0001', target]);
+    for (const command of printed(out)) {
+      for (const [, value] of command.matchAll(/--evidence "([^"]*)"/g)) {
+        assert.equal(shape.test(value), false, `${preset}: the refusal printed ${value}, which passes the gate it is refusing`);
+        assert.match(value, /^<.+>$/, `${preset}: an evidence value in printed advice must be visibly a placeholder`);
+      }
+    }
+
+    // Filled in the way its angle brackets ask, the printed command runs.
+    const move = printed(out).find((command) => command.startsWith(`gw move T-0001 ${target} --evidence `));
+    assert.ok(move, `${preset}: the refusal names the move that records evidence:\n${out}`);
+    const result = runPrintedCommand(b.root, fillEvidence(move), ACTOR);
+    assert.equal(result.error, undefined, result.error?.message);
+    assert.equal(result.status, 0, `${move}\n${result.stdout}\n${result.stderr}`);
+    assert.equal(stageOf(b.store), target, `${preset}: the filled-in command clears the gate it names`);
+  }
+});
+
 test('ownership and triage alternatives each work on their own board', () => {
   {
     const b = board([item('T-0001', { owner: 'human:other' })]);
@@ -215,6 +265,25 @@ test('check, next, edit, import, config, and repair remedies run through the pri
     const invalid = refusal(b.root, ['config', 'check.stale_exempt_stages', '[not-json']);
     assert.equal(printed(invalid).length, 0, 'invalid list syntax is a refusal with no executable remedy');
   }
+  // T-0138 — `--limit` and `--port` refuse a value, not a state. The remedy is
+  // the same command with a value that meets the constraint, so the refusal
+  // states the constraint and prints no command: a backticked `gw list
+  // --limit 25` here would be an example, not a fix, and this file exists to
+  // keep every printed command a real one.
+  {
+    const b = board();
+    for (const value of ['0', 'lots']) {
+      const out = refusal(b.root, ['list', '--limit', value]);
+      assert.match(out, /--limit needs a whole number of items, at least 1/);
+      assert.equal(printed(out).length, 0, 'a bad flag value names the constraint, not another command');
+    }
+    const out = refusal(b.root, ['doctor', '--port', 'yes']);
+    assert.match(out, /--port needs a port number between 1 and 65535/);
+    assert.equal(printed(out).length, 0, 'a bad flag value names the constraint, not another command');
+    // The value that does meet it is accepted by the parser: the constraint
+    // the refusal states is the one the command actually applies.
+    assert.equal(cli(b.root, ['list', '--limit', '1']).status, 0);
+  }
   {
     const b = board(); appendFileSync(b.store.paths.items, 'not json\n');
     const out = cli(b.root, ['repair']).output; assert.match(out, /Dry run/);
@@ -234,7 +303,8 @@ const KNOWN_REFUSAL_CONSTRUCTORS = {
   'lib/cli/args.js': 4, 'lib/cli/root.js': 3, 'lib/commands/add.js': 6,
   'lib/commands/claim.js': 2, 'lib/commands/config.js': 5, 'lib/commands/edit.js': 9,
   'lib/commands/gc.js': 1, 'lib/commands/guard.js': 1, 'lib/commands/hook.js': 4,
-  'lib/commands/import.js': 7, 'lib/commands/init.js': 2, 'lib/commands/list.js': 1,
+  'lib/commands/doctor.js': 1, 'lib/commands/import.js': 7, 'lib/commands/init.js': 2,
+  'lib/commands/list.js': 2,
   'lib/commands/move.js': 7, 'lib/commands/next.js': 1, 'lib/commands/note.js': 2,
   'lib/commands/open.js': 1, 'lib/commands/release.js': 2, 'lib/commands/resume.js': 1,
   'lib/commands/serve.js': 2, 'lib/commands/show.js': 1, 'lib/commands/stop.js': 3,
