@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
 import { createServeServer, listen } from '../lib/serve/server.js';
+import { run as openBoard } from '../lib/commands/open.js';
 
 // These are the tests the structural pins cannot be: layout geometry and
 // event timing in a real browser. They need puppeteer-core and a Chromium
@@ -483,4 +484,90 @@ test('T-0124/T-0125: a 278-item board at 2000px -- widths, counts and a cool pal
       }
     } finally { await browser.close(); }
   }, { items: LARGE_ITEMS, stages: TRUNK_STAGES });
+});
+
+// T-0135: /api/state caps its first payload the way `gw open` caps a snapshot
+// -- every event of an open item, the tail of each finished one -- and reports
+// the remainder as config.eventsOmitted. A structural test can prove the pill
+// is built; only a browser can prove it survives contact with the live poll,
+// which answers `?since=` without any omission of its own.
+test('T-0135: a live board that capped its history says so, in both schemes, and keeps saying it through a poll', { skip: BROWSER_SKIP }, async (t) => {
+  const { mod: puppeteer, executablePath } = found;
+  // 'built' is the last stage of the harness pipeline, so it is the finish
+  // line: this item's history is the capped kind. 25 events, 20 kept, 5 left.
+  const finished = item({ id: 'P1-01', stage: 'built', scope: 'a finished item with a long history' });
+  const history = Array.from({ length: 25 }, (_, i) => ({ type: 'note', item: 'P1-01', by: 'human:tester', note: 'note ' + i }));
+  const EXPECTED = 'history trimmed · 5 older events not shown';
+  await withServer(async (url) => {
+    const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: scheme }]);
+        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.waitForSelector('#gw-snapshot-meta .info-pill');
+        const pill = await page.$eval('#gw-snapshot-meta .info-pill', (el) => {
+          const rgb = (css) => (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+          const style = getComputedStyle(el);
+          const head = el.closest('#gw-header') || document.getElementById('gw-header');
+          return {
+            text: el.textContent, title: el.title,
+            background: rgb(style.backgroundColor), color: rgb(style.color), border: rgb(style.borderTopColor),
+            inHeader: Boolean(head) && head.contains(el),
+            afterModePill: Boolean(el.previousElementSibling) && /^(live|snapshot)-pill$/.test(el.previousElementSibling.className),
+            live: Boolean(document.querySelector('#gw-snapshot-meta .live-pill')),
+          };
+        });
+        assert.equal(pill.text, EXPECTED, `${scheme}: the pill says what was left out and where it is`);
+        assert.ok(pill.live, `${scheme}: this is the live board, not a snapshot`);
+        assert.ok(pill.inHeader && pill.afterModePill, `${scheme}: the pill sits in the header, next to the live pill`);
+        assert.match(pill.title, /gw open --all-events/, `${scheme}: the tooltip says how to see the whole log`);
+        assert.match(pill.title, /still in \.gatewright\/events\.jsonl/, `${scheme}: and where the events actually are on a board gc has not touched`);
+        for (const [name, [r, , b]] of Object.entries({ background: pill.background, color: pill.color, border: pill.border })) {
+          assert.ok(b >= r, `${scheme}: the pill's ${name} rgb(${r}, _, ${b}) is warm`);
+        }
+      }
+      // The poll is the failure mode this test exists for: `?since=` returns
+      // only new events and therefore no omission at all.
+      const started = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, 2300));
+      const after = await page.$eval('#gw-snapshot-meta', (el) => el.textContent);
+      assert.ok(after.includes(EXPECTED), `the pill vanished ${Date.now() - started}ms in, once the first incremental poll landed: ${JSON.stringify(after)}`);
+      t.diagnostic(`compacted-history pill survived ${Date.now() - started}ms of live polling`);
+    } finally { await browser.close(); }
+  }, { items: [finished], events: history });
+});
+
+// The same pill on the other loading path: a file:// snapshot has no server to
+// ask, so everything it knows comes from the blocks `gw open` injected. This
+// is the read-only board most people see, and the one where a silently capped
+// log has no other way of being noticed.
+test('T-0135: a file:// snapshot written by gw open shows the pill from its injected config', { skip: BROWSER_SKIP }, async () => {
+  const { mod: puppeteer, executablePath } = found;
+  const root = mkdtempSync(join(tmpdir(), 'gw-viewer-snapshot-'));
+  const store = createStore(root); store.ensure();
+  store.writeItems([item({ id: 'P1-01', stage: 'built' })]);
+  for (let i = 0; i < 25; i += 1) store.appendEvent({ type: 'note', item: 'P1-01', by: 'human:tester', note: 'note ' + i });
+  writeFileSync(store.paths.config, JSON.stringify({ version: 1, vocab: { phase: ['P1'], priority: ['P1'], type: ['feature'] } }));
+  writeFileSync(store.paths.stages, JSON.stringify(STAGES));
+  // fetch: null is what keeps this off the network entirely -- no live-board
+  // probe, no port touched; the snapshot is written straight to disk.
+  await openBoard({ root, store, flags: { 'no-browser': true }, stdout: { write() {} }, fetch: null });
+
+  const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] });
+  try {
+    const page = await browser.newPage();
+    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+    await page.goto('file://' + store.paths.board, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#gw-snapshot-meta .snapshot-pill');
+    const meta = await page.$eval('#gw-snapshot-meta', (el) => ({
+      text: el.textContent,
+      pill: el.querySelector('.info-pill') ? el.querySelector('.info-pill').textContent : null,
+      background: (getComputedStyle(el.querySelector('.info-pill')).backgroundColor.match(/\d+/g) || []).slice(0, 3).map(Number),
+    }));
+    assert.equal(meta.pill, 'history trimmed · 5 older events not shown');
+    assert.match(meta.text, /^snapshot · /, 'and it is still a snapshot, said first');
+    const [r, , b] = meta.background;
+    assert.ok(b >= r, `the light snapshot pill background rgb(${r}, _, ${b}) is warm`);
+  } finally { await browser.close(); }
 });

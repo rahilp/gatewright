@@ -118,25 +118,127 @@ test('naming an item that is not on the board is refused as its own mistake', ()
 
 // T-0028 — found by pointing guard at this project's own board: a rollup
 // commit of 21 already-built items was refused, and `--no-verify` — the off
-// switch for the whole check — was the only escape. A check whose only
-// escape hatch is to turn it off gets turned off habitually, and then it
-// protects nothing. So the question is "is this change accounted for on the
-// board", and an item that is built IS accounted for.
+// switch for the whole check — was the only escape.
+//
+// T-0132 — the rescue went too far. specs §6.5 is explicit: "an id whose
+// item is in a terminal stage [is] refused with [its] own sentence", because
+// it means "the author believes they are tracked and is not". A finished
+// item is refused again; what T-0028 actually needed survives in the two
+// places the spec puts it — `--range`, where history is being read rather
+// than an action gated, and the exempt-paths escape for a commit that only
+// writes the board.
 test('an item in a role:"done" stage is finished even when the stage is not listed as terminal', () => {
   const trunk = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built', role: 'done' }], terminal: ['dropped'], extra: [{ id: 'dropped' }] };
   const done = item({ stage: 'built', owner: 'human:test' });
   assert.equal(guardCommit({ message: 'later, unrelated', files: ['lib/a.js'], items: [done], actor: 'human:test', stages: trunk }).ok, false, 'a finished claim does not vouch for unnamed new work');
   const verdict = guardCommit({ message: 'P1-01: one more', files: ['lib/a.js'], items: [done], stages: trunk });
-  assert.equal(verdict.ok, true, 'a named finished item still accounts for the change');
-  assert.deepEqual(verdict.warnings, ['P1-01 is already built']);
+  assert.equal(verdict.ok, false, 'naming it does not change what it is: a finish line the board has already crossed');
+  assert.match(verdict.reason, /P1-01 is already built/, 'the stage the item actually reached, not the terminal list');
 });
 
-test('a commit naming an already finished item passes with a warning naming the item and its stage', () => {
+test('a commit naming only an already finished item is refused in a sentence naming the item and its stage', () => {
   const verdict = guardCommit({ message: 'P1-01: one more thing', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages });
-  assert.equal(verdict.ok, true);
-  assert.deepEqual(verdict.warnings, ['P1-01 is already verified']);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, /^P1-01 is already verified, and finished work does not account for a new change$/);
+  assert.match(verdict.headline, /nothing open on the board accounts for this change/);
+  assert.ok(verdict.fixes.some((fix) => fix.startsWith('gw add')), 'follow-up work after a finish line is new work');
 });
 
+// The refusal must not repeat the mistake T-0042 fixed: advice that this
+// same guard would refuse. With an open item on the board the example names
+// it, and naming it really does pass.
+test('the finished refusal names a way out that guard itself would accept', () => {
+  const mixed = [item({ id: 'P1-01', stage: 'verified' }), item({ id: 'P1-02', stage: 'building' })];
+  const withOpen = guardCommit({ message: 'P1-01: more', files: ['lib/a.js'], items: mixed, stages });
+  assert.match(withOpen.fixes.find((fix) => fix.includes('e.g.')), /"P1-02: <subject>"/);
+  assert.equal(guardCommit({ message: 'P1-02: <subject>', files: ['lib/a.js'], items: mixed, stages }).ok, true);
+});
+
+// The board where every candidate example is wrong: a real id would be a
+// finished one, and the id minted from the scheme collides with it --- on a
+// `seq` board whose only item is a finished T-0001, "e.g. T-0001" is exactly
+// the id the sentence above rejected. So there is no example line at all,
+// and `gw add` carries that case.
+test('with nothing open on the board the refusal offers no example rather than a rejected id', () => {
+  const only = [{ ...item({ id: 'T-0001', stage: 'verified' }) }];
+  for (const config of [{ id_scheme: 'seq' }, { id_scheme: 'phase-seq', vocab: { phase: ['P1'] } }, {}]) {
+    for (const message of ['T-0001: one more thing', 'an untracked tweak']) {
+      const verdict = guardCommit({ message, branch: 'main', files: ['lib/a.js'], items: only, actor: 'human:test', stages, config });
+      assert.equal(verdict.ok, false);
+      assert.equal(verdict.fixes.some((fix) => fix.includes('e.g.')), false, `an example is offered with nothing to exemplify: ${verdict.fixes.join(' | ')}`);
+      assert.ok(verdict.fixes.some((fix) => fix.startsWith('gw add')), 'the way out of a board with nothing open is to add something');
+    }
+  }
+
+  // The rule the example line exists to satisfy, checked across boards
+  // rather than assumed on one. On a board that HAS items the example must
+  // be an open one, and naming it must pass right now. On an EMPTY board the
+  // example is deliberately a forward reference to the id the `gw add` fix
+  // beside it will mint (T-0042 pins that); what it must never be, on any
+  // board, is an id already sitting in a finished stage.
+  const boards = [
+    { items: [], config: { id_scheme: 'seq' } },
+    { items: [], config: { id_scheme: 'phase-seq', vocab: { phase: ['P2'] } } },
+    { items: only, config: { id_scheme: 'seq' } },
+    { items: [item({ id: 'T-0001', stage: 'verified' }), item({ id: 'T-0002', stage: 'building' })], config: { id_scheme: 'seq' } },
+    { items: [item({ id: 'P1-01', stage: 'verified' }), item({ id: 'P1-02', stage: 'building' })], config: {} },
+  ];
+  for (const board of boards) {
+    const refusal = guardCommit({ message: 'a tweak', branch: 'main', files: ['lib/a.js'], items: board.items, actor: 'human:test', stages, config: board.config });
+    const example = refusal.fixes.find((fix) => fix.includes('e.g.'))?.match(/"([^":]+): <subject>"/)?.[1];
+    if (!example) continue;
+    const named = board.items.find((entry) => entry.id === example);
+    assert.equal(Boolean(named && ['verified', 'dropped'].includes(named.stage)), false, `the refusal exemplified ${example}, which this same guard has just refused for being finished`);
+    if (!board.items.length) continue;
+    assert.ok(named, `the refusal exemplified ${example}, which is not on this board at all`);
+    assert.equal(
+      guardCommit({ message: `${example}: the work`, files: ['lib/a.js'], items: board.items, stages, config: board.config }).ok,
+      true,
+      `the refusal exemplified ${example}, and guard refuses it`,
+    );
+  }
+});
+
+// The board names its own parking stage; a board without one is offered no
+// such line rather than a stage it does not have.
+test('the finished refusal offers the board\'s own reopen move, and only when the board has one', () => {
+  const parked = { stages: [{ id: 'backlog' }, { id: 'verified' }], terminal: ['verified'], extra: [{ id: 'on-ice', role: 'paused' }] };
+  const verdict = guardCommit({ message: 'P1-01: more', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages: parked });
+  assert.ok(verdict.fixes.some((fix) => fix.startsWith('gw move P1-01 on-ice --force')));
+
+  const noParking = { stages: [{ id: 'backlog' }, { id: 'verified' }], terminal: ['verified'], extra: [] };
+  const bare = guardCommit({ message: 'P1-01: more', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages: noParking });
+  assert.equal(bare.fixes.some((fix) => fix.includes('--force')), false);
+});
+
+test('a rollup naming several finished items and nothing open is refused, listing each with its stage', () => {
+  const verdict = guardCommit({
+    message: 'land P1-01 and P1-02',
+    files: ['lib/a.js'],
+    items: [item({ id: 'P1-01', stage: 'verified' }), item({ id: 'P1-02', stage: 'dropped' })],
+    stages,
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, /P1-01 \(verified\), P1-02 \(dropped\)/);
+});
+
+// The flow this repository itself runs on: `gw` writes the board, and that
+// commit names the items it just finished. It passes on the exemption, which
+// is checked before any id is looked at — the T-0028 rescue, kept.
+test('a bookkeeping commit that only writes the board passes however finished the items it names are', () => {
+  const verdict = guardCommit({
+    message: 'T-0124 T-0125 T-0126: record built on the board',
+    files: ['.gatewright/items.jsonl', '.gatewright/events.jsonl', '.gatewright/.digest'],
+    items: [item({ id: 'T-0124', stage: 'verified' }), item({ id: 'T-0125', stage: 'verified' }), item({ id: 'T-0126', stage: 'verified' })],
+    stages,
+  });
+  assert.equal(verdict.ok, true);
+  assert.equal(verdict.via, 'exempt', 'the exemption is reached before the finished-id check, and must stay that way');
+  assert.equal(verdict.warnings, undefined);
+});
+
+// One open item among them still accounts for the change, and the finished
+// ones are still said out loud.
 test('a rollup naming several finished items warns once per finished one, deduped across message and branch', () => {
   const verdict = guardCommit({
     message: 'land P1-01, P1-02 and P1-03',
@@ -216,18 +318,44 @@ test('guard judges the message file, and ignores the comment block git will stri
 // T-0028 — at the command boundary the pass-with-warning must be visible on
 // stderr and must not flip the exit code, or the warning would train readers
 // to ignore guard's output entirely.
-test('a commit naming a built item exits 0 with a one-line warning', () => {
+test('a commit naming a built item alongside an open one exits 0 with a one-line warning', () => {
   const trunk = { stages: [{ id: 'backlog' }, { id: 'building' }, { id: 'built', role: 'done' }], terminal: ['dropped'], extra: [{ id: 'dropped' }] };
   const root = mkdtempSync(join(tmpdir(), 'gw-guard-'));
   const store = createStore(root);
   store.ensure();
-  store.writeItems([item({ stage: 'built' })]);
+  store.writeItems([item({ stage: 'built' }), item({ id: 'P1-02', stage: 'building' })]);
   writeFileSync(store.paths.stages, JSON.stringify(trunk));
   const git = fakeGit({ 'rev-parse --abbrev-ref HEAD': 'main\n', 'diff --cached --name-only': 'lib/a.js\n' });
-  const result = ctx({ root, store }, { message: 'P1-01: the landed work' });
+  const result = ctx({ root, store }, { message: 'P1-01 P1-02: the landed work' });
   assert.equal(run(result.ctx, { git }), 0);
   assert.match(result.err(), /^gw: warning: P1-01 is already built\n$/);
   assert.doesNotMatch(result.err(), /--no-verify/);
+});
+
+// T-0132 at the command boundary: the exit code is what a git hook reads.
+test('a code commit naming only a built item exits 1, and the same commit touching only the board exits 0', () => {
+  const b = board([item({ stage: 'verified' })]);
+  const code = ctx(b, { message: 'P1-01: one more thing' });
+  assert.equal(run(code.ctx, { git: fakeGit({ 'rev-parse --abbrev-ref HEAD': 'main\n', 'diff --cached --name-only': 'lib/a.js\n' }) }), 1);
+  assert.match(code.err(), /nothing open on the board accounts for this change/);
+  assert.match(code.err(), /P1-01 is already verified/);
+  assert.match(code.err(), /--no-verify/, 'the deliberate exception stays visible; it is just no longer the only way through');
+
+  const bookkeeping = ctx(b, { message: 'P1-01: record built on the board' });
+  assert.equal(run(bookkeeping.ctx, { git: fakeGit({ 'rev-parse --abbrev-ref HEAD': 'main\n', 'diff --cached --name-only': '.gatewright/items.jsonl\n.gatewright/.digest\n' }) }), 0);
+  assert.equal(bookkeeping.err(), '');
+});
+
+// --pretool gates an action, exactly like the commit hook, so it answers the
+// same way — in the provider's contract rather than on stderr.
+test('--pretool denies an edit whose only account is a finished item', () => {
+  const b = board([item({ stage: 'verified' })]);
+  const git = fakeGit({ 'rev-parse --abbrev-ref HEAD': 'gw/P1-01\n' });
+  const result = ctx(b, { pretool: true, file: 'lib/a.js' });
+  assert.equal(run(result.ctx, { git, readStdin: () => '' }), 0, 'a refused edit is still not a broken hook');
+  const decision = JSON.parse(result.out()).hookSpecificOutput;
+  assert.equal(decision.permissionDecision, 'deny');
+  assert.match(decision.permissionDecisionReason, /P1-01 is already verified/);
 });
 
 test('warn mode reports the same refusal and still lets the commit through', () => {
@@ -266,10 +394,13 @@ test('--range accepts a commit naming an item that has since been finished', () 
   const result = ctx(b, { range: 'main..HEAD', branch: 'feature' });
   assert.equal(run(result.ctx, { git }), 0);
 
-  // T-0028 — the same commit, made now rather than reviewed later, passes
-  // too: the item is on the board and finished, which is the question. It
-  // says so with a warning instead of refusing.
-  assert.equal(guardCommit({ message: 'P1-01: the work', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages }).ok, true);
+  assert.match(result.err(), /^gw: warning: \S+ P1-01: the work: P1-01 is already verified\n$/, 'history is read, not gated: the finished item is noted, not refused');
+
+  // T-0132 — the same commit, made now rather than reviewed later, is
+  // refused: gating an action and reading history are different questions,
+  // and specs §6.5 answers them differently on purpose.
+  assert.equal(guardCommit({ message: 'P1-01: the work', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages }).ok, false);
+  assert.equal(guardCommit({ message: 'P1-01: the work', files: ['lib/a.js'], items: [item({ stage: 'verified' })], stages, history: true }).ok, true);
 });
 
 test('--range still refuses a commit naming an item that does not exist', () => {

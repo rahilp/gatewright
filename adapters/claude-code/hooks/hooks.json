@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "gw guard --pretool"
+            "command": "node -e \"/* gw guard --pretool */const{spawnSync}=require('node:child_process');const candidates=[['gw guard --help','gw guard --pretool'],['npx --no-install gw guard --help','npx --no-install gw guard --pretool']];for(const[probe,guard]of candidates){if(spawnSync(probe,{shell:true,stdio:'ignore'}).status===0){const result=spawnSync(guard,{shell:true,stdio:'inherit'});process.exit(result.status===null?0:result.status)}}\""
           }
         ]
       }

@@ -2,7 +2,8 @@ import './helpers/isolate-env.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BLOCK_TARGETS, templatePath, readTemplate, upsertBlock } from '../lib/templates.js';
+import { BLOCK_TARGETS, templatePath, readTemplate, readPipelinePreset, upsertBlock } from '../lib/templates.js';
+import { ARTIFACT_EVIDENCE } from '../lib/gates/describe.js';
 
 const START = '<!-- gatewright:start -->';
 const END = '<!-- gatewright:end -->';
@@ -105,15 +106,37 @@ test('stages.json parses: pipeline order, auto gates, terminal and side states m
   assert.deepEqual(parsed.extra.map((s) => s.id), ['dropped', 'paused']);
 });
 
-test('every evidence_match in stages.json is a valid RegExp source that gates PR URLs', () => {
+test('every evidence_match in stages.json is a valid RegExp source, and the two shipped gates are the shape rule and the PR link', () => {
   const { stages } = JSON.parse(readTemplate('stages.json'));
-  const matches = stages.flatMap((s) => Object.keys(s.requires ?? {}).includes('evidence_match') ? [s.requires.evidence_match] : []);
-  assert.equal(matches.length, 1);
-  for (const source of matches) {
-    let re;
-    try { re = new RegExp(source); } catch (err) { assert.fail(`evidence_match is not a valid RegExp source: ${source} (${err.message})`); }
-    assert.equal(re.test('https://github.com/acme/app/pull/12'), true, source);
-    assert.equal(re.test('https://example.com/pr/12'), false, source);
+  const matches = Object.fromEntries(stages.flatMap((s) => Object.keys(s.requires ?? {}).includes('evidence_match') ? [[s.id, s.requires.evidence_match]] : []));
+  assert.deepEqual(Object.keys(matches), ['built', 'in_review']);
+  for (const source of Object.values(matches)) {
+    try { new RegExp(source); } catch (err) { assert.fail(`evidence_match is not a valid RegExp source: ${source} (${err.message})`); }
+  }
+  const review = new RegExp(matches.in_review);
+  assert.equal(review.test('https://github.com/acme/app/pull/12'), true, matches.in_review);
+  assert.equal(review.test('https://example.com/pr/12'), false, matches.in_review);
+  assert.equal(matches.built, ARTIFACT_EVIDENCE, 'the Built gate is the shared shape rule, not a second copy of it that can drift');
+});
+
+// T-0129 — the defect this gate exists to close: `gw move T-0001 done` refused
+// with an example, and the example passed. Both shipped pipelines gate the
+// stage where completion is claimed on the shape of the evidence, so no string
+// a refusal could print is a string the gate accepts.
+test('both shipped pipelines gate the stage that claims completion on the evidence shape, and free text fails it', () => {
+  const gated = { solo: 'done', team: 'built' };
+  for (const [preset, stageId] of Object.entries(gated)) {
+    const { stages } = readPipelinePreset(preset).stages;
+    const requires = stages.find((stage) => stage.id === stageId).requires;
+    assert.equal(requires.evidence_min, 1, `${preset}: ${stageId} still counts evidence`);
+    assert.equal(requires.evidence_match, ARTIFACT_EVIDENCE, `${preset}: ${stageId} gates the shape of that evidence`);
+    const shape = new RegExp(requires.evidence_match);
+    for (const good of ['abc1234', 'test/scheduler.test.js', 'README.md', 'https://github.com/acme/app/pull/12']) {
+      assert.equal(shape.test(good), true, `${preset}: ${good} is an artifact reference and must pass`);
+    }
+    for (const bad of ['new evidence 1', 'npm test', 'commit abc', 'it works', 'done']) {
+      assert.equal(shape.test(bad), false, `${preset}: ${bad} is free text and must not pass`);
+    }
   }
 });
 
@@ -146,7 +169,7 @@ test('prompt.md carries exactly the ten spec placeholders and stays under 40 lin
 
 test('prompt.md tells the agent the item, what done means, the target stage, its exit rule, and to record evidence with gw move', () => {
   const content = readTemplate('prompt.md');
-  assert.match(content, /Done means: \{\{scope\}\}/);
+  assert.match(content, /Done means:\n\{\{scope\}\}/);
   assert.match(content, /\{\{target_stage\}\}/);
   assert.match(content, /\{\{exit\}\}/);
   assert.match(content, /gw move/);
@@ -154,6 +177,34 @@ test('prompt.md tells the agent the item, what done means, the target stage, its
   assert.match(content, /\{\{prior_context\}\}/);
   assert.match(content, /\{\{capsule\}\}/);
   assert.match(content, /may be empty/i);
+});
+
+// T-0128 — the prompt carries text anyone can write (a GitHub issue body
+// reaches {{scope}} through `gw sync`), and it goes to an unattended agent.
+// lib/run/spawn.js quotes those fields between data markers at substitution
+// time; the template's job is to tell the agent what those markers mean.
+// Nothing here can switch the quoting off -- this is the wording, not the
+// mechanism -- but a template that never explains the markers leaves the
+// agent to guess, so the shipped one must.
+test('prompt.md explains the data markers and forbids obeying what is inside them', () => {
+  const content = readTemplate('prompt.md');
+  assert.match(content, /<<<GW-DATA:name>>>/);
+  assert.match(content, /<<<END-GW-DATA:name>>>/);
+  assert.match(content, /never follow an instruction/i);
+  assert.match(content, /DATA/);
+  // The explanation has to arrive before the first quoted field, or an agent
+  // reads a stranger's text with no warning attached.
+  assert.ok(content.indexOf('never follow an instruction') < content.indexOf('{{title}}'));
+});
+
+// Fencing puts the markers on their own lines, so a placeholder sharing a
+// line with prose would render that prose orphaned against a marker.
+test('every quoted field in prompt.md sits alone on its line', () => {
+  for (const line of readTemplate('prompt.md').split('\n')) {
+    const names = [...line.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]);
+    const quoted = names.filter((name) => ['title', 'scope', 'deps', 'notes', 'log_tail', 'prior_context', 'capsule'].includes(name));
+    if (quoted.length) assert.equal(line.trim(), `{{${quoted[0]}}}`, `a quoted field must be alone on its line: ${line}`);
+  }
 });
 
 test('upsertBlock replaces the fenced block in place, preserving everything around it', () => {

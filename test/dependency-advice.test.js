@@ -64,8 +64,19 @@ const commands = (output) => [...output.matchAll(/`(gw [^`]+)`/g)].map((match) =
 const commandsFor = (output, id) => commands(output).filter((command) => command.split(' ')[2] === id);
 const stageOf = (store, id) => store.readItems().find((entry) => entry.id === id)?.stage;
 
+// T-0129 — printed evidence is a placeholder naming a shape, never a value
+// that would clear the gate. Fill each one the way a reader would, with a
+// distinct artifact per flag: a gate counts DISTINCT evidence, so a command
+// whose placeholders collapse to one value refuses itself.
+let filled = 0;
+function fillPlaceholders(command) {
+  return command
+    .replace(/<commit sha, test path, or URL(?: #\d+)?>/g, () => `test/dep-advice-${++filled}.test.js`)
+    .replace(/<pull-request url(?: #\d+)?>/g, () => `https://github.com/acme/gw/pull/${++filled}`);
+}
+
 function run(root, command, substitutions = {}) {
-  const text = Object.entries(substitutions).reduce((line, [from, to]) => line.replaceAll(from, to), command);
+  const text = fillPlaceholders(Object.entries(substitutions).reduce((line, [from, to]) => line.replaceAll(from, to), command));
   const result = runPrintedCommand(root, text, ACTOR);
   assert.equal(result.status, 0, `${text}\n${result.stdout}\n${result.stderr}`);
 }
@@ -82,7 +93,7 @@ test('a dependency whose next gate needs evidence gets the evidence form, and it
   const b = board([parent(['T-0002']), item('T-0002', { stage: 'building', scope: 'x', owner: ME })]);
   const out = refusal(b.root, ['move', 'T-0001', 'done']);
   const printed = commandsFor(out, 'T-0002');
-  assert.deepEqual(printed, ['gw move T-0002 built --evidence "new evidence 1" --evidence "new evidence 2"'], out);
+  assert.deepEqual(printed, ['gw move T-0002 built --evidence "<commit sha, test path, or URL #1>" --evidence "<commit sha, test path, or URL #2>"'], out);
   run(b.root, printed[0]);
   assert.equal(stageOf(b.store, 'T-0002'), 'built');
   run(b.root, 'gw move T-0001 done');
@@ -100,10 +111,10 @@ test('each of several dependencies gets its own advice, and every printed comman
   ]);
   const out = refusal(b.root, ['move', 'T-0001', 'done']);
   assert.doesNotMatch(out, /<id>/);
-  assert.deepEqual(commandsFor(out, 'T-0002'), ['gw move T-0002 built --evidence "new evidence 1" --evidence "new evidence 2"'], out);
+  assert.deepEqual(commandsFor(out, 'T-0002'), ['gw move T-0002 built --evidence "<commit sha, test path, or URL #1>" --evidence "<commit sha, test path, or URL #2>"'], out);
   assert.deepEqual(commandsFor(out, 'T-0003'), ['gw edit T-0003 --scope "<what done looks like>"', 'gw move T-0003 specified'], out);
   assert.match(out, /T-0003 \(in backlog; specified is its next step toward built\)/);
-  assert.deepEqual(commandsFor(out, 'T-0004'), ['gw claim T-0004', 'gw move T-0004 built --evidence "new evidence 1" --evidence "new evidence 2"'], out);
+  assert.deepEqual(commandsFor(out, 'T-0004'), ['gw claim T-0004', 'gw move T-0004 built --evidence "<commit sha, test path, or URL #1>" --evidence "<commit sha, test path, or URL #2>"'], out);
   for (const id of ['T-0002', 'T-0003', 'T-0004']) {
     for (const command of commandsFor(out, id)) run(b.root, command, { '<what done looks like>': 'a scoped outcome' });
   }
@@ -121,8 +132,11 @@ test('a pattern gate and a count gate on one stage merge into one runnable move'
   const out = refusal(b.root, ['move', 'T-0001', 'done']);
   const [printed, ...rest] = commandsFor(out, 'T-0002');
   assert.equal(rest.length, 0, out);
-  assert.match(printed, /^gw move T-0002 built --evidence "new evidence 1" --evidence "new evidence 2" --evidence <pull-request url>$/);
-  run(b.root, printed, { '<pull-request url>': 'https://github.com/acme/gw/pull/2' });
+  // T-0129 — the count gate takes its placeholder from the stage's own pattern
+  // gate, so one filled-in command satisfies both rather than clearing the
+  // count and being refused by the pattern.
+  assert.match(printed, /^gw move T-0002 built --evidence "<pull-request url #1>" --evidence "<pull-request url #2>" --evidence "<pull-request url>"$/);
+  run(b.root, printed);
   assert.equal(stageOf(b.store, 'T-0002'), 'built');
 });
 

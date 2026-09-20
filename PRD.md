@@ -1,10 +1,16 @@
 # Gatewright — Product Requirements
 
-**Status:** Draft v0.2 · **Owner:** Rahil · **Date:** 2026-09-14 (decisions D1–D6 closed)
+**Status:** Draft v0.2 · **Owner:** Rahil · **Date:** 2026-09-14 (decisions D1–D6 closed) · **Revised:** 2026-09-20 (T-0139 — the name, D3, R1, R5, R25 and the success metrics corrected against the shipped v0.13.2)
 
 ## Name
 
-**Gatewright.** A wright builds a thing well (shipwright, playwright); a gatewright builds gates. The product's differentiator is evidence gates between stages, so the name says what it does. Coined, with no npm, GitHub, or web collisions found on 2026-09-13. Package `gatewright`, binaries `gw` and `gatewright`, folder `.gatewright/`. `gatewright.dev` registered 2026-09-14. **The npm name is not yet claimed** — `registry.npmjs.org/gatewright` returns 404 because we are not logged in to npm, so the placeholder publish has not happened. Until it does, the name is available to anyone.
+**Gatewright.** A wright builds a thing well (shipwright, playwright); a gatewright builds gates. The product's differentiator is evidence gates between stages, so the name says what it does. Coined, with no npm, GitHub, or web collisions found on 2026-09-13. Package `gatewright`, binaries `gw` and `gatewright`, folder `.gatewright/`. `gatewright.dev` registered 2026-09-14.
+
+**Updated 2026-09-20.** The npm name is claimed and the package is published:
+`gatewright@0.13.2` is the `latest` tag on `registry.npmjs.org/gatewright`, with
+every release from 0.1.0 on the registry. The 404 this paragraph used to report
+was the state before the first publish, not a permanent condition, and the risk
+it described — "until it does, the name is available to anyone" — is closed.
 
 ## Landscape
 
@@ -16,6 +22,13 @@
 - **Detent**: a deterministic hook layer for Claude Code, not a tracker, but it owns that word.
 
 All of these are app-first: the board is the product and the data lives inside it. Gatewright is file-first: the data is git-tracked JSONL any agent can drive through a CLI, the board is a viewer, and stages have machine-checked exit rules. That's the pitch. Where they say "run agents from a board," we say "work that earns its way forward."
+
+Punchlist reaches its agent over MCP, and since v0.13 so does Gatewright — which
+is a convergence on a transport, not on a product. `gw mcp` publishes the same
+commands, with the same rules and the same refusal sentences, over the interface
+an agent already has a tool list for; the board is still files in the repo. The
+distinction that matters is unchanged: what an agent can do to the board is
+gated by `stages.json`, whichever way it reaches it.
 
 ## Problem
 
@@ -37,7 +50,7 @@ The cost of not solving this: repeated context spend at the top of every session
 ## Non-goals
 
 - **Replacing GitHub Issues or Jira.** The tracker is an execution layer. Intake and team visibility stay in the issue tracker; we sync, we don't compete.
-- **A hosted service.** Everything is local files in the repo. No accounts, no server outside the developer's machine. Hosting is a separate product decision if it ever comes.
+- **A hosted service.** Everything is local files in the repo. No accounts, no server outside the developer's machine. Hosting is a separate product decision if it ever comes. This still holds with `gw mcp` shipped (v0.13): the MCP server is a local process speaking over the client's own stdin and stdout — no port, no account, no network — so it is a way to reach the same local files, not a service anyone connects to.
 - **A generic project management tool.** Stages are for code work with evidence gates. If someone wants sprint burndowns, that's out of scope.
 - **Prompt engineering per provider.** The dispatch prompt is a plain template. Tuning it for a specific model is the user's job via config, not ours in code.
 - **GitHub Projects sync.** Projects is a second status model that overlaps our stages. Labels and comments give the team what they need. Revisit only if users ask.
@@ -87,11 +100,11 @@ Edge cases that are stories in their own right:
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| R1 | `npx gatewright init` creates `.gatewright/` with items, events, stages and config, and writes the instruction block to `AGENTS.md` always, mirroring it into a provider's own file only when that provider's artifact already exists (specs §11.1), or when `--mirror` asks for it | Fresh repo → run init → four data files + `board.html` exist, `AGENTS.md` contains the block, running init again is a no-op |
+| R1 | `npx gatewright init` creates `.gatewright/` with items, events, stages and config, and writes the instruction block to `AGENTS.md` always, mirroring it into a provider's own file only when that provider's artifact already exists (specs §11.1), or when `--mirror` asks for it | Fresh repo → run init → four data files exist, plus `prompt.md`, a baselined `.digest` and `.gatewright/.gitignore`; `AGENTS.md` contains the block; running init again is a no-op. **Corrected 2026-09-20:** `board.html` is *not* among them. It is a `gw open` artifact per D1, and `init` never writes it — the acceptance test asked for a file the design says init must not produce |
 | R2 | `gw brief` prints in-flight, blocked, owned, and next-unblocked items in ≤25 lines | Board with 100 items (test fixture) → brief output ≤25 lines, ≤500 tokens |
 | R3 | `gw add`, `edit`, `claim`, `move`, `note` write to items and events atomically | Each command appends exactly one event; a crash mid-write leaves valid JSONL |
 | R4 | `gw move` enforces stage exit rules from `stages.json` (evidence required, deps must be at or past a stage) | Move to Built with no evidence → non-zero exit and reason; with evidence → succeeds |
-| R5 | `gw check` reports every item that violates an exit rule or has unmet deps, and reports when `items.jsonl` was written outside `gw` | Exit code 1 if anything is reported; an out-of-band write is reported once, then the digest is re-baselined |
+| R5 | `gw check` reports every item that violates an exit rule or has unmet deps, and reports when `items.jsonl`, `stages.json` or `config.json` was written outside `gw` | Exit code 1 if anything is reported; an out-of-band write is reported **every run** until a legitimate `gw` write restores the digest or `gw repair --write --force` re-baselines it deliberately. **Changed in v0.12, recorded 2026-09-20:** the original acceptance — "reported once, then the digest is re-baselined" — made the second `gw check` after a hand edit report a clean board, which is the sentence a reviewer acts on. `check` is an audit, never an acknowledgement. A *missing* digest is still written silently: absence is not evidence of an edit |
 | R6 | `gw open` writes `.gatewright/board.html` with the data files inlined as JSON blocks and opens it; the board renders board and table views with no build step and no network | `gw open` in a fresh repo → board renders in Chrome, Firefox and Safari with the network disabled; filters by phase, type, stage work |
 | R7 | Zero runtime dependencies. Node 22+ (18 and 20 are EOL) | `npm ls --prod` shows nothing |
 | R8 | `gw import` ingests a markdown task list (this repo's `tasks.md` format) and CSV | All items land with stage, deps, evidence, notes preserved |
@@ -116,7 +129,7 @@ Edge cases that are stories in their own right:
 | R17 | One run = one git worktree = one agent process; output logged to `.gatewright/runs/` | Killing a run leaves main checkout clean |
 | R18 | Stop sends SIGTERM, then SIGKILL after `stop_timeout_s`; item goes to Paused with last commit noted | Hung process → killed within timeout |
 | R19 | Resume respawns in the same worktree with the log tail in the prompt | Resumed run's prompt contains last N lines of prior log |
-| R20 | Agent-created items get `needs-triage` and are not scheduler-eligible until cleared, unless `auto_dispatch_children` allows | Child from a run → not started until approved |
+| R20 | Agent-created items get `needs-triage` and are not scheduler-eligible until cleared, unless `auto_dispatch_children` allows | Child from a run → not started until approved. **Refined 2026-09-20:** whose work is held is `policy.triage_required_for`, which the pipeline preset sets — `["agent", "github"]` on team, `[]` on solo (specs §4.3). A human's unclassified capture is flagged `unclassified` instead: off the scheduler, but claimable and movable at once |
 | R21 | `max_children_per_item` hard cap | Agent's 11th `add --parent X` with cap 10 → refused |
 | R22 | `gw stop --all` from any terminal | All runs terminated, `paused: true` set |
 | R23 | Provider adapters: Claude Code plugin (SessionStart hook), Cursor rule, Codex config snippet | Each adapter installs with one command and runs `gw brief` at session start |
@@ -126,7 +139,7 @@ Edge cases that are stories in their own right:
 | ID | Requirement | Acceptance |
 |---|---|---|
 | R24 | A `memory` provider interface with `recall(query, n)` and `remember(text, tags)`; off unless `config.memory.enabled` | Default install makes no memory calls; `npm ls --prod` still empty |
-| R25 | Dispatch prompt includes top-N recall hits for the item's title and scope, under a token cap | Run prompt contains a "Prior context" section when hits exist; section absent when none or when disabled |
+| R25 | Dispatch prompt includes top-N recall hits for the item's title and scope, under a token cap | Run prompt contains a "Prior context" section when hits exist. **Corrected 2026-09-20:** the section is **not** absent when empty. `templates/prompt.md` keeps the heading and closes with a line explaining what an empty one means — "these last two sections may be empty: empty means nothing useful was recalled, or memory is disabled" — because a heading that silently vanishes leaves an agent unable to tell "nothing was recalled" from "this build has no memory support". What is absent when empty is the `<<<GW-DATA>>>` fencing around the value (specs §10.3): markers around nothing tell an agent nothing |
 | R26 | On `run_ended: ok` and on reaching `close_on` stage, one condensed memory is written (item, change, why, evidence, repo tag); decision-type items are marked canonical on Verified | Exactly one `remember` call per event in tests; content under 800 chars |
 | R27 | `config.memory.project_id` pulls the backend's project prompt capsule as a stable prompt prefix when supported | Prefix present and byte-identical across runs until the capsule changes |
 | R28 | `brief --recall` opt-in flag; plain `brief` never calls the backend | `brief` with memory enabled makes zero network calls unless `--recall` |
@@ -134,15 +147,25 @@ Edge cases that are stories in their own right:
 
 ## Success metrics
 
+The targets below are as written. Actuals are recorded beside them where they
+are knowable, measured 2026-09-20 against v0.13.2; an unmeasured target is
+marked as such rather than left to read as met.
+
 Leading (first 30 days after v0.1):
-- Time from `npx` to first `gw brief` under 60s in 90% of fresh installs.
-- Median `gw brief` output under 400 tokens on the 100-item test fixture.
-- Zero `gw check` reports of out-of-band writes in dogfood repos.
+
+| Target | Actual (2026-09-20) |
+|---|---|
+| Time from `npx` to first `gw brief` under 60s in 90% of fresh installs | **0.9s** end to end, on one machine. Two orders of magnitude inside the target, which says the target was set against the wrong risk: the cost was never the runtime, it was the decisions `init` used to ask for |
+| Median `gw brief` output under 400 tokens on the 100-item test fixture | **~108 tokens** — on a **282-item** board, not the 100-item fixture, so the figure is better than a like-for-like comparison would give. The brief is capped at 25 lines by construction, so it does not grow with the board; this is what that cap costs in practice |
+| Zero `gw check` reports of out-of-band writes in dogfood repos | **Not measured.** Left open rather than claimed |
 
 Lagging (90 days):
-- Used in every new project Rahil starts. Honest target: 100%, because if he skips it, it isn't good enough.
-- At least 3 repos outside the author's using it (GitHub search for `.gatewright/stages.json`).
-- One v0.4 user running unattended queues overnight without a reported runaway.
+
+| Target | Actual (2026-09-20) |
+|---|---|
+| Used in every new project Rahil starts. Honest target: 100%, because if he skips it, it isn't good enough | Not measured here |
+| At least 3 repos outside the author's using it (GitHub search for `.gatewright/stages.json`) | **Not met: 1 repo** on that search. Roughly **1,000 npm downloads a month**, which is traffic rather than adoption — a download is not a board. The honest reading is that the product works and nobody outside has picked it up yet, and that distribution, not capability, is what is missing |
+| One v0.4 user running unattended queues overnight without a reported runaway | Not met; follows from the line above |
 
 ## Decisions
 
@@ -153,20 +176,23 @@ Closed 2026-09-14. Each was a blocking open question; the rationale is kept beca
 | D1 | **Read-only board is a snapshot written by `gw open`**, not a `file://` page that fetches its data. `gw open` injects the four data files into the pinned `board.html` as `<script type="application/json">` blocks and opens it. | Chrome and Firefox treat `file://` as an opaque origin and block the fetch, so the headline "open the file, see your board" promise could not be kept. Inlining needs no server and no browser flags. Live updates stay a `gw serve` feature. |
 | D2 | **`serve` is the only write path.** The File System Access API is not used. | Follows from D1: the snapshot is read-only by construction, and a second write path would have to re-implement the rules. Chromium-only with per-session permission prompts on top. |
 | D3 | **Item IDs are phase-seq**: `P2-01`, children `P2-01.1`. An item that moves phase keeps its ID. | The prefix reads well on a board and in a brief. Phase is a field; the prefix is just where the item started. Renaming IDs would break evidence links and event history. |
+| D3a | **Reversed 2026-09-11 (v0.11): the default `id_scheme` is `seq` — `T-0001`, children `T-0001.1`.** `phase-seq` survives as an opt-in and is unchanged for boards that chose it; the "an item that moves phase keeps its ID" rule in D3 holds under either scheme. Recorded in `specs.md` §2 and §6.3. | D3 made phase a *precondition* of having an id, and capture is the moment you least know the phase. `phase-seq` mints `<phase>-<nn>` and so must refuse an item with no phase — which meant a bare `gw add "Fix the login bug"` and an unlabelled GitHub issue both had to be given a phase, and both were silently given `P0`. Unclassified work was arriving mislabelled as the most urgent work on the board. `seq` lets phase, type and priority stay genuinely empty until someone knows them, which is what made the `unclassified` flag possible. The prefix reading well on a board was worth less than capture costing one command. |
 | D4 | **License: MIT.** | This is a CLI people will vendor and fork. Apache-2.0's patent grant buys nothing here and adds adoption friction. |
-| D5 | **Package `gatewright`, binary `gw` *and* `gatewright`, domain `gatewright.dev`.** | Shipping both binary names means a `gw` collision on someone's PATH is an annoyance, never a blocker. Publishing the placeholder is still open: it needs an npm login, and the name is unclaimed until then. |
+| D5 | **Package `gatewright`, binary `gw` *and* `gatewright`, domain `gatewright.dev`.** | Shipping both binary names means a `gw` collision on someone's PATH is an annoyance, never a blocker. ~~Publishing the placeholder is still open: it needs an npm login, and the name is unclaimed until then.~~ **Closed 2026-09-20:** published for real, not as a placeholder; `gatewright@0.13.2` is `latest`, and both binaries are on PATH after install. |
 | D6 | **`gw check` detects out-of-band writes via a committed `.gatewright/.digest`.** | The "never hand-edit" rule needs enforcement, not just instruction. A hash written after every CLI/API write, committed so it survives a clone, is the cheapest mechanism that works. |
 
 ## Open questions
 
 Nothing is blocking v0.1; see Decisions.
 
-Non-blocking:
-- **Worktree cleanup policy.** Delete on Merged, on Verified, or never? Disk grows fast with many runs. (Engineering, v0.4)
-- **Dispatch prompt template.** Ship one generic template or one per provider in `adapters/`? Start generic; revisit after dogfood. (Rahil, v0.2)
-- **Event log growth.** Compact or rotate `events.jsonl` after N thousand lines? Probably never for v0.x. (Engineering)
-- **Memory transport.** Talk to Second Brain over MCP from Node (stdio/HTTP client in the adapter) or via its plain HTTP API? MCP keeps one integration path; HTTP is fewer moving parts. (Rahil, v0.5)
-- **What counts as "why" in the run-end memory.** The agent's own summary, the item notes, or a second short call to the provider to summarise the log? Start with notes + last commit message; measure whether recall quality is good enough. (Engineering, v0.5)
+All five non-blocking questions below have been answered. They are kept with
+their answers rather than deleted, because each will be proposed again.
+
+- **Worktree cleanup policy.** Delete on Merged, on Verified, or never? Disk grows fast with many runs. (Engineering, v0.4) — **Answered v0.4: none of those.** Nothing is deleted automatically; `gw gc` removes terminal-stage and done-stage worktrees when asked, previews with `--dry-run`, and refuses a dirty worktree without `--force`. The moment an item is marked finished is exactly the moment someone may still want to see what produced the claim.
+- **Dispatch prompt template.** Ship one generic template or one per provider in `adapters/`? Start generic; revisit after dogfood. (Rahil, v0.2) — **Answered: generic, and it stayed generic.** One `templates/prompt.md`, shipped into `.gatewright/prompt.md`, user-editable, untouched by plain `upgrade`. Per-provider tuning remains a non-goal. The one thing the user cannot edit away is the data-fencing (specs §10.3), which happens at substitution time precisely because the template is expected to be rewritten.
+- **Event log growth.** Compact or rotate `events.jsonl` after N thousand lines? Probably never for v0.x. (Engineering) — **Answered v0.13: compact, never rotate, and it was needed inside v0.x after all.** `gw gc --events` moves the history of finished items to `events-archive.jsonl`, keeping every event of an open item and the last 20 of each finished one. Nothing is deleted. "Probably never" was wrong by an order of magnitude: at dogfood pace `gw open` was inlining 13 MB into a single HTML file.
+- **Memory transport.** Talk to Second Brain over MCP from Node (stdio/HTTP client in the adapter) or via its plain HTTP API? MCP keeps one integration path; HTTP is fewer moving parts. (Rahil, v0.5) — **Answered v0.5: MCP over plain HTTP**, JSON-RPC POSTs built with `fetch` and no SDK, because an SDK would be the first runtime dependency in the project and would land in every install to serve a feature that is off by default. Recorded in `specs.md` §14.
+- **What counts as "why" in the run-end memory.** The agent's own summary, the item notes, or a second short call to the provider to summarise the log? Start with notes + last commit message; measure whether recall quality is good enough. (Engineering, v0.5) — **Answered: notes + last commit message, composed by the tracker.** Never a second call to the provider: the text is deterministic and free, and enabling memory therefore cannot add to a model bill. Recall quality has not been measured against the alternative, so this is a decision that has shipped rather than a question that was settled by evidence.
 
 ## Timeline and phasing
 
@@ -177,5 +203,18 @@ No external deadline. Phasing is by usable increments; each version is dogfooded
 - **v0.3** — GitHub sync, comments, `agent/go`, child mirroring.
 - **v0.4** — scheduler, worktrees, runner, triage gate, `stop --all`, adapters.
 - **v0.5** — memory provider interface, recall-in-prompt, remember-on-complete, Second Brain adapter. Depends on v0.4 (the runner is where the hooks live).
+
+Everything in that plan is built. The versions since were not planned here and
+are recorded after the fact, because the phasing above stops being a forecast at
+v0.5 and a reader needs to know where the road actually went:
+
+- **v0.6** — Windows support.
+- **v0.7** — `gw config`; `serve --host`.
+- **v0.8** — `init` asks how you work and writes a pipeline that fits; the `done` stage role.
+- **v0.9** — vocabulary drift in `check`; CSV and JSON import; per-command `--help`.
+- **v0.10** — the board manages the tracker: stages, gates and settings editable from the UI; `gw next`.
+- **v0.11** — capture costs one command; `seq` ids by default; `Specified` removed; the `gate` field deleted.
+- **v0.12** — evidence gates count evidence supplied *with the move*; `gw repair`; onboarding as one choice.
+- **v0.13** — full-screen `init` and `config`; `gw doctor`; `gw mcp`; `gw gc --events`; untrusted text fenced out of dispatch prompts.
 
 Dependency: v0.3 relies on the `gh` CLI being installed and authenticated. We don't handle tokens ourselves.

@@ -2,7 +2,7 @@ import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { describeRule, describeRequires, describeStage } from '../lib/gates/describe.js';
+import { ARTIFACT_EVIDENCE, describeRule, describeRequires, describeStage, evidencePlaceholder } from '../lib/gates/describe.js';
 
 const shipped = JSON.parse(readFileSync(new URL('../templates/stages.json', import.meta.url), 'utf8'));
 const stages = {
@@ -24,6 +24,11 @@ test('every documented rule key gets a sentence a human can act on', () => {
     describeRule('evidence_match', '^https://github.com/.+/pull/\\d+', stages),
     'Evidence supplied with the move must include a link to a pull request',
     'the shipped pull request pattern is explained by intent, never by pasting the regex',
+  );
+  assert.equal(
+    describeRule('evidence_match', ARTIFACT_EVIDENCE, stages),
+    'Evidence supplied with the move must look like a commit, a file path, or a link',
+    'the shipped shape gate reads back as the three things it accepts, never as its regex',
   );
   assert.equal(
     describeRule('evidence_match', '^ADR-\\d+$', stages),
@@ -91,6 +96,10 @@ test('every shipped stage describes itself in prose, with no JSON leaking throug
       assert.equal(sentence.includes('{'), false, `stage ${stage.id} leaked a raw JSON brace into "${sentence}"`);
       assert.equal(sentence.includes('"'), false, `stage ${stage.id} leaked a raw JSON quote into "${sentence}"`);
       assert.equal(sentence.includes('\\d'), false, `stage ${stage.id} leaked a raw regex into "${sentence}" instead of explaining it`);
+      // T-0129 — the shape gate's source is mostly character classes and
+      // escapes, so a backslash anywhere in a sentence means a pattern this
+      // module failed to recognise was pasted at a human instead.
+      assert.equal(sentence.includes('\\'), false, `stage ${stage.id} leaked a raw regex into "${sentence}" instead of explaining it`);
       assert.equal(sentence, sentence.trim(), `stage ${stage.id} produced a sentence with stray whitespace`);
       assert.match(sentence, /^[A-Z]/, `stage ${stage.id} must produce a sentence that starts like one`);
     }
@@ -102,10 +111,43 @@ test('shipped stages render the exact wording the board will show', () => {
   assert.deepEqual(describeStage(byId.building, shipped).sentences, ['Someone must have claimed it'], 'the Building gate explains the claim it requires');
   assert.deepEqual(
     describeStage(byId.built, shipped).sentences,
-    ['Scope must be filled in', 'Needs at least one new piece of evidence, distinct from anything already recorded', 'Every dependency must have reached Built'],
-    'the Built gate explains the scope it is named after, its evidence minimum, and its dependency boundary',
+    [
+      'Scope must be filled in',
+      'Needs at least one new piece of evidence, distinct from anything already recorded',
+      'Evidence supplied with the move must look like a commit, a file path, or a link',
+      'Every dependency must have reached Built',
+    ],
+    'the Built gate explains the scope it is named after, its evidence minimum, the shape that evidence must have, and its dependency boundary',
   );
   assert.deepEqual(describeStage(byId.in_review, shipped).sentences, ['Evidence supplied with the move must include a link to a pull request'], 'the In review gate explains its regex as a pull request link');
   assert.deepEqual(describeStage(byId.merged, shipped).sentences, ['Every dependency must have reached Merged'], 'the Merged gate names the dependency boundary by label');
   assert.deepEqual(describeStage(byId.verified, shipped).sentences, ['Needs at least two new pieces of evidence, distinct from anything already recorded', 'Every direct child item must be finished'], 'the Verified gate requires both fresh validation evidence and finished child work');
+});
+
+// T-0129 — the placeholder a refusal prints is the other half of the sentence:
+// the rule says what is wanted, the placeholder says what to type. Neither may
+// ever be a value the gate would accept, or the refusal answers itself.
+test('an evidence placeholder names a shape, is quoted for the shell, and never passes the gate it advises', () => {
+  assert.equal(evidencePlaceholder(ARTIFACT_EVIDENCE), '"<commit sha, test path, or URL>"');
+  assert.equal(evidencePlaceholder('^https://github.com/.+/pull/\\d+'), '"<pull-request url>"');
+  assert.equal(evidencePlaceholder('^ADR-\\d+$'), '"<matching text>"');
+  assert.equal(evidencePlaceholder(undefined), '"<commit sha, test path, or URL>"',
+    'a count-only gate accepts anything, so its advice teaches the shape good evidence has');
+
+  // Several flags on one command must differ: the gate de-duplicates.
+  const two = [0, 1].map((index) => evidencePlaceholder(undefined, { index, of: 2 }));
+  assert.deepEqual(two, ['"<commit sha, test path, or URL #1>"', '"<commit sha, test path, or URL #2>"']);
+  assert.equal(new Set(two).size, 2);
+
+  const shape = new RegExp(ARTIFACT_EVIDENCE);
+  for (const pattern of [ARTIFACT_EVIDENCE, undefined, '^https://github.com/.+/pull/\\d+']) {
+    for (const of_ of [1, 2]) {
+      for (let index = 0; index < of_; index += 1) {
+        const printed = evidencePlaceholder(pattern, { index, of: of_ });
+        const value = printed.slice(1, -1);
+        assert.match(value, /^<.+>$/, 'a placeholder is visibly a placeholder');
+        assert.equal(shape.test(value), false, `${printed} would pass the shipped shape gate as printed`);
+      }
+    }
+  }
 });

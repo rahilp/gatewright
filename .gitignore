@@ -5,3 +5,5 @@ node_modules/
 .gatewright/.worktrees/
 .gatewright/.lock
 brag-output/
+serve.pid
+brag-output/

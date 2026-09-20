@@ -1698,7 +1698,8 @@ test('T-0124: one accent, with readable text on it in both themes, for tabs, lin
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
   for (const [theme, vars] of [['light', LIGHT_VARS], ['dark', DARK_VARS]]) {
     const pairs = [['--text', '--bg'], ['--text-dim', '--bg'], ['--text-faint', '--bg'], ['--text-faint', '--bg-raised'], ['--accent', '--bg'], ['--accent', '--bg-raised'],
-      ['--on-accent', '--accent'], ['--accent', '--accent-bg'], ['--danger', '--danger-bg'], ['--warn', '--warn-bg'], ['--warn', '--bg'], ['--ok', '--ok-bg']];
+      ['--on-accent', '--accent'], ['--accent', '--accent-bg'], ['--danger', '--danger-bg'], ['--warn', '--warn-bg'], ['--warn', '--bg'], ['--ok', '--ok-bg'],
+      ['--text-dim', '--bg-sunken']];
     for (const [fg, bg] of pairs) {
       const ratio = contrast(vars[fg], vars[bg]);
       assert.ok(ratio >= 4.5, `${theme} ${fg} on ${bg} is ${ratio.toFixed(2)}:1, below WCAG AA`);
@@ -1735,4 +1736,117 @@ test('T-0125: columns with cards get at least the width of empty ones, and a cou
   assert.match(renderBoard, /\(columnEmpty\(inCol\.length, folded\) \? ' column-empty' : ''\)/);
   const update = SHELL.match(/function updateBoardInPlace\([\s\S]*?\n  \}/)[0];
   assert.match(update, /column\.classList\.toggle\('column-empty', columnEmpty\(inCol\.length, folded\)\);/, 'the poll path keeps it in step as cards come and go');
+});
+
+// T-0135: `gw open` and /api/state both cap the history they carry -- every
+// event of an open item, the tail of each finished one -- and both report the
+// remainder as config.eventsOmitted / config.eventsArchive. A board that
+// quietly shows part of its history is indistinguishable from one that has no
+// more, so the header has to say so.
+const omissionState = (config) => ({ config, live: false, sync: { status: 'off' } });
+const omittedHistory = (config) => new Function('State', `${liftFunction('omittedHistory')}\nreturn omittedHistory();`)(omissionState(config));
+const omittedHistoryPill = (config) => new Function('State', `${liftHelper('escapeHtml')}\n${liftFunction('omittedHistory')}\n${liftFunction('omittedHistoryPill')}\nreturn omittedHistoryPill();`)(omissionState(config));
+
+test('T-0135: the header reads the omission the CLI and the server both report, and nothing else', () => {
+  assert.deepEqual(omittedHistory({ eventsOmitted: 54000, eventsArchive: 'events-archive.jsonl' }), { count: 54000, archive: 'events-archive.jsonl' });
+  assert.equal(omittedHistory({}), null, 'an uncompacted board says nothing');
+  assert.equal(omittedHistory({ eventsOmitted: 0 }), null, 'and neither does one that omitted nothing');
+  assert.equal(omittedHistory(undefined), null, 'a board loaded before any config exists must not throw here');
+  assert.equal(omittedHistory({ eventsOmitted: 'lots' }), null, 'a count that is not a number is not a count');
+  assert.deepEqual(
+    omittedHistory({ eventsOmitted: 7 }),
+    { count: 7, archive: 'events-archive.jsonl' },
+    'the archive name falls back to the one gw gc writes, so the tooltip never says "moves to .gatewright/undefined"',
+  );
+});
+
+// The pill states the one thing that is true of every trimmed board -- these
+// events are not on screen -- and says nothing about where they are. Both
+// producers report eventsOmitted whenever the page caps what it loads, which
+// happens whether or not `gw gc --events` has ever run; until it does, the
+// older events are still in events.jsonl, so a pill naming the archive would
+// send someone to a file that may not exist.
+test('T-0135: the pill counts what is missing without claiming where it went', () => {
+  const many = omittedHistoryPill({ eventsOmitted: 54000, eventsArchive: 'events-archive.jsonl' });
+  assert.match(many, /^ <span class="info-pill" title="[^"]+">history trimmed · 54000 older events not shown<\/span>$/);
+  assert.match(omittedHistoryPill({ eventsOmitted: 1 }), />history trimmed · 1 older event not shown</, 'one event is not "1 older events"');
+  assert.equal(omittedHistoryPill({}), '', 'nothing omitted, nothing claimed');
+  const label = />([^<]*)<\/span>$/.exec(many)[1];
+  assert.doesNotMatch(label, /archive/, 'the visible pill must not name a file that gw gc may never have written');
+});
+
+test('T-0135: the tooltip is where the precision lives: both places the events can be, and the way to see them all', () => {
+  const title = /title="([^"]*)"/.exec(omittedHistoryPill({ eventsOmitted: 54000, eventsArchive: 'events-archive.jsonl' }))[1];
+  assert.match(title, /still in \.gatewright\/events\.jsonl/, 'where they are before gc runs');
+  assert.match(title, /move to \.gatewright\/events-archive\.jsonl/, 'and where they go after it does');
+  assert.match(title, /gw gc --events/, 'named as the thing that moves them');
+  assert.match(title, /gw open --all-events/, 'the escape hatch for the whole log');
+  const renamed = /title="([^"]*)"/.exec(omittedHistoryPill({ eventsOmitted: 3, eventsArchive: 'older-events.jsonl' }))[1];
+  assert.match(renamed, /move to \.gatewright\/older-events\.jsonl/, 'the archive the producer actually named, not a hard-coded one');
+});
+
+test('T-0135: a hostile archive name cannot escape the tooltip', () => {
+  const evil = omittedHistoryPill({ eventsOmitted: 3, eventsArchive: '"><img src=x onerror=alert(1)>' });
+  assert.ok(!evil.includes('<img'), 'the archive name is escaped into the attribute, never into markup');
+  assert.ok(!/title="[^"]*"[^>]*onerror/.test(evil), 'and cannot break out of the title attribute either');
+});
+
+test('T-0135: both the snapshot header and the live header carry the pill', () => {
+  const header = SHELL.match(/\n  function renderHeader\(\) \{[\s\S]*?\n  \}/)[0];
+  assert.match(header, /const historyPill = omittedHistoryPill\(\);/);
+  assert.match(
+    header,
+    /document\.getElementById\('gw-snapshot-meta'\)\.innerHTML = \(State\.live[\s\S]*?\) \+ historyPill \+ syncPill;/,
+    'the pill must sit outside the live/snapshot choice, or a live board would show a capped log with nothing said about it',
+  );
+  assert.equal(SHELL.split('omittedHistoryPill(').length - 1, 2, 'one caller, one definition: a second copy is a second wording');
+});
+
+// The poll path is where this is easy to get wrong: /api/state answers a
+// `?since=` request with only the new events, so it never reports an omission
+// -- and a config assignment that took it at face value would blink the pill
+// out two seconds after the board opened.
+test('T-0135: an incremental poll cannot blink the pill out, and a full load still replaces it', () => {
+  const carry = (previous, next, incremental) => new Function('State', 'next', 'incremental',
+    `${liftHelper('carryOmittedHistory')}\nreturn carryOmittedHistory(next, incremental);`)({ config: previous }, next, incremental);
+
+  assert.deepEqual(
+    carry({ version: 1, eventsOmitted: 12, eventsArchive: 'events-archive.jsonl' }, { version: 1 }, true),
+    { version: 1, eventsOmitted: 12, eventsArchive: 'events-archive.jsonl' },
+    'an incremental poll keeps the last full answer',
+  );
+  assert.deepEqual(carry({ version: 1 }, { version: 2 }, true), { version: 2 }, 'nothing to carry on an uncompacted board');
+  assert.deepEqual(
+    carry({ eventsOmitted: 12, eventsArchive: 'events-archive.jsonl' }, { version: 2 }, false),
+    { version: 2 },
+    'a full load is authoritative: a board that is no longer compacted stops claiming it is',
+  );
+  assert.deepEqual(
+    carry({ eventsOmitted: 12 }, { eventsOmitted: 40, eventsArchive: 'events-archive.jsonl' }, true),
+    { eventsOmitted: 40, eventsArchive: 'events-archive.jsonl' },
+    'a response that does report an omission is believed',
+  );
+  assert.equal(carry({ eventsOmitted: 12 }, null, true), null, 'a missing config is left missing for the caller to fall back on');
+
+  const poll = SHELL.match(/\n  async function poll\(\) \{[\s\S]*?\n  \}/)[0];
+  assert.match(poll, /State\.config = carryOmittedHistory\(data\.config, Boolean\(since\)\) \|\| State\.config;/);
+});
+
+test('T-0135: the pill is neutral and cool in both themes, borrowing neither the warning nor the ok colour', () => {
+  const rule = STYLE.match(/\.info-pill \{([^}]*)\}/);
+  assert.ok(rule, 'the pill has a rule of its own');
+  assert.match(rule[1], /background: var\(--bg-sunken\);/);
+  assert.match(rule[1], /color: var\(--text-dim\);/);
+  assert.match(rule[1], /border: 1px solid var\(--border\);/);
+  assert.doesNotMatch(rule[1], /--warn|--ok|--danger/, 'omitted history is a fact about the page, not a warning or a health signal');
+  // Same geometry as the pills beside it, so the header reads as one row.
+  for (const property of ['font-size: 0.72rem;', 'padding: 0.15rem 0.5rem;', 'border-radius: 1rem;', 'white-space: nowrap;']) {
+    assert.ok(rule[1].includes(property), `the pill must match its neighbours on ${property}`);
+  }
+  for (const [theme, vars] of [['light', LIGHT_VARS], ['dark', DARK_VARS]]) {
+    for (const name of ['--bg-sunken', '--text-dim', '--border']) {
+      const [r, , b] = rgbOf(vars[name]);
+      assert.ok(b >= r, `${theme} ${name} ${vars[name]} is warm (red ${r} > blue ${b})`);
+    }
+  }
 });

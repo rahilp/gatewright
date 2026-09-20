@@ -21,11 +21,16 @@ function config(overrides = {}) {
 
 const item = { id: 'P1-01', title: 'Runner foundation', scope: 'works offline', stage: 'specified', deps: [], notes: '' };
 
+// T-0128 — item-derived text is quoted as data wherever it lands, including
+// mid-line, so the markers always own their own lines. The stage comes from
+// the board's own pipeline and is substituted as it was.
+const fenced = (field, value) => `\n<<<GW-DATA:${field}>>>\n${value}\n<<<END-GW-DATA:${field}>>>\n`;
+
 test('dry run renders exact argv without calling the process boundary', () => {
   const root = board(); let called = false;
   const result = createRunner({ dryRun: true, spawnFn: () => { called = true; } }).start({ config: config(), item, run: 'r-1', worktree: root, root, promptValues: { target_stage: 'building' } });
   assert.equal(called, false);
-  assert.deepEqual(result.argv, ['agent', '--prompt', 'Item Runner foundation / works offline / building', '--item', 'P1-01']);
+  assert.deepEqual(result.argv, ['agent', '--prompt', `Item ${fenced('title', 'Runner foundation')} / ${fenced('scope', 'works offline')} / building`, '--item', 'P1-01']);
 });
 
 test('missing and unknown providers name the configuration key', () => {

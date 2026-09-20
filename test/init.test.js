@@ -1,7 +1,7 @@
 import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -127,7 +127,9 @@ test('the solo preset takes one agent-created item from backlog to done without 
   assert.equal(runAs(['add', 'First session', '--scope', 'works end to end'], root, 'agent:demo').trim(), 'T-0001');
   assert.equal(runAs(['claim', 'T-0001'], root, 'agent:demo'), '');
   assert.match(runAs(['move', 'T-0001', 'building'], root, 'agent:demo'), /backlog → building/);
-  assert.match(runAs(['move', 'T-0001', 'done', '--evidence', 'npm test'], root, 'agent:demo'), /building → done/);
+  // T-0129 — the solo done gate takes evidence shaped like an artifact: a
+  // commit, a path, or a link. "npm test" is a sentence about evidence.
+  assert.match(runAs(['move', 'T-0001', 'done', '--evidence', 'test/scheduler.test.js'], root, 'agent:demo'), /building → done/);
   const item = JSON.parse(readFileSync(join(root, '.gatewright', 'items.jsonl'), 'utf8').trim());
   assert.equal(item.stage, 'done');
   assert.equal(item.flag, null);
@@ -267,4 +269,53 @@ test('init --gh on an existing tracker re-baselines the digest, so gw check stay
 test('the usage text advertises --gh now that P3-08 has landed', () => {
   const help = run(['--help'], mkdtempSync(join(tmpdir(), 'gw-init-')));
   assert.ok(help.includes('--gh'));
+});
+
+// T-0136 — specs §1 and docs/internals.md both promise a shipped .gitignore
+// keeping run logs and worktrees out of git, and no such file was ever
+// written: every board that ran an agent offered its logs and worktrees to
+// the next `git add -A`.
+test('init writes .gatewright/.gitignore covering the transient files', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-gitignore-'));
+  run(['init'], root);
+  const ignore = readFileSync(join(root, '.gatewright', '.gitignore'), 'utf8');
+  const patterns = ignore.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+  for (const pattern of ['runs/', '.worktrees/', '*.pid', '*.tmp', '.lock']) {
+    assert.ok(patterns.includes(pattern), `${pattern} must be ignored`);
+  }
+  // The board itself is the record and has to survive a clone; only the
+  // transient files are ignored.
+  for (const kept of ['items.jsonl', 'events.jsonl', 'events-archive.jsonl', '.digest', 'stages.json', 'config.json']) {
+    assert.ok(!patterns.some((pattern) => pattern.includes(kept)), `${kept} must stay committed`);
+  }
+});
+
+test('init leaves an edited .gitignore alone on re-init', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-gitignore-'));
+  run(['init'], root);
+  const path = join(root, '.gatewright', '.gitignore');
+  writeFileSync(path, 'runs/\nmy-own-scratch/\n');
+  run(['init'], root);
+  run(['init', '--force'], root);
+  assert.equal(readFileSync(path, 'utf8'), 'runs/\nmy-own-scratch/\n', 'a user-edited ignore file is theirs, not ours to rewrite');
+});
+
+// Boards created before this existed get it from the next `gw init`, which is
+// the command that already exists for "bring this project up to date".
+test('init adds a missing .gitignore to an already-initialized board', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-gitignore-'));
+  run(['init'], root);
+  rmSync(join(root, '.gatewright', '.gitignore'));
+  const out = run(['init'], root);
+  assert.ok(existsSync(join(root, '.gatewright', '.gitignore')));
+  assert.match(out, /\.gitignore/);
+  // and the data files it did not touch are still the ones it wrote first
+  assert.match(out, /already exists/);
+});
+
+test('the .gitignore init writes is not reported by gw check as an out-of-band write', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gw-init-gitignore-'));
+  run(['init'], root);
+  const check = run(['check'], root);
+  assert.doesNotMatch(check, /out-of-band|modified/i);
 });

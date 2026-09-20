@@ -110,3 +110,73 @@ test('no format infers priority from phase', () => {
   assert.equal(parseCsv('id,title,phase\nT-1,T,P4\n').items[0].priority, null);
   assert.equal(parseJson('[{"id":"A","title":"T","phase":"P4"}]').items[0].priority, null);
 });
+
+// T-0134 — notes and refs were promised by PRD R8 and tasks P1-12 and read
+// by no parser: csv had no alias for either, and json never looked. The
+// aliases are the column names a real export uses; `description` stays
+// scope, because one header cannot mean two fields.
+test('csv reads notes, refs and parent through their aliases', () => {
+  const { items } = parseCsv('id,title,Note,Refs,Parent ID\nT-2,Child,"why it is so","https://a.test/x, https://a.test/y",T-1\n');
+  assert.equal(items[0].notes, 'why it is so');
+  assert.deepEqual(items[0].refs, ['https://a.test/x', 'https://a.test/y']);
+  assert.equal(items[0].parent, 'T-1');
+});
+
+test('csv columns that are absent or empty land as the empty defaults, not as empty strings', () => {
+  const { items } = parseCsv('id,title,notes,refs,parent\nT-1,Solo,,,\n');
+  assert.equal(items[0].notes, '');
+  assert.deepEqual(items[0].refs, []);
+  assert.equal(items[0].parent, null, 'an empty parent cell is no parent at all');
+  assert.equal(parseCsv('id,title\nT-1,Solo\n').items[0].parent, null);
+});
+
+test('a csv description column is still scope, and does not become notes', () => {
+  const { items } = parseCsv('id,title,description\nT-1,Solo,the done-when text\n');
+  assert.equal(items[0].scope, 'the done-when text');
+  assert.equal(items[0].notes, '');
+});
+
+test('json carries notes, refs and parent, with refs as an array or a delimited string', () => {
+  const [item] = parseJson('[{"id":"J-1","title":"T","notes":"line one\\nline two","refs":["https://a.test/x"],"parent":"J-0"}]').items;
+  assert.equal(item.notes, 'line one\nline two');
+  assert.deepEqual(item.refs, ['https://a.test/x']);
+  assert.equal(item.parent, 'J-0');
+  assert.deepEqual(parseJson('[{"id":"J-1","title":"T","refs":"https://a.test/x; https://a.test/y"}]').items[0].refs, ['https://a.test/x', 'https://a.test/y']);
+  const bare = parseJson('[{"id":"J-1","title":"T"}]').items[0];
+  assert.equal(bare.notes, '');
+  assert.deepEqual(bare.refs, []);
+  assert.equal(bare.parent, null);
+});
+
+// The T-0053 rule, on the two fields that just gained a reader: a field that
+// arrives as the wrong type fails its row with the reason rather than being
+// quietly nulled, because a dropped field looks exactly like a clean import.
+test('json refs, notes and parent of the wrong type skip the row with the reason', () => {
+  const refs = parseJson('[{"id":"J-1","title":"T","refs":["ok",7]}]');
+  assert.equal(refs.items.length, 0);
+  assert.match(refs.skipped[0].reason, /non-string ref: 7/);
+
+  const notes = parseJson('[{"id":"J-1","title":"T","notes":{"text":"x"}}]');
+  assert.equal(notes.items.length, 0);
+  assert.match(notes.skipped[0].reason, /notes must be a string/);
+
+  const parent = parseJson('[{"id":"J-1","title":"T","parent":7}]');
+  assert.equal(parent.items.length, 0);
+  assert.match(parent.skipped[0].reason, /parent must be a string/);
+
+  const shape = parseJson('[{"id":"J-1","title":"T","refs":{"a":1}}]');
+  assert.equal(shape.items.length, 0);
+  assert.match(shape.skipped[0].reason, /refs must be an array or a delimited string/);
+});
+
+// Markdown's six-field row has no column for any of the three, and the
+// checklist form has fewer still. The importer's defaults are the format's
+// limit, not a discarded field.
+test('markdown expresses none of notes, refs or parent, and says so by omission', () => {
+  const { items } = parseMarkdown('## P1 — phase\n- **P1-01** · A task · feature · G0 · — · Done when.\n- **P1-01.1** · A child · feature · G0 · — · Done when.\n');
+  for (const item of items) {
+    assert.equal(item.notes, undefined);
+    assert.equal(item.refs, undefined);
+    assert.equal(item.parent, undefined, 'a dotted id is the board\'s id scheme, not a parent column: inferring one would change which gates hold');
+  }
+});

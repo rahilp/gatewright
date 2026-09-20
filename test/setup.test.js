@@ -57,7 +57,7 @@ test('interactive init asks exactly one workflow question and can choose team', 
   assert.equal(remaining(), 0);
   assert.match(transcript(), /Choose a workflow/);
   assert.deepEqual(read(cwd, 'stages.json').stages.map((stage) => stage.id), shipped.stages.map((stage) => stage.id));
-  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
+  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent', 'github']);
 });
 
 // Screen text with escape sequences and box edges removed and whitespace
@@ -108,7 +108,7 @@ test('rich init asks the workflow once, then options and a review, and never wri
   assert.doesNotMatch(screen, /\x1b\[[0-9;]*m/, 'NO_COLOR suppresses every colour sequence');
   // Written for someone new to Gatewright, git and AI agents.
   assert.doesNotMatch(flat(screen).replace(/`[^`]*`/g, ''), /\b(triage|pipeline|evidence|gate|scheduler|worktree|commit-msg|instruction block|signal)\b/i);
-  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
+  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent', 'github']);
   assert.ok(existsSync(join(cwd, 'CLAUDE.md')), 'ticking Claude with Space mirrors the block into CLAUDE.md');
   assert.deepEqual(tty.raw, [true, false], 'raw mode is entered once and given back before init writes');
   assert.match(screen, /\x1b\[\?25h\x1b\[\?1049l/, 'the cursor and the normal screen are restored');
@@ -203,7 +203,7 @@ test('Windows, legacy console host (before Windows 10 1511): the numbered prompt
   await run;
   assert.match(tty.read(), /Choose a workflow:\n {2}1\) Solo/);
   assert.doesNotMatch(tty.read(), /\x1b\[\?(1049h|25l)/, 'no full-screen UI on a console without VT support');
-  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
+  assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent', 'github']);
 });
 
 // Agents, CI and the numbered prompt read these lines. They are pinned
@@ -287,7 +287,7 @@ test('TERM=dumb and GW_TUI=0 keep the numbered prompt even with raw mode availab
     assert.match(tty.read(), /Choose a workflow:/);
     assert.match(tty.read(), /choose 1-2/);
     assert.doesNotMatch(tty.read(), /\x1b\[\?1049h/, 'no full-screen UI for this terminal');
-    assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent']);
+    assert.deepEqual(read(cwd, 'config.json').policy.triage_required_for, ['agent', 'github']);
   }
 });
 

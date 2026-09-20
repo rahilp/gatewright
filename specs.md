@@ -8,20 +8,57 @@ This is the contract. If the code and this document disagree while work is in fl
 
 ```
 .gatewright/
-  items.jsonl        one item per line, current state
-  events.jsonl       append-only log, one event per line
-  stages.json        stage definitions and exit rules
-  config.json        tool config: providers, labels, policy
-  prompt.md          dispatch prompt template (v0.2); user-editable
-  .digest            hash of items.jsonl after the last gw write
-  board.html         viewer snapshot written by `gw open` and `gw serve`
-  runs/              per-run logs (v0.4), gitignored by default
-  .worktrees/        git worktrees for runs (v0.4), gitignored
+  items.jsonl           one item per line, current state
+  events.jsonl          append-only log, one event per line
+  events-archive.jsonl  events moved out of events.jsonl by `gw gc --events`;
+                        append-only, committed (v0.13)
+  stages.json           stage definitions and exit rules
+  config.json           tool config: providers, labels, policy
+  prompt.md             dispatch prompt template (v0.2); user-editable
+  .digest               hashes of items.jsonl, stages.json and config.json
+                        after the last gw write
+  .gitignore            written by `init`; names the five throwaway paths below
+  board.html            viewer snapshot written by `gw open`
+  runs/                 per-run logs (v0.4), gitignored
+  .worktrees/           git worktrees for runs (v0.4), gitignored
 ```
 
-Everything except `runs/` and `.worktrees/` is committed, `.digest` included — the out-of-band write check in §6.4 has to work in a fresh clone.
+Everything except the paths named in `.gatewright/.gitignore` is committed —
+`.digest` included, because the out-of-band write check in §6.4 has to work in a
+fresh clone, and `events-archive.jsonl` included, because an archive that is not
+in git is not an audit trail.
 
-`board.html` is an installed artifact, never agent-written. The source lives at `viewer/board.html` in the package; `gw open` copies it and injects the current data (§7), and `upgrade` replaces the copied shell. It carries a version header comment that `upgrade` compares to the package version.
+**Amended 2026-09-20 (T-0136).** "gitignored by default" was a claim about a file
+that did not exist. Nothing shipped ignored anything, so every board that had run
+an agent offered its run logs, its worktrees and its lock file to the next
+`git add -A`. `init` now writes `.gatewright/.gitignore`, and writes it on an
+existing board too if it is absent:
+
+```
+runs/
+.worktrees/
+.lock
+*.tmp
+*.pid
+```
+
+Those five are exactly what gw creates and then throws away. It only ever
+creates the file: a `.gitignore` already on disk may have been edited
+deliberately, and overwriting it would be the hand-edit this tool tells everyone
+else not to make.
+
+`board.html` is an installed artifact, never agent-written. The source lives at `viewer/board.html` in the package; `gw open` copies it and injects the current data (§7), and `upgrade` replaces the copied shell.
+
+**Amended 2026-09-20 (T-0139).** Two claims in that sentence had drifted from the
+code. `gw serve` does **not** write `board.html`: it holds the same pinned shell
+in memory and serves it with empty data blocks for the page to hydrate from
+`/api/state` (§7, §8), so a board that has never been `gw open`ed has no
+`board.html` on disk at all — and the live board is not a file anyone can be
+looking at a stale copy of. And the shell's version header comment
+(`<!-- gatewright board v1 -->`) is *printed* by `upgrade` in its report, so the
+user can see which shell they now have; nothing compares it to the package
+version. The comparison was never built, and the header is a shell-format marker
+rather than a release number, so there is nothing for it to be compared against.
 
 `prompt.md` is shipped by `init` from `templates/` and is expected to be edited. Plain `upgrade` never touches it; `upgrade --templates` replaces it and says so.
 
@@ -60,7 +97,7 @@ Field rules:
 | `title` | string | github if linked, else human/agent | ≤120 chars |
 | `phase`, `priority`, `type` | string | github if linked (via label map), else human/agent | Values are free-form but validated against `config.vocab` if present |
 | `stage` | string | tracker | Must be a key in `stages.json` |
-| `flag` | `null` \| `"blocked"` \| `"needs-triage"` \| `"paused"` \| `"conflict"` | tracker | One flag at a time. Blocked and needs-triage prevent scheduling. |
+| `flag` | `null` \| `"blocked"` \| `"needs-triage"` \| `"unclassified"` \| `"paused"` \| `"conflict"` | tracker | One flag at a time. **Any** flag keeps an item off the scheduler (`isSchedulable` refuses a non-null flag outright). Only `needs-triage` also refuses `move`: `unclassified` is an inbox marker, not a hold — see §6.3. |
 | `owner` | string \| null | tracker | `human:<name>` or `agent:<run-id>` |
 | `scope` | string | github (body) if linked | What "done" means. Shown in dispatch prompt. |
 | `deps` | string[] | human/agent | Item IDs. Cycles rejected on write. |
@@ -70,6 +107,8 @@ Field rules:
 | `parent` | string \| null | tracker | Set by `add --parent`. |
 | `created_by` | `"human"` \| `"github"` \| `"agent:<run-id>"` | tracker | Immutable |
 | `gh` | object \| null | tracker | `{number, url, updated_at}` when linked |
+| `prev_stage` | string | tracker | The stage the item stood in when a run was stopped or timed out, written alongside `flag: "paused"`. `resume` restores the stage from it. Absent on an item no run has ever stopped. |
+| `last_commit` | string \| null | tracker | HEAD of the run's worktree when the run ended, resolved through the worktree's `commondir` so a linked worktree reports its own branch rather than the main checkout's. Written on the item at the same moment as the `run_ended` event that carries it. Absent until a run has ended. |
 | `created`, `updated` | ISO 8601 | tracker | |
 
 "Owner" in the table means who is allowed to change it. `sync` may only write GitHub-owned fields. The CLI may only write tracker-owned and human/agent-owned fields.
@@ -98,9 +137,22 @@ Event types:
 | `run_started` | item, run, provider, worktree | scheduler |
 | `run_ended` | item, run, outcome (`ok` \| `error` \| `cancelled` \| `timeout`), last_commit | scheduler |
 | `sync` | pulled, pushed, conflicts | sync |
-| `pause_all` / `resume_all` | by | serve, CLI |
+| `stages` | by | serve (Stages & rules editor) |
+| `config` | by, keys (the settings that changed) | serve (Settings view) |
+| `compact` | by, kept, archived, keep, archive | CLI (`gc --events`) |
+| `pause_all` / `resume_all` | by | serve |
 
-`by` is always one of `human:<name>`, `agent:<run-id>`, `github`, `scheduler`, `sync`.
+`by` is always one of `human:<name>`, `agent:<name>`, `github`, `scheduler`, `sync`. The `<name>` on an agent is whatever that agent declared: a run id (`agent:r-0042`) for a run the scheduler spawned, `agent:mcp` for the MCP server's default (§6.9), or anything `GW_ACTOR`/`--by` supplied. Identity is declared, not authenticated.
+
+**Amended 2026-09-20 (T-0139).** `pause_all` was listed as written by "serve,
+CLI". Only `serve` writes it. `gw stop --all` sets `runner.paused` in
+`config.json` through `writeConfig` — which re-baselines the digest, so the
+change is a legitimate gw write — and appends no event: it persists the pause
+*before* it signals anything, so an offline kill switch closes the scheduler's
+restart window even if the process running it dies mid-sweep. The consequence to
+know about is that a board paused from a terminal shows the paused state,
+because the state is read from config, but carries no `pause_all` line in its
+history. Recorded here rather than changed.
 
 The event log is the source of truth for "what happened." `items.jsonl` is a materialised view that could be rebuilt from events plus the initial import. v0.1 doesn't implement the rebuild; the format allows it.
 
@@ -130,6 +182,7 @@ The event log is the source of truth for "what happened." `items.jsonl` is a mat
       "requires": {
         "scope": true,
         "evidence_min": 1,
+        "evidence_match": "^(?:[0-9a-fA-F]{7,64}|[A-Za-z][A-Za-z0-9+.-]*://\\S+|\\S+/\\S*|\\S+\\.[A-Za-z][A-Za-z0-9_-]*)$",
         "deps_at_least": "built"
       }
     },
@@ -191,7 +244,7 @@ Semantics:
 - `requires` is the machine-checked rule for **entering** the next stage. `gw move X <stage>` evaluates the `requires` block of the *target* stage. Keys:
   - `owner: true` — item must have an owner
   - `evidence_min: n` — at least n DISTINCT evidence entries supplied with this move for this stage. Entries are trimmed and de-duplicated against each other and against every entry already recorded on the item, so pasting the same string twice counts once, and evidence recorded at an earlier stage never satisfies a later gate. Forcing an item backward and re-moving it forward therefore demands fresh evidence — intended.
-  - `evidence_match: regex` — at least one distinct entry supplied with this move matches
+  - `evidence_match: regex` — at least one distinct entry supplied with this move matches. Both shipped pipelines (§4.3) put the *same* pattern on the stage where completion is claimed — `built` on team, `done` on solo. It is `ARTIFACT_EVIDENCE`, exported from `lib/gates/describe.js` and read from there by both templates, so the rule, the English the board reads it back as, and the placeholder a refusal prints cannot drift apart. It is anchored at both ends and admits no whitespace, and so accepts a commit SHA (7–64 hex), a scheme-qualified URL, a path containing `/`, or a dotted filename — and refuses a sentence.
   - `deps_at_least: stage` — every dep must be at that stage or later (by list order)
   - `children_done: true` — every direct child item must be in a terminal stage. This is normally set on the done stage; a board that does not want parent completion to wait for children omits it. Descendants are covered transitively because each child must clear its own gate before it can finish.
 
@@ -217,6 +270,7 @@ Semantics:
   been allowed to skip evidence, and cumulative evaluation is what makes that true
   for skips as well as for single steps.
 - `auto: true` on a stage means: when an item is in the *previous* stage and eligible, the scheduler may start a run whose goal is to reach this stage. The human-gated stages are whatever has `auto: false`.
+- **Evidence has a shape as well as a count (added 2026-09-20, T-0129).** The default `built` gate above gained `evidence_match`. The defect it closes is specific and was reproducible: `gw move T-0001 built` refused for want of evidence and printed an example of what evidence looks like, and the example passed the gate — so the fastest way through the gate was to paste the refusal back at it. `evidence_min` counts strings, and any string is a string. Gating the shape as well means the count now counts artifacts: something a reviewer can open. Every value a refusal prints is an angle-bracketed placeholder for the same reason. Loosening or removing the rule is a per-board edit like any other rule here; the point is what the shipped default claims.
 - `paused` and `dropped` are side states. `paused` remembers `prev_stage` in the item so resume can restore it.
 
 Order in the array is the pipeline order. Users edit this file to change their process; nothing is hardcoded.
@@ -277,6 +331,61 @@ validates it and reports, before it looks at any item:
 A board whose rules are malformed cannot be trusted to enforce anything, so
 this runs first and exits non-zero on any finding.
 
+### 4.3 The two shipped pipelines
+
+Added 2026-09-20 (T-0139). This was the largest single gap between this document
+and the product: `init` has shipped two pipeline presets since v0.8, and §4
+described only one of them as though it were the only thing `init` could write.
+
+`init` does not copy a fixed `stages.json`. It reads a **preset** from
+`templates/pipeline-<name>.json`, writes the preset's `stages` block to
+`.gatewright/stages.json`, and merges the preset's `policy` block over the
+`policy` block in `config.json` (§5). A preset is therefore two things: a
+pipeline, and the policy that pipeline implies.
+
+| | **solo** | **team** |
+|---|---|---|
+| file | `templates/pipeline-solo.json` | `templates/pipeline-team.json` |
+| stages | `backlog → building → done` | `backlog → building → built → in_review → reviewed → merged → verified` (the block in §4, by reference: the preset names `stages_template: "stages.json"` rather than copying it) |
+| terminal | `done`, `dropped` | `verified`, `dropped` |
+| roles | declared: `done` on Done, `dropped` on Dropped, `paused` on Paused | none declared; resolved by the §4.1 defaults |
+| the completion gate | `done` — `scope`, `evidence_min: 1`, `evidence_match` (§4), `deps_at_least: building`, `children_done` | `built` — `scope`, `evidence_min: 1`, `evidence_match` (§4), `deps_at_least: built`; and `verified` — `evidence_min: 2`, `children_done` |
+| review | none | `in_review` gates on a GitHub PR link; `reviewed`, `merged`, `verified` are `auto: false` |
+| `policy.triage_required_for` | `[]` — nothing is held | `["agent", "github"]` |
+
+**The default is solo.** Not "the eight-stage default", and not the block in §4:
+`gw init` with no flags and no terminal chooses `team` only when the checkout has
+a GitHub origin, and `solo` everywhere else. `--pipeline solo|team` decides it
+explicitly and an unknown name is a usage error naming the two. In a terminal,
+`init`'s first screen asks the same question in English and offers a third
+answer, "Team, linked to GitHub", which is `team` plus `--gh`.
+
+Solo is the default because the pipeline has to end where the user actually
+finishes. A pipeline that assumes pull requests, given to someone who does not
+open them, leaves every completed item parked one stage short of its finish line
+— and `gw brief`, which reads `role: "done"`, then reports all of it as still in
+flight forever. That is how a digest degrades into a list of everything ever
+done. Solo's `done` carries the role explicitly for the same reason §4.1 gives:
+only an explicit role counts, because plenty of pipelines end in a waiting room.
+
+**Why the policy differs, and why it is part of the preset rather than a second
+question.** A hold is only worth its cost when someone other than the author
+will look at what is held. On a solo board nobody will, so
+`triage_required_for: []` means a capture is workable the moment it is written
+down. On a team board the two actor kinds whose work arrives from outside the
+room — `agent` and, since T-0128, `github` — are held for a human. Everything
+about *how* a hold behaves is in §6.3 and §10.1; the preset only decides who is
+subject to one.
+
+**`github` in that list is new (2026-09-20, T-0128).** A GitHub issue body is
+written by whoever opened it and flows into an item's `scope`, and from there
+into the dispatch prompt of an unattended agent (§5, §10). Before this, a pulled
+issue was schedulable the moment it landed: `gw sync` hardcoded `flag: null`
+while `gw add` went through the capture-flag rule, so the two disagreed about
+what a bare capture looks like. Both now call the one function, so a team board
+puts a human between what a stranger opened upstream and what a runner starts
+working on. A solo board holds nothing, and is unchanged.
+
 ## 5. config.json
 
 `vocab` lists the codes a board allows; `glossary` explains them. It is
@@ -285,6 +394,18 @@ language, and a code with no entry renders exactly as it always has. This is
 help text, never a requirement: nothing validates against it, and a missing or
 malformed `glossary` block means "no descriptions", not an error. Set one
 entry with `gw config glossary.phase.P1 "..."`; an empty value removes it.
+
+The block below is `templates/config.json` byte for byte: what `init` copies
+*before* it merges the chosen pipeline preset's `policy` block over it (§4.3).
+So the file that actually lands has `"triage_required_for": []` on a solo board
+and `["agent", "github"]` on a team one; everything else is as shown. `gw config`
+reads and writes these values, and the live board's Settings view is generated
+from the same schema `gw config` validates against, so the two cannot offer
+different settings.
+
+One key is read but not shipped: `gc.events_keep` (§6.10), how many events a
+finished item keeps in `events.jsonl`. It defaults to 20 when absent, which is
+why the default file carries no `gc` block.
 
 ```json
 {
@@ -445,29 +566,52 @@ entry with `gw config glossary.phase.P1 "..."`; an empty value removes it.
 ## 6. CLI commands
 
 ```
-gw init [--gh] [--force]
-gw brief [--me <owner>] [--json] [--recall]        (--recall: v0.5, opt-in)
+gw init [--pipeline solo|team] [--gh] [--repo owner/name]
+        [--mirror claude,cursor,copilot|all] [--no-hook] [--yes] [--no-input] [--force]
+gw brief [--me [<owner>]] [--json] [--recall]        (--recall: v0.5, opt-in)
 gw add "<title>" [--parent ID] [--type T] [--phase P] [--priority P] [--scope "..."] [--by <who>]
-gw claim <id> [--by <who>]
-gw release <id>
+gw claim <id> [--force] [--by <who>]
+gw release <id> [--force] [--by <who>]
 gw move <id> <stage> [--evidence <e>...] [--by <who>] [--force]
-gw edit <id> [--title "..."] [--scope "..."] [--priority P] [--type T] [--phase P] [--deps a,b] [--refs a,b] [--by <who>]
+gw next <id> [--json]
+gw edit <id> [--title "..."] [--scope "..."] [--priority P] [--type T] [--phase P] [--deps a,b] [--refs a,b] [--force] [--by <who>]
 gw note <id> "<text>" [--by <who>]
 gw check [--json]
-gw guard [--message-file F | --message "..."] [--branch B] [--range A..B] [--pretool] [--warn] [--json]
+gw doctor [--json] [--port P]                                       (§6.8)
+gw repair [--write] [--force]
+gw guard [--message-file F | --message "..."] [--branch B] [--range A..B]
+         [--pretool] [--tool T] [--file F] [--warn] [--json]
 gw hook install [--ci] [--agent] [--force]
 gw hook status | gw hook uninstall [--ci] [--agent]
+gw config [<key> [<value>]] [--list] [--yes] [--no-input]
 gw show <id> [--json]
-gw list [--stage S] [--phase P] [--flag F] [--json]
-gw import <file> [--format md|csv|json]
-gw open [--no-browser]
+gw list [<text>] [--stage S] [--phase P] [--flag F] [--owner W] [--limit N] [--json]
+gw import <file> [--format md|csv|json] [--dry-run]
+gw open [--no-browser] [--watch] [--port P] [--all-events]
 gw upgrade [--templates]
-gw serve [--port 7777] [--open]
+gw serve [--port 7777] [--host H] [--open] [--no-browser]
+gw mcp [--by <who>]                                                 (§6.9)
 gw sync [--dry-run]                       (v0.3)
 gw stop <id> | --all                      (v0.4)
 gw resume <id>                            (v0.4)
-gw triage <id> --approve | --drop         (v0.4)
+gw triage <id> --approve | --drop [--force] [--by <who>]            (v0.4)
+gw gc [--events] [--dry-run] [--force]    (v0.4; --events v0.13, §6.10)
+gw help <command>  |  gw <command> --help
 ```
+
+**Amended 2026-09-20 (T-0139).** This list had fallen four versions behind the
+parser. `config` (v0.7), `next` (v0.10), `repair` (v0.12) and `gc` (v0.4) were
+missing outright, as were `doctor` and `mcp`, shipped in this sweep; several
+commands had flags the list did not carry. Each entry above is the flag set in
+that command's own `spec` in `lib/commands/<name>.js`, which is also what
+`gw <command> --help` renders — so the three places a reader can look now agree
+by construction rather than by upkeep.
+
+Exactly two commands run without a board — `init` and `doctor`, the only two
+whose `spec` sets `needsRoot: false`. Everything else resolves a project root
+first, so a missing board ends the command before it starts. `doctor` is in that
+pair deliberately: "there is no board here" is one of the things it exists to
+tell you, and a diagnostic that cannot run on a broken setup is no diagnostic.
 
 `--by` defaults to `$GW_ACTOR`, then `human:$USER`. Runs set `GW_ACTOR=agent:<run-id>` in the spawned environment, so agents never pass `--by` themselves.
 
@@ -525,9 +669,32 @@ Order 1 before 2 before 3 is load-bearing. Reading "no next stage" as "outside t
 ### 6.3 add
 
 1. Validate parent exists if given.
-2. If `--by` is `agent:*`: enforce `max_children_per_item` on the parent; set `flag: needs-triage` if `policy.triage_required_for` includes `agent` and `auto_dispatch_children` is false. Independently of actor: an item with no `phase`, `type` and `priority` also gets `flag: needs-triage` — capture never guesses a classification, so an unclassified item is held from the scheduler's eligibility check the same way, but `claim` and `move` never consult that check, so a human can still pick it up and work it immediately.
-3. Assign ID per `id_scheme`. `seq` (default): `T-<nnnn>`. `phase-seq`: `<phase>-<nn>`, and refuses when `phase` is null. Children get `<parent>.<n>` under either scheme.
-4. Append item line, append `add` event, print the new ID on stdout (and only the ID, so agents can capture it).
+2. If `--by` is `agent:*`: enforce `max_children_per_item` on the parent.
+3. Decide the capture flag. One function owns this (`captureFlag`), and `gw add`, `gw sync` (§9) and a `policy.triage_required_for` change all call it, so they cannot disagree about what a bare capture looks like:
+   - **A policy hold wins.** If `policy.triage_required_for` names the actor's kind (`agent`, `github`, `human`) and `auto_dispatch_children` is false → `flag: needs-triage`.
+   - **Otherwise, a non-agent capture with no `phase`, `type` *and* no `priority`** → `flag: unclassified`.
+   - Otherwise → `flag: null`.
+
+   **Amended 2026-09-20 (T-0139); the behaviour changed in v0.13 (T-0113).** This
+   step used to say a bare capture "also gets `flag: needs-triage`", and that is
+   what the code did — with the consequence that `gw move` refused a human's own
+   two-second capture until somebody approved it. Two different things were
+   wearing one flag. They are separate now, and they differ in the one way that
+   matters, whether the item may be *worked*:
+
+   | flag | what it means | scheduler | `claim` | `move` |
+   |---|---|---|---|---|
+   | `needs-triage` | a policy hold: work nobody has reviewed | held | allowed | **refused** until `gw triage --approve` |
+   | `unclassified` | capture with no classification yet | held | allowed | allowed |
+
+   Both sit in the triage inbox and both are reported by `check` without failing
+   it — an inbox is not a defect. `unclassified` clears itself the moment
+   `gw edit --phase|--type|--priority` supplies any one of the three, or
+   `gw triage --approve` takes the item as it is. Agent-created work is never
+   flagged `unclassified`: the policy decides whether it is held, and
+   `auto_dispatch_children` exists to say it is not.
+4. Assign ID per `id_scheme`. `seq` (default): `T-<nnnn>`. `phase-seq`: `<phase>-<nn>`, and refuses when `phase` is null. Children get `<parent>.<n>` under either scheme.
+5. Append item line, append `add` event, print the new ID on stdout (and only the ID, so agents can capture it).
 
 ### 6.4 check
 
@@ -571,7 +738,44 @@ One question: **which item accounts for this change?** Answered against the boar
 3. **Branch** — the branch name names one. `feat/P1-07-thing` counts; `P1-011` is a different item and does not count as `P1-01`.
 4. **Owner** — the actor (§6, `--by` resolution) holds a claim on a non-terminal item.
 
-`guard.accept` (default `["message","branch","owner"]`) narrows the list. An id that is *not* on the board, and an id whose item is in a terminal stage, are each refused with their own sentence: both mean the author believes they are tracked and is not.
+`guard.accept` (default `["message","branch","owner"]`) narrows the list.
+
+**An id whose item is finished is refused, in its own sentence.** "Finished" is
+the board's own definition — a `terminal` stage, or the stage holding
+`role: "done"` — not a hardcoded word. The refusal names which item and which
+stage it reached, and gives three ways out that are not `--no-verify`:
+`gw brief`, `gw add` (follow-up work after a finish line is new work), and,
+when the board has a parked role, `gw move <id> <paused> --force` to reopen it.
+It never offers a finished id as the "e.g." in its own advice, which on a `seq`
+board whose only item is a finished `T-0001` would have proposed the very id it
+had just rejected two lines above.
+
+Two escapes survive, and both are this section's own: `--range`, below, where an
+item that has since been finished still accounts for its own commits; and the
+exempt-paths check above, which returns first, so a bookkeeping commit touching
+only `.gatewright/` passes however finished the items it names are. A commit
+that names a finished item *alongside* an open one passes too, and still says
+out loud which of them were finished.
+
+**Amended 2026-09-20 (T-0132).** This rule had been softened to a warning to
+rescue one flow — landing a rollup of already-built work — and the softening
+reached further than the flow did. While every named item is finished, nothing
+open on the board is tracking the change being made, which is the one thing
+guard exists to notice. The two escapes above cover the rescued flow without
+covering everything else.
+
+**An id that is not on the board is refused only conditionally, and this
+document used to claim otherwise.** Guard cannot tell an invented item id from
+prose: a commit citing `CVE-2024-5678`, or an HTTP status, is an ordinary
+commit. So a token that matches no board item is never *by itself* a refusal
+while something else — an open id elsewhere in the message or branch, or a claim
+held by the actor — accounts for the change. The tokens guard tried and could
+not match are reported only inside a refusal, where they are the fastest thing
+to show an author who thought a name tracked their work and it did not. The
+sentence this replaces read as unconditional, and the code has been the
+conditional form since T-0028; the spec is being made to say what the code does
+rather than the other way round, because the unconditional reading is the one
+that refuses honest commits.
 
 Weak evidence is accepted deliberately. Any of the four proves someone opened the board before touching code, which is the whole claim being enforced. Anything stricter becomes the kind of hook people delete.
 
@@ -579,7 +783,7 @@ Three modes, one decision module:
 
 - **commit** (default, or `--message-file` from the hook) — judges the staged files and the message. Exit 1 refuses the commit; `git commit --no-verify` remains available, and remains visible in the log.
 - **`--range A..B`** — judges every non-merge commit in the range on its own message and paths. Two differences from the commit case, both because this reads history rather than gating an action: a claim is local state that does not travel with a commit, so `owner` never applies; and an item that has since been finished still accounts for its own commits, since a pull request is reviewed *after* its work is done. An id that is not on the board is still refused.
-- **`--pretool`** — judges an editor tool call read as JSON on stdin (a path outside the repository, or inside `.gatewright/`, is not gated; containment goes through `isWithin` for the reason in §13's path rule, never a `..` prefix test), *before* the edit happens, and answers on stdout in the provider hook contract (`permissionDecision: deny` with a reason naming `gw add` and `gw claim`). Exit is always 0: a refused edit is a decision, and a non-zero exit would read as a broken hook. This is the gate that keeps a plan from being written down only after the code is.
+- **`--pretool`** — judges an editor tool call read as JSON on stdin (a path outside the repository, or inside `.gatewright/`, is not gated; containment goes through `isWithin` for the reason in §10.2's path rule, never a `..` prefix test), *before* the edit happens, and answers on stdout in the provider hook contract (`permissionDecision: deny` with a reason naming `gw add` and `gw claim`). Exit is always 0: a refused edit is a decision, and a non-zero exit would read as a broken hook. This is the gate that keeps a plan from being written down only after the code is.
 
 `guard.mode: "warn"` reports and permits everywhere. `guard.enabled: false` is silent. A passing guard prints nothing at all.
 
@@ -605,6 +809,158 @@ Changes item fields that aren't stage, owner, evidence, or notes — those have 
 
 Nothing is partially applied: a command that touches three fields and fails validation on one writes none of them.
 
+### 6.8 doctor
+
+New 2026-09-20 (T-0138). Twelve checks, in this order: `gw` on PATH · newest
+release · git repository · board · board digest · `stages.json` · `config.json` ·
+commit hook · agent pre-edit guard · GitHub CLI · runner provider · serve on
+port. Each answers in one shape — what was looked at, what was found, and the
+exact command that fixes it — and each ends PASS, FAIL or SKIP. Three outcomes
+only, because a reader scanning for what to do next should not also have to
+grade a severity. A SKIP is never a failure; it means the check does not apply
+here (GitHub sync is off, the runner is off, no `--port` was given), which is
+also why `doctor` works on a plane.
+
+**`doctor` writes nothing at all.** No board lock, so no `.lock` file; the
+digest is read through `verifyDigest` and never re-baselined; the `--port` probe
+never starts a server. A diagnostic that quietly repairs what it finds cannot be
+run twice and believed, so a board it reported as edited outside gw is still
+reported the next time. Re-baselining belongs to `gw check` (for a *missing*
+digest only, §6.4) and to `gw repair --write --force`.
+
+It runs without a board (`needsRoot: false`), so "there is no board here" is a
+CHECK rather than the command dying before it can say so.
+
+Every outbound call is bounded, because each of them is something that can hang
+— a registry, a wedged server, a `gh` waiting on a device-auth prompt — and a
+diagnostic that hangs is the failure it was run to explain.
+
+`--port P` additionally probes a `gw serve` already running, on **both**
+`127.0.0.1` and `localhost`, and fails when the same board answers differently
+depending on the name it is asked by: a browser picks the name, so a
+disagreement is what a person would actually see.
+
+Exit 0 when nothing failed, 1 when anything did. `--json` renders the same
+report for a program.
+
+### 6.9 mcp
+
+New 2026-09-20 (T-0137). `gw mcp` speaks the Model Context Protocol over stdin
+and stdout, publishing the board as ten tools: `gw_brief`, `gw_show`, `gw_next`,
+`gw_list`, `gw_add`, `gw_claim`, `gw_move`, `gw_note`, `gw_edit`, `gw_triage`.
+It is registered once in a client's config and never run by hand. Zero runtime
+dependencies: the JSON-RPC 2.0 transport is written by hand, like the `gh`
+wrapper and the runner's spawn.
+
+This is an affordance, not an enforcement point, and it does not replace one.
+`gw guard` still refuses an agent's first edit when nothing on the board
+accounts for it (§6.5). What changes is what the agent does next: instead of
+shelling out to a command it half-remembers, it calls `gw_add` and `gw_claim`.
+
+Four properties are the contract:
+
+- **One write path, unchanged.** Every tool call goes through `lib/serve/invoke.js`
+  — the same adapter `gw serve`'s HTTP writes use — into the same
+  `lib/commands/*` module the CLI loads, with a synthesized ctx. No rule is
+  reimplemented and no rule can live in two places.
+- **Refusals come back byte for byte.** A board refusal is an `isError: true`
+  result carrying the command's own stderr exactly: the message, then each
+  `RuleError` failure on its own line. Those sentences are the teaching surface;
+  paraphrasing them would make the MCP surface a worse teacher than the terminal.
+  A silent CLI success (a note, an edit, an uncontested claim) returns
+  ``ok — `gw <command>` succeeded and printed nothing.``, because an empty
+  content block reads as a failure.
+- **Protocol errors and board refusals are different things.** An unknown tool,
+  an unknown method or a malformed message is a JSON-RPC error (-32602, -32601,
+  -32600, -32700). Bad arguments and board refusals are `isError: true`, which
+  is what a model can read and retry.
+- **Actor.** Writes default to `agent:mcp`, not the CLI's `human:$USER`
+  fallback: an MCP server is always agent-driven, and attributing its writes to
+  a person would be a lie the event log then keeps. `GW_ACTOR` and `--by`
+  override it through the same `actor()` resolution as every other command, so a
+  bare `agent` is refused in the CLI's own words before a single byte of
+  protocol is read.
+
+The server implements revision `2025-06-18` and also accepts `2025-03-26` and
+`2024-11-05`. An unknown version is answered with the pinned one — a
+negotiation, never an error. Batched JSON-RPC is refused by name, having been
+removed in `2025-06-18`. Wire details are in `docs/mcp.md`.
+
+### 6.10 gc
+
+`gw gc` has two jobs, and `--events` picks the second.
+
+**Worktrees (v0.4, default).** Removes the run worktrees of items in a terminal
+stage or the `done`-role stage. `--dry-run` previews; `--force` permits a dirty
+worktree, which is otherwise refused with the uncommitted files listed. Needs a
+git checkout, and says so in the tool's own voice when there isn't one.
+
+**`--events` (new 2026-09-20, T-0135).** `events.jsonl` only ever grew, and the
+snapshot inlines it, so the log's growth was the document's growth: at the
+audited 2,000-item / 100k-event scale a `gw open` produced a 13 MB `board.html`,
+nearly all of it the history of items that finished months ago.
+
+Compaction **moves** history to `events-archive.jsonl`. It never deletes: the
+audit trail is the entire point of an append-only log, and a greppable sibling
+file is still an audit trail. The split is:
+
+- every event of an **open** item — an item not in a terminal stage and not in
+  the `done`-role stage — is kept, whole;
+- for every other bucket, the **last `gc.events_keep`** events (default 20) are
+  kept and the rest archived. Board-level events that name no item (`sync`,
+  `pause_all`, `config`, `stages`, `compact`) share one bucket and are capped
+  the same way.
+
+Order and locking are load-bearing. The archive is **appended before**
+`events.jsonl` is rewritten: a crash between the two leaves events in both
+files, which is a duplicate a human can see, where the other order loses them.
+The whole operation runs under the board lock, so a concurrent `gw move` cannot
+have its event read before the split and appended after it, where the rewrite
+would drop it. A `compact` event records what was kept, what was archived, the
+keep value, and the archive's name.
+
+`--dry-run` reports what would move and writes nothing.
+
+**One cap, three readers.** `gw open` inlines the same partition rather than the
+whole log, and so does `GET /api/state` when it is asked with no `?since`
+cursor (§8) — a full page reload is not a poll and used to carry the entire
+history. Sharing one helper is the point: a snapshot, a compacted board and the
+live board must not disagree about which history is hot. Nothing an open item
+needs is ever capped away, so a card's Play/Cancel control still reads its own
+dispatches. `gw open --all-events` is the escape hatch for anyone who wants the
+whole log in one file. When something really was left out, `eventsOmitted` and
+`eventsArchive` are written into the config block the viewer already reads (§7)
+so the board can say so; an uncompacted board's snapshot and `/api/state`
+response are byte-unchanged.
+
+### 6.11 The reading commands
+
+`next`, `show` and `list` are the surface an agent reads the board through, and
+each was corrected in this sweep (2026-09-20, T-0138).
+
+- **`next <id>`** names the immediate next stage and, when it is blocked, every
+  unmet rule on its own line — a triage hold first, because it is a policy
+  boundary and not just another gate; then the gate reasons; then the dependency
+  being waited on, named, with the command that unsticks a dependency that can
+  never advance. Stages further than one hop ahead are collapsed to a count that
+  **names them**, capped at four plus "and N more": the line used to read
+  "1 further stage need this first", which was ungrammatical and, worse, never
+  said which stages, so the one fact it carried could not be acted on.
+- **`show <id>`** renders every unset value as a single em dash (`—`). The block
+  used to print `phase: null` on one line and `scope: ` on the next: two
+  spellings of the same absence, one of them raw JSON reading as a value called
+  "null". `0` and `false` are values, not absences, and keep their own spelling.
+  `--json` is untouched — scripts parse that, and a dash is not data.
+- **`list`** takes a free-text positional matching an id or a title,
+  case-insensitively; `--owner`, which accepts either spelling of a name
+  (`rahil` or `human:rahil`) and `none`/`nobody`/`unowned` for the unowned; and
+  `--limit N`, which caps the rows **in `--json` too** and says how many it held
+  back. The budget a limit protects is the reader's, and on this board the reader
+  is usually a program; the JSON shape stays a bare array, because a wrapper
+  object would break every script that already parses it. With no argument and
+  no flag the output is unchanged. An unknown `--stage` is a usage error naming
+  the stages that do exist, not an empty list and exit 0.
+
 ## 7. Viewer contract (board.html)
 
 - Single file. No build. No external requests. Inline CSS and JS.
@@ -620,7 +976,8 @@ Nothing is partially applied: a command that touches three fields and fails vali
 
   JSONL becomes a JSON array in the block; `</` inside any string is escaped as `<\/` so a title can never close the script element. The shell reads these with `JSON.parse(document.getElementById('gw-items').textContent)` and renders. No network, no build, works from `file://` in every browser.
 - The injected snapshot carries the timestamp it was written at, shown in the header: this is a snapshot, and the board says so rather than pretending to be live.
-- Under `serve`, the same shell is served with empty data blocks and hydrates from `GET /api/state` instead, then polls. One shell, two data sources.
+- Under `serve`, the same shell is served with empty data blocks and hydrates from `GET /api/state` instead, then polls. One shell, two data sources. `serve` never writes `.gatewright/board.html`: it holds the shell in memory (§1).
+- The snapshot inlines a **capped** slice of the event log — every event of an open item, the tail of each finished one — and `gw open --all-events` inlines the whole log instead. When anything was left out, the config block carries `eventsOmitted` (a count) and `eventsArchive` (the archive's filename) so the page can say so. They travel in the config block rather than beside the events precisely so the events block stays a plain array and an uncompacted board's snapshot is byte-identical to the one it has always produced. `GET /api/state` with no `?since` reports the same two fields in the same place, so the viewer has one place to read them whichever way the board was loaded. See §6.10.
 - Views: Overview (counts by stage/phase/type), Board (columns from `stages.json`, filters by phase/type/stage/flag), Table (sortable), Stages & rules (rendered from `stages.json`), Export/import (JSON download; import only under `serve`).
 - Item panel: all fields, stage buttons (disabled when `requires` fails, with the reason), evidence and notes editors, Play/Stop/Resume buttons (v0.2+), triage approve/drop (v0.4), run log tail (v0.4).
 - Under `file://` (a `gw open` snapshot), every editor is read-only and a banner says so, with the `gw` command that would make the change.
@@ -629,22 +986,61 @@ Nothing is partially applied: a command that touches three fields and fails vali
 
 ## 8. serve API (v0.2+)
 
-Local only, binds `127.0.0.1`. No auth (it's your machine). Rejects non-loopback origins.
+Binds `127.0.0.1` unless `--host` names another address, and answers only on
+the addresses it is actually reachable at. No auth: reachability is the whole
+mechanism (§8.2).
 
 ```
-GET  /                      viewer
-GET  /api/state?since=      { items, events (since), stages, config, runs }
-POST /api/items             add
-POST /api/items/:id         edit (human/agent-owned fields only)
-POST /api/items/:id/move    { to, evidence[] }  runs the same rules as CLI
-POST /api/items/:id/note
-POST /api/items/:id/dispatch
-POST /api/items/:id/cancel
-POST /api/items/:id/resume          (v0.4)
-POST /api/items/:id/triage          { action: approve|drop }  (v0.4)
-POST /api/pause  /api/resume        global
-GET  /api/runs/:run/log?tail=200    (v0.4)
+GET  /                            viewer shell, with empty data blocks
+GET  /api/state?since=            { items, events, stages (+gates), config, runs, scheduler }
+GET  /api/items/:id/transitions   per-stage { ok, failures, force? }        (§8.3)
+GET  /api/runs/:run/log?tail=200  (v0.4)
+
+POST /api/items                   add
+POST /api/items/:id               edit (human/agent-owned fields only)
+POST /api/items/:id/edit          the same command, explicitly named
+POST /api/items/:id/move          { to, evidence[], force? }  runs the same rules as CLI
+POST /api/items/:id/note          { text }
+POST /api/items/:id/claim         claim                                      (v0.10)
+POST /api/items/:id/release       release                                    (v0.10)
+POST /api/items/:id/dispatch      queue a dispatch (Play)
+POST /api/items/:id/cancel        cancel a queued dispatch
+POST /api/items/:id/stop          stop a run already in progress             (v0.9)
+POST /api/items/:id/resume        (v0.4)
+POST /api/items/:id/triage        { action: approve|drop }                   (v0.4)
+POST /api/pause  /api/resume      global
+
+POST /api/stages                  replace the pipeline      ADMIN: loopback only  (v0.10)
+POST /api/config                  change settings           ADMIN: loopback only  (v0.10)
 ```
+
+**Amended 2026-09-20 (T-0139).** Six routes were missing from this list and the
+two administrative ones had no entry at all. `claim`/`release` exist because the
+board explains an unmet gate in English and offers the action that clears it:
+"Someone must have claimed it" is answered by a Claim button, not by telling a
+person with a mouse to open a terminal. `stop` exists because `cancel` could
+only ever cancel a dispatch that had not started, so an item whose agent was
+genuinely running could not be stopped from the very screen showing it running;
+it uses the asynchronous stop, because the grace period between the polite kill
+and the forceful one is `stop_timeout_s` — 30 seconds by default — and blocking
+on it would stop the board answering anything at all, the scheduler's own tick
+included.
+
+**The two ADMIN routes are loopback-only, whatever `--host` says.** `--host`
+widens who may move a card, which is the feature it exists for. It never widens
+who may rewrite the rules of the board: `/api/stages` and `/api/config` compare
+the same headers against loopback itself rather than against the widened
+allow-list, so no argument can reach them from off-machine. There is no
+authentication in this product, so this stays a separate and stricter test that
+never collapses back into the ordinary write check. Off loopback the board does
+not draw those controls at all, rather than offering them and refusing.
+
+`GET /api/state` with **no** `?since` cursor returns events capped by the same
+partition `gw gc --events` and `gw open` use, and carries `eventsOmitted` and
+`eventsArchive` in the config block when anything was left out (§6.10). An
+incremental poll — one that *does* carry `?since` — is never capped: capping it
+would drop events the viewer appends rather than replaces, and it would never
+see them again.
 
 ### 8.1 Writes invoke the CLI command modules
 
@@ -720,6 +1116,35 @@ caller.
 
 All writes go through the same module the CLI uses. There is one write path.
 
+**How a header becomes a hostname (amended 2026-09-20, T-0130).** Both checks
+reduce a header to a hostname and compare it against a fixed set, and that
+reduction is where an allow-list gets talked around, so it is specified rather
+than left to a `split(':')`:
+
+- A **`Host`** header is a bare authority, never a URL. It is given an
+  `http://` scheme and parsed with `URL`, and IPv6 brackets are stripped so
+  `[::1]:7777` and `--host ::1` land on the same canonical name. A Host
+  containing a scheme, a path, a query, a fragment, userinfo, a backslash or
+  whitespace is malformed and is rejected outright rather than guessed at:
+  `attacker@localhost` must never be read as `localhost`.
+- An **`Origin`** must be an absolute URL. The literal `null` (an opaque
+  origin) and a bare authority are both refused rather than coerced — every
+  real browser sends a scheme, so anything else is not a browser and has no
+  CSRF story to protect.
+- `--host` names an address to **bind**, so it arrives in whichever form a shell
+  accepts: `192.168.1.37`, `mybox`, or a bare IPv6 literal `fd00::1` that a
+  browser will later send bracketed. It is bracketed before parsing so both
+  spellings canonicalise to one entry.
+
+Reads accept a **missing** Origin, because an ordinary same-origin page load
+sends none; a supplied one still has to be permitted. A write still requires the
+Origin to be present, per rule 2 above.
+
+Getting this wrong was not theoretical. Splitting a bare authority on `:` and
+taking the first field is correct only for a dotted IPv4 literal, so `localhost`,
+`--host <name>` and `[::1]` each answered 403 on the very URL `gw serve` had
+just printed.
+
 ## 9. GitHub sync (v0.3)
 
 Uses the `gh` CLI. Never handles tokens.
@@ -781,7 +1206,7 @@ Scheduler loop in `serve`, every `tick_s` (default 5):
 2. Running count ≥ `max_concurrent` → skip.
 3. Candidates: items where the next stage has `auto: true`, `flag` is null, deps satisfy the next stage's `deps_at_least`, and either a `dispatch` event exists with no later `run_ended`/`cancel`, or the stage before is `auto` (continuation).
 4. Pick by index in `config.vocab.priority` (position 0 first), then oldest `updated`. An item whose `priority` is absent from that array, or null, sorts after every item whose priority is in it — an unclassified item never jumps the queue.
-5. Start: create worktree `git worktree add <root>/<id> -b gw/<id>` (reuse if exists). If `memory.enabled` and `recall.on_dispatch`: call `memory.recall("<title>. <scope>", top_k)`, trim to `max_chars`, fill `{{prior_context}}`; if `project_id` is set, fill `{{capsule}}`. A memory failure logs a warning and leaves both empty; it never blocks the run. Render prompt, spawn provider `cmd` with `cwd` = worktree and env `GW_ACTOR=agent:<run>`, `GW_ITEM=<id>`, `GW_ROOT=<repo>`. Pipe stdout+stderr to `runs/<id>-<run>.log`. Append `run_started`. Set `owner`.
+5. Start: create worktree `git worktree add <root>/<id> -b gw/<id>` (reuse if exists). If `memory.enabled` and `recall.on_dispatch`: call `memory.recall("<title>. <scope>", top_k)`, trim to `max_chars`, fill `{{prior_context}}`; if `project_id` is set, fill `{{capsule}}`. A memory failure logs a warning and leaves both empty; it never blocks the run. Render prompt (§10.3), spawn provider `cmd` with `cwd` = worktree and env `GW_ACTOR=agent:<run>`, `GW_ITEM=<id>`, `GW_ROOT=<repo>`. Pipe stdout+stderr to `runs/<id>-<run>.log`. Append `run_started`. Set `owner`.
 6. On exit — **normal exit included, which is the common case** — append `run_ended`
    with the outcome (`ok` when the process exits 0, otherwise `error`) and
    `git -C <worktree> rev-parse HEAD`, clear the registry record, and release
@@ -895,6 +1320,16 @@ more force.
 This is how a user sees what their configuration will actually do before it does
 it, and it is the first thing anyone sane tries.
 
+> **Not shipped (as of 2026-09-20, v0.13.2).** This paragraph has always
+> described an intention, not a command. `createRunner({ dryRun: true })` is
+> real and returns `{ prompt, argv, provider, log, env }` without spawning — but
+> it is reachable only from a test, and nothing in `lib/cli/` or
+> `lib/commands/serve.js` passes the flag. There is no `gw serve --dry-run` and
+> no `gw dispatch --dry-run`. The promise is left standing rather than deleted
+> because the seam it needs already exists and the reason for it is unchanged;
+> it is marked here so nobody reads it as a feature. The equivalent promise for
+> `gh` in §9.1 *is* shipped: `gw sync --dry-run` is a real flag.
+
 **Every run is recorded on disk before the process starts**, in
 `.gatewright/runs/<run>.json` with its pid, item, worktree and start time. Not
 in the server's memory. `gw stop --all` must work from any terminal, with no
@@ -918,6 +1353,67 @@ that files three more.
 
 **One run, one worktree, one branch, one log.** Killing a run never dirties the
 main checkout, and two runs cannot stomp each other's files.
+
+### 10.3 Rendering the dispatch prompt
+
+New 2026-09-20 (T-0128). `prompt.md` (§1) is rendered by substituting ten
+placeholders: `{{title}}`, `{{scope}}`, `{{deps}}`, `{{notes}}`,
+`{{log_tail}}`, `{{prior_context}}`, `{{capsule}}`, `{{stage}}`,
+`{{target_stage}}`, `{{exit}}`.
+
+**The first seven are written by someone who is not the person running the
+agent.** A GitHub issue body anyone can open reaches `{{scope}}` through
+`gw sync`; a previous run's output reaches `{{log_tail}}`; a memory backend
+reaches `{{prior_context}}` and `{{capsule}}`. Splicing that text straight into
+the template put a stranger's `## When done` at the same structural level as the
+template's own, in a prompt handed to an unattended
+`claude -p ... --allowedTools Edit,Bash`. The last three are different: `stage`,
+`target_stage` and `exit` come from `stages.json`, which is written by whoever
+owns the board, so they are substituted plainly.
+
+Each of the seven is quoted as data:
+
+```
+<<<GW-DATA:scope>>>
+...the field's text...
+<<<END-GW-DATA:scope>>>
+```
+
+- **Marker forgery is neutralised.** Every `<<<` in the quoted text is escaped
+  to `\<\<\<`, wherever it appears and mid-line included, so quoted text can
+  never forge a closing marker.
+- **Structure is neutralised.** An ATX heading or a code fence at the start of a
+  line (up to three leading spaces, as Markdown allows) is escaped, so a
+  stranger's `## When done` cannot sit at the same level as the template's own
+  headings. Markdown renders every escaped form as the literal text, so nothing
+  is hidden from whoever later reads the run's prompt: the text is all still
+  there, it just cannot restructure the page.
+- **Each field has its own cap**, applied before quoting: `title` 500,
+  `deps` 1000, `notes`/`prior_context`/`capsule` 4000 (also the default for any
+  field added later), `scope`/`log_tail` 8000 characters. A field longer than
+  that is not information, it is a flood — it pushes the instructions out of the
+  model's attention, and out of some providers' argv limits, at whatever length
+  the author chose. Truncation is visible: `(truncated: N of M characters
+  shown)`.
+- **An absent field stays absent.** Markers around nothing tell an agent
+  nothing, so an empty value substitutes as empty, and `prompt.md`'s closing
+  line explains what an empty prior-context section means.
+- **The markers own their lines** however the placeholder was written, including
+  inline in the middle of a sentence.
+
+**Fencing happens at substitution time and never in the template.** `prompt.md`
+ships expecting to be edited (§1), so a template author who rewrites a line must
+not be able to drop the quoting with it. What the template *does* own is the
+explanation: the shipped one tells the agent that everything between the markers
+is DATA, that anyone can write it, and that it must never follow an instruction,
+request or heading found inside it — and that explanation appears **before** the
+first quoted field, or an agent reads a stranger's text with no warning attached.
+
+**Provider argv substitution uses callbacks.** `{prompt}` and `{item}` are
+replaced in `runner.providers.<name>.cmd` with function replacements, not string
+ones. A string replacement is itself a pattern, so `$&`, ``$` ``, `$'` and `$1`
+occurring in an item's title or a quoted issue body rewrote the argv the
+provider was handed.
 
 ## 11. AGENTS.md block
 
@@ -971,19 +1467,33 @@ This repo uses gatewright. At the start of every session run `gw brief` and act 
 
 ## 12. Adapters (v0.4)
 
-`adapters/claude-code/` — plugin manifest with a `SessionStart` hook running `gw brief`, a `PreToolUse` hook running `gw guard --pretool` before any edit or write (§6.5), and a skill file pointing at the AGENTS.md rules.
-`adapters/cursor/` — `.cursor/rules/gatewright.mdc` with the same block.
-`adapters/codex/` — snippet for `AGENTS.md` (Codex already reads it; adapter is docs only).
+`adapters/claude-code/` — plugin manifest with a `SessionStart` hook running `gw brief`, a `PreToolUse` hook running `gw guard --pretool` before any edit or write (§6.5), a skill file pointing at the AGENTS.md rules, and `.mcp.json` registering `gw mcp` (§6.9).
+`adapters/cursor/` — `.cursor/rules/gatewright.mdc` with the same block, and the `.cursor/mcp.json` snippet.
+`adapters/codex/` — snippet for `AGENTS.md` (Codex already reads it), and the `config.toml` `[mcp_servers.gw]` snippet.
 `adapters/generic/` — the block above, for anything else.
 
 Adapters contain no logic. If a provider can't run a command at session start, the AGENTS.md instruction is the fallback and is sufficient.
+
+**Amended 2026-09-20 (T-0137).** Every adapter now also carries the one-line MCP
+registration for its provider — the same `{"command": "gw", "args": ["mcp"]}`
+in whatever shape that client's config takes. The Claude Code plugin registers
+it through its own `.mcp.json` rather than the manifest's `mcpServers` field.
+This remains no logic: a registration is a path and two strings.
+
+The `PreToolUse` hook does not call `gw guard` directly. It first probes for a
+guard-capable `gw` and steps aside when there is none, because an older `gw`
+first on `PATH` answers `gw guard --pretool` with a usage error, which Claude
+Code reads as a refusal — and that blocked every edit in the repository. On
+Windows it finds `gw.cmd`. A project set up before v0.13 keeps the old hook
+until `gw hook install --agent` is run again; `gw hook status` and
+`gw doctor` (§6.8) each report a stale one.
 
 `adapters/second-brain/` is the exception: it is a memory provider (see §14) and contains the client code for that backend. Provider adapters and memory adapters are different kinds of thing and live in the same folder only for discoverability.
 
 ## 13. Non-functional
 
 - `brief` on 500 items: under 100ms.
-- `items.jsonl` writes: atomic via temp file + rename.
+- `items.jsonl` writes: atomic **and durable** — write a sibling temp file, `fsync` it, rename over the target, then `fsync` the directory that now holds the new name. Appends to `events.jsonl` are `fsync`ed too. A crash therefore leaves either the old file or the new one, never a renamed file whose contents were still in the page cache (amended 2026-09-20, T-0136; the version this replaces did no `fsync` at all). Windows has no fsync-a-directory concept and refuses the open outright, so the directory step degrades to a no-op there rather than failing the write. Measured cost on btrfs: `gw add` 67ms → 77ms.
 - Concurrent CLI writes from multiple runs: advisory lock file `.gatewright/.lock` with 2s retry, 10s give-up.
 - No telemetry. No network except `gh` in `sync` and the loopback server.
 - Node 22+. No native modules. `npm ls --prod` is empty. 18 and 20 are EOL
