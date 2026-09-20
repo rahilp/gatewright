@@ -5,8 +5,9 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
+import { readConfig, readStages } from '../lib/config.js';
 import { createRunRegistry } from '../lib/run/registry.js';
-import { createScheduler } from '../lib/run/scheduler.js';
+import { createScheduler, selectCandidate } from '../lib/run/scheduler.js';
 import { createRunLifecycle } from '../lib/run/lifecycle.js';
 import { spawn } from 'node:child_process';
 import { createRunner } from '../lib/run/spawn.js';
@@ -211,29 +212,57 @@ test('the dispatch index keeps exactly the semantics events.jsonl already had', 
   }
 });
 
+// Counts how many times the event log is TRAVERSED, by trapping the reads
+// `for...of` makes. Wall-clock cannot express this property honestly: the old
+// walk's dominant cost was a per-candidate Map rebuild that is constant in the
+// log length, so a same-items/longer-log ratio scored the OLD code better than
+// the new one, and a same-log/more-items ratio left only a 6.7x-vs-1.8x gap
+// between them -- a threshold in that gap is a measurement of the host, which is
+// how this assertion first failed on Windows CI. A traversal count is the claim
+// itself, exact on every machine.
+function countingEvents(events) {
+  const state = { passes: 0 };
+  return new Proxy(events, {
+    get(target, key) {
+      if (key === 'passes') return state.passes;
+      if (key === Symbol.iterator) state.passes += 1;
+      // `target` as the receiver, so Array's methods and its internal slots are
+      // reached directly and the trap never changes what the log reads as.
+      return Reflect.get(target, key, target);
+    },
+  });
+}
+
 test('the dispatch index reads every item in one pass over the events, not one pass per item', () => {
-  // Two boards with the SAME length of event log and a 20x difference in item
-  // count. A per-candidate walk costs items x events, so the second board takes
-  // ~20x as long; one pass costs items + events, so the two are within noise of
-  // each other. Holding the log fixed is what makes this a test of the algorithm
-  // rather than of the machine -- a slow host scales both boards alike, and the
-  // assertion is the ratio, never a wall-clock budget.
-  const EVENTS = 20_000;
-  function elapsed(count) {
+  // The 100-vs-2000 comparison, in traversals rather than milliseconds: the
+  // whole point is that this number does not grow with the board. A walk per
+  // candidate makes it 1 + candidates (101, then 2001); one shared index makes
+  // it 1, whatever the item count.
+  const EVENTS = 5_000;
+  function fixture(count) {
     const items = Array.from({ length: count }, (_, index) => item(`P1-${String(index).padStart(4, '0')}`));
     const store = board({ items });
     // Written straight to events.jsonl: appendEvent re-baselines the digest per
     // call, which would make building the fixture the slowest part of the test.
     const lines = Array.from({ length: EVENTS }, (_, index) => JSON.stringify({ ts: '2026-01-01T00:00:00.000Z', type: 'dispatch', item: items[index % count].id }));
     writeFileSync(store.paths.events, `${lines.join('\n')}\n`);
-    const subject = scheduler(store).scheduler;
-    const started = process.hrtime.bigint();
-    assert.equal(subject.tick().status, 'started', 'both boards must have real work to pick, or the walk is never reached');
-    return Number(process.hrtime.bigint() - started) / 1e6;
+    return { store, config: readConfig(store), stages: readStages(store), items: store.readItems(), events: store.readEvents() };
   }
-  const few = Math.max(elapsed(100), 1);
-  const many = elapsed(2000);
-  assert.ok(many / few < 5, `20x the items over the same event log must not cost ~20x the tick: ${few.toFixed(1)}ms -> ${many.toFixed(1)}ms`);
+
+  // selectCandidate() is measured because it is exactly what tick() calls --
+  // asserted below, so this can never drift into measuring a function production
+  // no longer uses.
+  let last = null;
+  for (const count of [100, 2000]) {
+    const fixed = fixture(count);
+    const events = countingEvents(fixed.events);
+    const candidate = selectCandidate({ ...fixed, events });
+    assert.ok(candidate, `a board of ${count} items must have real work to pick, or the walk is never reached`);
+    assert.equal(events.passes, 1, `${count} candidates over one log must read it once, not ${count + 1} times`);
+    last = { store: fixed.store, candidate };
+  }
+
+  assert.equal(scheduler(last.store).scheduler.tick().item, last.candidate.id, 'tick() must pick exactly what the measured selection picked');
 });
 
 // (b) A claim is a lock, and the scheduler is not exempt from it. It used to
