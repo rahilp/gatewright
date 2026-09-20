@@ -24,7 +24,7 @@ gw brief
 gw serve
 ```
 
-Capture is one command with no required flags: `phase`, `type` and `priority` start out null, because at the moment you write a title down you genuinely may not know them yet, and guessing is worse than leaving them unset. `add` → `claim` → `move … building` is the whole path to "I am working on this" — no mandatory edit stands in the way. Rigor still applies; it just applies where a claim of completion is made. In the solo pipeline, reaching `done` needs a scope (what "done" means) and evidence, because that is the step where the claim needs to hold up, not the step where the idea got written down.
+Capture is one command with no required flags: `phase`, `type` and `priority` start out null, because at the moment you write a title down you genuinely may not know them yet, and guessing is worse than leaving them unset. `add` → `claim` → `move … building` is the whole path to "I am working on this" — no mandatory edit stands in the way. Rigor still applies; it just applies where a claim of completion is made. In the solo pipeline, reaching `done` needs a scope (what "done" means) and evidence that looks like evidence — a commit SHA, a file path, or a link — because that is the step where the claim needs to hold up, not the step where the idea got written down.
 
 No global install? Use `npx gatewright <command>` for each command instead. The package ships both `gw` and `gatewright` as binary names so a `gw` collision on your PATH is never a blocker.
 
@@ -50,9 +50,18 @@ A card in Built has evidence because it could not have got there without it. `gw
 $ gw move T-0001 built
 target stage requirements are not met
 built: needs a scope: run `gw edit T-0001 --scope "<what done looks like>"`
-built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move T-0001 built --evidence "new evidence 1"`
+built: Needs at least one new piece of evidence, distinct from anything already recorded: run `gw move T-0001 built --evidence "<commit sha, test path, or URL>"`
+built: Evidence supplied with the move must look like a commit, a file path, or a link: run `gw move T-0001 built --evidence "<commit sha, test path, or URL>"`
 $ echo $?
 1
+```
+
+Every value a refusal prints is an angle-bracketed placeholder, because a refusal that prints a value prints the answer to itself. The stage where completion is claimed — `done` in the solo pipeline, `built` in the team one — asks for evidence that looks like a commit SHA, a file path, or a link, so a sentence about the work is not evidence of it:
+
+```
+$ gw move T-0001 built --evidence "new evidence 1"
+target stage requirements are not met
+built: Evidence supplied with the move must look like a commit, a file path, or a link: run `gw move T-0001 built --evidence "<commit sha, test path, or URL>"`
 ```
 
 Add the scope and the evidence and the same command succeeds:
@@ -251,9 +260,10 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw next <id> [--json]` | Show the stage(s) an item can move to right now, and the unmet conditions in plain English for the rest |
 | `gw edit <id> [--title ...] [--scope ...] [--priority P] [--type T] [--phase P] [--deps a,b\|""] [--refs a,b\|""] [--force] [--by <who>]` | Change non-stage, non-evidence, non-notes fields. An empty `--deps ""` or `--refs ""` clears the list; a forced `--scope` edit on finished work is recorded in the item's notes |
 | `gw note <id> "<text>" [--by <who>]` | Append a timestamped line to the item's notes |
-| `gw show <id> [--json]` | Print one item and its events |
-| `gw list [--stage S] [--phase P] [--flag F] [--json]` | Print items as a flat list |
+| `gw show <id> [--json]` | Print one item and its events. A field with nothing in it — null, empty, or an empty list — renders as `—`, so the block never mixes a raw `null` with a blank line; `--json` stays the raw item |
+| `gw list [<text>] [--stage S] [--phase P] [--flag F] [--owner W] [--limit N] [--json]` | Print items as a flat list. `<text>` matches a title or an id, case-insensitively; `--owner` takes a name in either spelling (`rahil` or `human:rahil`), or `none` for the unowned; `--limit` caps the rows — in `--json` too — and says how many it held back. With no argument and no flag, the output is unchanged |
 | `gw check [--json]` | Report rule violations, vocabulary drift, and out-of-band writes; exit 1 on any report |
+| `gw doctor [--json] [--port P]` | Check the things that make gw work and name the command that fixes each one: the `gw` on PATH and whether a newer release is published, the git repository, the board and its digest, `stages.json` and `config.json`, the commit hook and the agent pre-edit guard (including a stale one), `gh` when GitHub sync is on, and the runner's provider binary when the runner is on. `--port P` also probes a `gw serve` you already started, on `127.0.0.1` and on `localhost`; it never starts one. Exit 0 when everything passed, 1 when anything failed. Writes nothing — not even a digest baseline |
 | `gw repair [--write] [--force]` | Inspect corrupt item and event lines without changing them by default. `--write` moves unparseable lines to `.gatewright/quarantine.jsonl`; after review, `--force` re-baselines a stale digest |
 | `gw guard [--message-file F] [--message M] [--branch B] [--range A..B] [--pretool] [--tool T] [--file F] [--warn] [--json]` | Refuse a change no board item accounts for: a commit (via the hook), every commit in a range (via CI), or an agent's edit before it happens |
 | `gw hook install [--ci] [--agent] [--force]` | Install the enforcement points: a `commit-msg` hook, a pull-request workflow, and the agent pre-edit guard. Also `gw hook status` and `gw hook uninstall` |
@@ -263,6 +273,7 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw open [--no-browser] [--watch] [--port P]` | Write `board.html` and open it; `--watch` rewrites the snapshot when items or events change |
 | `gw upgrade [--templates]` | Replace the CLI and the viewer, never the data |
 | `gw serve [--port 7777] [--host H] [--open] [--no-browser]` | Serve the live board; loopback unless `--host` says otherwise, with its write API and, when explicitly enabled and configured, its scheduler |
+| `gw mcp [--by <who>]` | Speak the Model Context Protocol on stdin/stdout, exposing the board as tools an MCP client can call. Registered once in the client's config, not run by hand |
 | `gw sync [--dry-run]` | Pull linked GitHub issues through `gh`; `--dry-run` previews synchronization |
 | `gw stop <id> \| --all` | Stop one recorded run, or all recorded runs from any terminal |
 | `gw resume <id>` | Resume a paused item in its existing worktree with the previous log tail |
@@ -270,6 +281,30 @@ Every command exits 0 on success, 1 on a rule violation, 2 on a usage error, 3 o
 | `gw gc [--dry-run] [--force]` | Remove terminal-stage worktrees; dry-run previews and force permits dirty worktrees |
 
 The full contract, including field ownership, the move algorithm, and the brief layout, is in `specs.md`.
+
+### When it doesn't work
+
+```
+$ gw doctor
+gw doctor — board at /work/api
+
+PASS  gw on PATH            the gw on PATH is the build answering this check
+PASS  git repository        /work/api is inside /work/api
+PASS  board                 41 items in .gatewright
+FAIL  board digest          items.jsonl changed outside gw since 2026-09-19T11:04:22.881Z. Whatever is in there was not written by gw, so no rule was applied to it.
+                            fix: run `gw check` to see what it says now, then `gw repair --write --force` to accept it deliberately — or restore the file from git
+FAIL  agent pre-edit guard  .claude/settings.json runs a pre-edit guard this gw did not write — an older one installed it. [...]
+                            fix: replace it with `gw hook install --agent`
+
+2 of 12 checks failed, 3 skipped. Each FAIL line names the command that fixes it.
+```
+
+One command, one screen, and every failing line ends in something you can run.
+`gw doctor` writes nothing at all: a board it reported as edited outside gw is
+still reported the next time, because a diagnostic that quietly repairs what it
+finds cannot be run twice and believed. `--json` gives the same report to a
+program, and `--port <p>` probes a board you are already serving.
+
 
 ## Using it with agents
 
@@ -299,6 +334,63 @@ The agent's whole interface is `brief`, `show`, `claim`, `move`, `note`, `add`, 
 
 Gatewright includes adapters for Claude Code, Cursor, and Codex. The Claude Code adapter provides a `SessionStart` hook that runs `gw brief` and a `PreToolUse` hook that first verifies a guard-capable `gw`, then runs `gw guard --pretool` before any edit; Cursor uses its rules file; Codex reads `AGENTS.md` directly.
 
+## The board as tools: `gw mcp`
+
+Everything above asks an agent to *remember* something: read `AGENTS.md`, then
+type the right `gw` command at the right moment. `gw mcp` removes the
+remembering. It is an MCP server — zero dependencies, the protocol written by
+hand over stdin and stdout — that publishes the board as ten tools an agent can
+see in its own tool list:
+
+`gw_brief` · `gw_show` · `gw_next` · `gw_list` · `gw_add` · `gw_claim` ·
+`gw_move` · `gw_note` · `gw_edit` · `gw_triage`
+
+Register it once. In Claude Code it comes with the plugin, or:
+
+```sh
+claude mcp add gw -- gw mcp
+```
+
+Codex: `codex mcp add gw -- gw mcp`. Cursor and everything else take the same
+shape in JSON — `{"command": "gw", "args": ["mcp"]}` — and each adapter under
+`adapters/` carries the exact snippet.
+
+### MCP or the CLI and hooks?
+
+Both. They are not two ways to do the same job.
+
+| | What it does | Why it is not the other one |
+| --- | --- | --- |
+| **hooks** (`gw guard`, `gw hook install`) | Refuse a commit or an edit that no board item accounts for | Enforcement. It runs whether or not the agent cooperates, which is the whole point of a gate |
+| **MCP** (`gw mcp`) | Make reading and writing the board a native tool call | Affordance. It makes the tracked path the easy path; it stops nothing |
+| **CLI** (`gw ...`) | The same commands, for people and for scripts | Still the substrate: MCP calls the very same command modules |
+
+The guard still gates edits when MCP is registered — an agent that skips the
+board is refused at its first `Edit`, exactly as before. What changes is what
+it does next: instead of shelling out to a command it half-remembers, it calls
+`gw_add` and `gw_claim`, reads the refusal the board gave it, and carries on.
+
+Nothing about the rules moves. A tool call runs the same `lib/commands/*`
+module the CLI runs, through the same adapter `gw serve` writes through, so
+there is one write path and one place a rule can live. A refused move comes
+back with `isError` set and the command's own sentence, byte for byte:
+
+```
+target stage requirements are not met
+built: Needs at least one new piece of evidence, distinct from anything already
+recorded: run `gw move T-0007 built --evidence "<commit sha, test path, or URL>"`
+```
+
+Those sentences are the teaching surface. Paraphrasing them for the tool
+result would have made the MCP surface a worse teacher than the terminal.
+
+Writes are recorded as `agent:mcp` unless `GW_ACTOR` says who is really
+acting; a bare `agent` is refused here exactly as it is on the CLI, before the
+server reads a single byte of protocol. The server implements MCP revision
+`2025-06-18` and negotiates down to `2025-03-26` and `2024-11-05`. See
+`docs/mcp.md` for the wire details.
+
+
 ## Choosing a workflow shape
 
 A stage may declare `"role": "done"`, which marks it as the finish line: work standing there is finished, and `gw brief` stops counting it as in flight. The solo pipeline ends at Done and uses that role; the team pipeline ends at Verified. Only an explicit role counts — a final stage is not assumed to be an ending.
@@ -318,7 +410,7 @@ with `paused` and `dropped` as side states. Each stage has:
 - `label` — shown on the board.
 - `exit` — a human-readable description of what "done" means at this stage. Shown in the brief and the board. No machine meaning.
 - `auto` — when `true`, the scheduler (v0.4) may move items into this stage. When `false`, only a human can. The default is `auto: false` for `reviewed`, `merged`, and `verified`.
-- `requires` — the machine-checked rule for **entering** the next stage. Keys: `scope: true`, `owner: true`, `evidence_min: n`, `evidence_match: regex`, `deps_at_least: stage`.
+- `requires` — the machine-checked rule for **entering** the next stage. Keys: `scope: true`, `owner: true`, `evidence_min: n`, `evidence_match: regex`, `deps_at_least: stage`, `children_done: true`. Both shipped pipelines put an `evidence_match` on the stage that claims completion — `built` for team, `done` for solo — and it accepts a commit SHA (7–64 hex), a path, or a link, and nothing with a space in it. `evidence_min` alone counts strings, and a count is something any sentence can pay; the shape rule is what makes the count mean an artifact someone can go and look at. Loosen or remove it per board by editing the stage, like every other rule here.
 
 `stages.json` is the entire process definition. There is no hardcoded logic outside it. Add a stage, rename a stage, change the rule for entering `built`, mark `reviewed` as auto, drop a stage entirely — edit the JSON and `gw check` will pick it up. The board re-renders from it; `brief` reads the same file; the scheduler (when it lands) will too.
 
@@ -335,7 +427,7 @@ Two runner guarantees are genuinely weaker on Windows, and are weaker by the pla
 
 ## Status
 
-Gatewright is at v0.13.2.
+Gatewright is at v0.14.0.
 
 Shipped in v0.1: `init`, `brief`, `add`, `claim`, `release`, `move`, `edit`, `note`, `show`, `list`, `check`, `import` (markdown only at the time; CSV and JSON arrived in v0.9), `open`, `upgrade`. Snapshot viewer with board, table, and overview views. Out-of-band write detection via `.digest`.
 
@@ -372,6 +464,10 @@ Shipped in v0.13: `gw init` and `gw config` are full-screen and driven by the ar
 Shipped in v0.13.1: polish that the new README screenshots exposed. On the Overview, the What next rows keep their titles readable instead of shrinking them to a few characters, and nothing spills past its card. On the Board, a card blocked by a dependency says what it waits on, `Show all` appears only when something is hidden, and empty Dropped and Paused columns collapse to narrow strips so the whole pipeline fits on a laptop screen. An item's detail panel lists only each stage's own rules, and the distribution bars share one starting edge. The title bar in `gw init` and `gw config` is now dark text on bright cyan, readable in light and dark terminal themes, and spans the full width.
 
 Shipped in v0.13.2: the light theme is white and cool rather than warm stone and cream — white cards on a cool grey page, slate text and borders, one blue accent for tabs, links, buttons and focus rings, and warnings as amber on white. The dark theme keeps its look without its brown cast, and every text colour passes WCAG AA in both. On the board, a column's width follows its cards: a stage holding hundreds of items is no longer squeezed while an empty one takes the space, and a column's count is never clipped. `gw` also says which board it is using when `GW_ROOT` points somewhere other than the board the current directory would find — one line on stderr, silent for the runner's own agents, and stdout unchanged. Running the test suite no longer writes into a board outside its scratch directories, whatever `GW_ROOT` or agent variables the calling shell has set; a test holds that line.
+
+Shipped in v0.14: the two claims at the heart of the product now hold under pressure, and two new commands came out of auditing them. The completion gates carry a shape rule — evidence must look like a commit SHA, a file path, or a link — so the refusal's own suggestion no longer satisfies the gate it prints, and the advice shows an unmistakable placeholder instead of a passing string. Dispatch prompts quote every board-derived field between data markers with headings and fences neutralised, synced GitHub issues arrive held for review on team boards, and a stray `$&` in a title can no longer corrupt the runner's command line, so an issue body cannot smuggle instructions to an unattended agent. `gw mcp` exposes the board to any MCP client as ten typed tools — brief, show, next, list, add, claim, move, note, edit, triage — through the same write path as the CLI, refusing with the CLI's exact words; `gw doctor` runs twelve read-only checks and names the command that fixes each failure. A commit naming only finished work is now refused the way the spec always said, with reopen advice; `last_commit` on runs carries the real worktree SHA instead of null; import preserves notes and refs; `gw gc --events` compacts the event log into a greppable archive without deleting a line, and boards and snapshots cap the history they inline, saying so on a header pill. The scheduler admits runs under the lock, never steals a human's claim, survives its own errors, and its tick dropped from seconds to milliseconds on large boards; `localhost` finally works in the browser, writes are fsynced before rename, and the founding documents in the repo say what the product actually does.
+
+Shipped in v0.13.x (patches): see the git tags; 0.13.1 and 0.13.2 carried the viewer polish, TUI title-bar contrast, GW_ROOT notice and test isolation now folded into the story above.
 
 Everything in the original plan is now built. Known gaps are tracked on the board rather than listed here.
 

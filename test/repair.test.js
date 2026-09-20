@@ -109,7 +109,7 @@ test('the re-baseline command repair prints runs verbatim from that state and le
     id: 'T-0001', title: 'Forged verified item', stage: 'verified', flag: null,
     owner: 'human:tester', scope: 'fully forged but shape-valid', deps: [],
     evidence: [
-      { text: 'commit abc123', stage: 'built' },
+      { text: 'abc1234', stage: 'built' },
       { text: 'https://github.com/acme/app/pull/1', stage: 'in_review' },
       { text: 'CI green', stage: 'verified' },
       { text: 'deployed to target', stage: 'verified' },

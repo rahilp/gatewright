@@ -18,10 +18,10 @@ const stages = {
 };
 const item = (over = {}) => ({ id: 'P1-01', title: 'test', stage: 'backlog', flag: null, owner: null, deps: [], evidence: [], updated: '2020-01-01T00:00:00.000Z', gh: null, ...over });
 
-function board(items = [item()]) {
+function board(items = [item()], boardStages = stages) {
   const root = mkdtempSync(join(tmpdir(), 'gw-next-'));
   const store = createStore(root); store.ensure(); store.writeItems(items);
-  writeFileSync(store.paths.stages, JSON.stringify(stages));
+  writeFileSync(store.paths.stages, JSON.stringify(boardStages));
   writeFileSync(store.paths.config, JSON.stringify({}));
   // These fixture writes are legitimate setup, not a hand edit under test.
   store.rebaselineDigest();
@@ -49,7 +49,7 @@ other moves: dropped, paused (now)
 `);
 });
 
-test('gw next mid-pipeline leads with the blocked next stage, collapses further stages to a count, and puts backward moves in their own section after the answer', () => {
+test('gw next mid-pipeline leads with the blocked next stage, names the stages waiting behind it, and puts backward moves in their own section after the answer', () => {
   const b = board([item({ stage: 'building', owner: 'human:test' })]);
   const c = ctx(b, ['P1-01']);
   run(c);
@@ -60,7 +60,7 @@ test('gw next mid-pipeline leads with the blocked next stage, collapses further 
 
 next: built (blocked)
   - ${describeRule('evidence_min', 1, stages)}
-  - 4 further stages need this first
+  - 4 further stages need this first: in_review, reviewed, merged, verified
 
 other moves: dropped, paused (now); backlog, specified (needs --force)
 `);
@@ -68,6 +68,33 @@ other moves: dropped, paused (now); backlog, specified (needs --force)
   const answerLine = c.out.indexOf('next: built');
   const backwardLine = c.out.indexOf('backlog, specified (needs --force)');
   assert.ok(answerLine >= 0 && backwardLine > answerLine, 'the answer must appear before the backward/side moves section');
+});
+
+// T-0138 — the line read "1 further stage need this first": the agreement was
+// wrong, and it named no stage, so the only thing it told a reader was that
+// there was something it would not name.
+test('one stage waiting behind the next one agrees with itself and is named', () => {
+  const small = { stages: [{ id: 'todo' }, { id: 'doing', requires: { owner: true } }, { id: 'done' }], terminal: ['done'], extra: [] };
+  const b = board([item({ stage: 'todo', owner: null })], small);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.match(c.out, /^ {2}- 1 further stage needs this first: done$/m);
+  assert.doesNotMatch(c.out, /stage need this/);
+});
+
+test('a long pipeline names the first few stages waiting and counts the rest', () => {
+  const long = {
+    stages: [
+      { id: 's0' }, { id: 's1', requires: { owner: true } }, { id: 's2' }, { id: 's3' },
+      { id: 's4' }, { id: 's5' }, { id: 's6' }, { id: 's7' },
+    ],
+    terminal: ['s7'],
+    extra: [],
+  };
+  const b = board([item({ stage: 's0', owner: null })], long);
+  const c = ctx(b, ['P1-01']);
+  run(c);
+  assert.match(c.out, /^ {2}- 6 further stages need this first: s2, s3, s4, s5, and 2 more$/m);
 });
 
 // T-0045 — the gate sentences name conditions, never the item causing them,

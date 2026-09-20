@@ -65,14 +65,14 @@ test('parseMarkdown returns items, deps, and skipped malformed lines', () => {
   assert.equal(items.find((i) => i.id === 'P1-07').stage, 'done');
 });
 
-test('parseMarkdown round-trips the real tasks.md with 89 items and correct details', () => {
+test('parseMarkdown round-trips the real tasks.md with 101 items and correct details', () => {
   const text = readFileSync(TASKS_MD, 'utf8');
   const { items, skipped } = parseMarkdown(text);
   assert.equal(skipped.length, 0);
-  assert.equal(items.length, 89); // hand-counted; bump deliberately when tasks.md gains items
+  assert.equal(items.length, 101); // hand-counted; bump deliberately when tasks.md gains items (89 + the 12 audit-sweep items recorded under ## P7)
 
   const ids = new Set(items.map((i) => i.id));
-  for (const id of ['P0-01', 'P1-01', 'P1-08a', 'P1-20', 'P4-01', 'P5-14']) {
+  for (const id of ['P0-01', 'P1-01', 'P1-08a', 'P1-20', 'P4-01', 'P5-14', 'T-0128', 'T-0139']) {
     assert.ok(ids.has(id), `missing expected id ${id}`);
   }
   for (const bad of ['Rebuild `items.jsonl` from events.', 'events.jsonl rotation', 'Multi-repo aggregation']) {
@@ -278,7 +278,7 @@ test('a gw list --json dump round-trips through import into a fresh board', () =
   run(source, 'triage', 'T-0001', '--approve', '--force', '--by', 'human:reviewer');
   run(source, 'claim', 'T-0001', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'building', '--by', 'agent:roundtrip');
-  run(source, 'move', 'T-0001', 'built', '--evidence', 'commit abc', '--by', 'agent:roundtrip');
+  run(source, 'move', 'T-0001', 'built', '--evidence', 'abc1234', '--by', 'agent:roundtrip');
   const dump = run(source, 'list', '--json');
 
   run(target, 'init', '--pipeline', 'team');
@@ -289,7 +289,7 @@ test('a gw list --json dump round-trips through import into a fresh board', () =
 
   const imported = createStore(target).readItems().find((i) => i.id === 'T-0001');
   assert.equal(imported.stage, 'built');
-  assert.deepEqual(imported.evidence, [{ text: 'commit abc', stage: 'built' }]);
+  assert.deepEqual(imported.evidence, [{ text: 'abc1234', stage: 'built' }]);
   assert.equal(imported.owner, 'agent:roundtrip', 'the claim that earned the building gate survives too');
 });
 
@@ -305,7 +305,7 @@ test('a verified item with four evidence entries across three stages round-trips
   run(source, 'triage', 'T-0001', '--approve', '--force', '--by', 'human:reviewer');
   run(source, 'claim', 'T-0001', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'building', '--by', 'agent:roundtrip');
-  run(source, 'move', 'T-0001', 'built', '--evidence', 'commit def', '--by', 'agent:roundtrip');
+  run(source, 'move', 'T-0001', 'built', '--evidence', 'def5678', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'in_review', '--evidence', 'https://github.com/a/b/pull/1', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'reviewed', '--by', 'agent:roundtrip');
   run(source, 'move', 'T-0001', 'merged', '--by', 'agent:roundtrip');
@@ -320,7 +320,7 @@ test('a verified item with four evidence entries across three stages round-trips
   const imported = createStore(target).readItems().find((i) => i.id === 'T-0001');
   assert.equal(imported.stage, 'verified');
   assert.deepEqual(imported.evidence, [
-    { text: 'commit def', stage: 'built' },
+    { text: 'def5678', stage: 'built' },
     { text: 'https://github.com/a/b/pull/1', stage: 'in_review' },
     { text: 'checked on staging', stage: 'verified' },
     { text: 'VALIDATION log', stage: 'verified' },
@@ -487,4 +487,101 @@ test('importing the real tasks.md never produces a board that fails stage rules'
 
   assert.deepEqual(findCycles(items), []);
   assert.deepEqual(missingDeps(items), []);
+});
+
+// T-0134 — PRD R8 ("All items land with stage, deps, evidence, notes
+// preserved") and tasks P1-12 ("stage, deps, evidence, notes, refs intact; a
+// 100-item fixture round-trips") both promised these, and import hardcoded
+// `notes: ''`, `refs: []`, `parent: null` at the last step, on every format.
+// A dump that loses an item's running notes, the links it points at and the
+// parent it belongs to is not a round trip; it is a new board that happens
+// to share some ids. Exercised through the binary, end to end, because that
+// is where the loss actually happened.
+test('a json dump round-trips an item\'s notes, refs and parent', () => {
+  const source = mkdtempSync(join(tmpdir(), 'gw-export-'));
+  const target = mkdtempSync(join(tmpdir(), 'gw-reimport-'));
+  const run = (cwd, ...args) => execFileSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, GW_ROOT: '' } });
+
+  run(source, 'init', '--pipeline', 'team');
+  run(source, 'add', 'parent work', '--scope', 'what done looks like');
+  run(source, 'note', 'T-0001', 'chose the simple path');
+  run(source, 'note', 'T-0001', 'and then the second thought');
+  run(source, 'edit', 'T-0001', '--refs', 'https://example.test/spec,https://example.test/issue/2');
+  run(source, 'add', 'the child', '--parent', 'T-0001', '--scope', 's');
+  const dump = run(source, 'list', '--json');
+  const before = JSON.parse(dump);
+
+  run(target, 'init', '--pipeline', 'team');
+  writeFileSync(join(target, 'dump.json'), dump);
+  assert.match(run(target, 'import', 'dump.json'), /imported 2, skipped 0/);
+
+  const after = createStore(target).readItems();
+  const parent = after.find((i) => i.id === 'T-0001');
+  const child = after.find((i) => i.id === 'T-0001.1');
+  assert.equal(parent.notes, before[0].notes, 'both note lines, timestamps and all, exactly as the source recorded them');
+  assert.match(parent.notes, /chose the simple path[\s\S]*second thought/);
+  assert.deepEqual(parent.refs, ['https://example.test/spec', 'https://example.test/issue/2']);
+  assert.equal(child.parent, 'T-0001', 'the child belongs to something; an import that forgets it makes children_done vacuous');
+  assert.equal(parent.parent, null);
+});
+
+test('a csv carries notes, refs and parent through their column aliases', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'rows.csv');
+  writeFileSync(path, [
+    'id,title,Notes,References,Parent',
+    'T-1,Parent row,"first line\nsecond line","https://a.test/x; https://a.test/y",',
+    'T-2,Child row,plain note,https://a.test/z,T-1',
+    '',
+  ].join('\n'));
+  const streams = capture();
+  assert.equal(await run({ store, root, actor: 'human:tester', flags: {}, positionals: [path], ...streams }), 0);
+
+  const items = store.readItems();
+  assert.equal(items.find((i) => i.id === 'T-1').notes, 'first line\nsecond line', 'RFC 4180 quoting is what lets a notes cell hold the newlines notes are made of');
+  assert.deepEqual(items.find((i) => i.id === 'T-2').refs, ['https://a.test/z']);
+  assert.deepEqual(items.find((i) => i.id === 'T-1').refs, ['https://a.test/x', 'https://a.test/y']);
+  assert.equal(items.find((i) => i.id === 'T-2').parent, 'T-1');
+  assert.equal(items.find((i) => i.id === 'T-1').parent, null, 'an empty parent cell is no parent, not the empty string');
+});
+
+// Markdown's six-field row has no column for any of the three. The point of
+// this test is that the limit is the format's and not the importer's: what
+// the file can say still survives, and what it cannot say lands as the empty
+// default rather than as something invented.
+test('a markdown import lands the fields markdown can express, and empty defaults for the three it cannot', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'tasks.md');
+  writeFileSync(path, '## P1 — phase\n\n- **P1-01** · A task · feature · G0 · — · Done when it is done.\n');
+  const streams = capture();
+  assert.equal(await run({ store, root, actor: 'human:tester', flags: {}, positionals: [path], ...streams }), 0);
+
+  const [item] = store.readItems();
+  assert.equal(item.scope, 'Done when it is done.');
+  assert.equal(item.notes, '');
+  assert.deepEqual(item.refs, []);
+  assert.equal(item.parent, null);
+});
+
+// The same door deps have had since T-0046: a declared relationship that
+// names nothing is a corruption, not a detail to drop in silence.
+test('a parent that names no item, and an item that parents itself, are skipped with the reason', async () => {
+  const { root, store } = repo();
+  const path = join(root, 'orphans.json');
+  writeFileSync(path, JSON.stringify([
+    { id: 'J-1', title: 'Orphan', parent: 'J-404' },
+    { id: 'J-2', title: 'Ouroboros', parent: 'J-2' },
+    { id: 'J-3', title: 'Child of the orphan', parent: 'J-1' },
+    { id: 'J-4', title: 'Fine' },
+    { id: 'J-5', title: 'Child of the fine one', parent: 'J-4' },
+  ]));
+  const streams = capture();
+  assert.equal(await run({ store, root, actor: 'human:tester', flags: {}, positionals: [path], ...streams }), 0);
+
+  const out = streams.lines.join('');
+  assert.match(out, /imported 2, skipped 3/);
+  assert.match(out, /unknown parent: J-404/);
+  assert.match(out, /an item cannot be its own parent/);
+  assert.match(out, /unknown parent: J-1/, 'dropping a row orphans its children, and each one says so');
+  assert.deepEqual(store.readItems().map((i) => i.id), ['J-4', 'J-5'], 'a parent named in the same file counts, exactly like a dependency does');
 });

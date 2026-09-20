@@ -1,7 +1,7 @@
 import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../lib/store.js';
@@ -10,6 +10,7 @@ import { createScheduler } from '../lib/run/scheduler.js';
 import { createRunLifecycle } from '../lib/run/lifecycle.js';
 import { spawn } from 'node:child_process';
 import { createRunner } from '../lib/run/spawn.js';
+import { superviseTick } from '../lib/commands/serve.js';
 
 // createScheduler's default lifecycle defaults to process.platform, so on real Windows CI
 // tick()'s unconditional enforceTimeouts() call would otherwise shell out to the real
@@ -50,7 +51,7 @@ function board({ items = [], events = [], runner = {} } = {}) {
   return store;
 }
 
-function scheduler(store, { registry = { list: () => ({ records: [] }) }, calls = [] } = {}) {
+function scheduler(store, { registry = { list: () => ({ records: [] }), record() {} }, calls = [] } = {}) {
   return {
     calls,
     scheduler: createScheduler({
@@ -175,4 +176,181 @@ test('a normally completed run frees capacity so the next tick starts the next q
   const next = subject.tick();
   assert.equal(next.status, 'started'); assert.equal(next.item, second.id);
   await onceClose(next.started.child);
+});
+
+// ---------------------------------------------------------------------------
+// T-0133 -- THE SUPERVISOR'S FOUR DEFECTS.
+//
+// tick() runs inside `gw serve`'s single event loop, on a timer, for every
+// board that has the runner on. Everything below is about that: what it is
+// allowed to cost, what it is allowed to take, what two of them are allowed to
+// do at once, and what it is allowed to do when it fails.
+// ---------------------------------------------------------------------------
+
+// (a) The dispatch index. Rebuilding this as one pass over events must not
+// quietly redefine what an outstanding dispatch IS. The semantics already
+// written into events.jsonl -- and already shared with lib/brief.js's
+// computeActive -- are: `dispatch` opens one, `run_ended` or `cancel` closes
+// it, and nothing else touches it. `run_started` in particular does NOT close
+// one: a live run is excluded by the registry, not by the event log, and a run
+// that dies without a run_ended is reconciled into one rather than being
+// silently forgotten.
+test('the dispatch index keeps exactly the semantics events.jsonl already had', () => {
+  const cases = [
+    ['a dispatch with nothing after it is outstanding', [{ type: 'dispatch', item: 'P1-01' }], 'started'],
+    ['run_ended closes it', [{ type: 'dispatch', item: 'P1-01' }, { type: 'run_ended', item: 'P1-01', run: 'r-1', outcome: 'ok' }], 'idle'],
+    ['cancel closes it', [{ type: 'dispatch', item: 'P1-01' }, { type: 'cancel', item: 'P1-01' }], 'idle'],
+    ['a re-dispatch after a close opens a new one', [{ type: 'dispatch', item: 'P1-01' }, { type: 'run_ended', item: 'P1-01', run: 'r-1', outcome: 'ok' }, { type: 'dispatch', item: 'P1-01' }], 'started'],
+    ['run_started does not close it', [{ type: 'dispatch', item: 'P1-01' }, { type: 'run_started', item: 'P1-01', run: 'r-1' }], 'started'],
+    ['an unrelated event never closes it', [{ type: 'dispatch', item: 'P1-01' }, { type: 'run_ended', item: 'P1-02', run: 'r-2', outcome: 'ok' }, { type: 'move', item: 'P1-01', from: 'backlog', to: 'backlog' }], 'started'],
+    ['a close with no dispatch before it leaves nothing open', [{ type: 'run_ended', item: 'P1-01', run: 'r-1', outcome: 'ok' }], 'idle'],
+  ];
+  for (const [why, events, expected] of cases) {
+    const store = board({ items: [item('P1-01')], events });
+    assert.equal(scheduler(store).scheduler.tick().status, expected, why);
+  }
+});
+
+test('the dispatch index reads every item in one pass over the events, not one pass per item', () => {
+  // Two boards with the SAME length of event log and a 20x difference in item
+  // count. A per-candidate walk costs items x events, so the second board takes
+  // ~20x as long; one pass costs items + events, so the two are within noise of
+  // each other. Holding the log fixed is what makes this a test of the algorithm
+  // rather than of the machine -- a slow host scales both boards alike, and the
+  // assertion is the ratio, never a wall-clock budget.
+  const EVENTS = 20_000;
+  function elapsed(count) {
+    const items = Array.from({ length: count }, (_, index) => item(`P1-${String(index).padStart(4, '0')}`));
+    const store = board({ items });
+    // Written straight to events.jsonl: appendEvent re-baselines the digest per
+    // call, which would make building the fixture the slowest part of the test.
+    const lines = Array.from({ length: EVENTS }, (_, index) => JSON.stringify({ ts: '2026-01-01T00:00:00.000Z', type: 'dispatch', item: items[index % count].id }));
+    writeFileSync(store.paths.events, `${lines.join('\n')}\n`);
+    const subject = scheduler(store).scheduler;
+    const started = process.hrtime.bigint();
+    assert.equal(subject.tick().status, 'started', 'both boards must have real work to pick, or the walk is never reached');
+    return Number(process.hrtime.bigint() - started) / 1e6;
+  }
+  const few = Math.max(elapsed(100), 1);
+  const many = elapsed(2000);
+  assert.ok(many / few < 5, `20x the items over the same event log must not cost ~20x the tick: ${few.toFixed(1)}ms -> ${many.toFixed(1)}ms`);
+});
+
+// (b) A claim is a lock, and the scheduler is not exempt from it. It used to
+// overwrite item.owner unconditionally at the end of a tick, so an item a human
+// had claimed to work on by hand was handed to an agent and the human's name
+// disappeared from the board.
+test('the scheduler never takes an item a human has claimed', () => {
+  const store = board({ items: [item('P1-01', { owner: 'human:rahil' })], events: [{ type: 'dispatch', item: 'P1-01' }] });
+  const { scheduler: subject, calls } = scheduler(store);
+  assert.equal(subject.tick().status, 'idle', 'a claimed item is not schedulable work');
+  assert.equal(calls.length, 0, 'and no provider was reached');
+  assert.equal(store.readItems()[0].owner, 'human:rahil', "the human's claim is still theirs");
+  assert.deepEqual(store.readEvents().filter((event) => event.type === 'run_started'), [], 'nothing was recorded as started');
+});
+
+test('an item still owned by an earlier agent run is left alone rather than taken over', () => {
+  const store = board({ items: [item('P1-01', { owner: 'agent:r-previous' })], events: [{ type: 'dispatch', item: 'P1-01' }] });
+  const { scheduler: subject, calls } = scheduler(store);
+  assert.equal(subject.tick().status, 'idle');
+  assert.equal(calls.length, 0);
+  assert.equal(store.readItems()[0].owner, 'agent:r-previous', 'releasing a stale claim is reconcile\'s job, never a second dispatch\'s');
+});
+
+test('a claimed item at the front of the queue does not starve the one behind it', () => {
+  const claimed = item('P1-01', { owner: 'human:rahil', priority: 'P0' });
+  const free = item('P1-02', { priority: 'P1' });
+  const store = board({ items: [claimed, free], events: [{ type: 'dispatch', item: 'P1-01' }, { type: 'dispatch', item: 'P1-02' }] });
+  const { scheduler: subject, calls } = scheduler(store);
+  const result = subject.tick();
+  assert.equal(result.status, 'started');
+  assert.equal(result.item, 'P1-02', 'skipping a claimed item must mean skipping it, not stopping at it');
+  assert.equal(calls.length, 1);
+});
+
+// (c) Admission was check-then-act with nothing held: the tick read the record
+// count, then did the expensive work (worktree creation), then spawned. Two
+// supervisors on one board -- a stale `gw serve` and a fresh one, or one per
+// checkout -- both passed the check and both spawned, so max_concurrent 1 ran
+// two agents. Two real processes are impractical in a test; two schedulers over
+// one board directory, with the second ticking inside the first's race window,
+// is the same interleaving.
+function supervisor(store, name, { onWorktree } = {}) {
+  const registry = createRunRegistry({ store });
+  const calls = [];
+  const scheduler = createScheduler({
+    store, registry, makeRunId: () => `r-${name}`,
+    worktree: { ensure: ({ item: candidate }) => { onWorktree?.(); return { path: join(store.root, `${name}-${candidate.id}`) }; } },
+    // Stands in for lib/run/spawn.js, which replaces the durable reservation
+    // with the live child's pid the moment the provider is invoked.
+    runner: { start(args) { calls.push(args); registry.record({ run: args.run, item: args.item.id, pid: process.pid }); return { provider: 'fixture' }; } },
+  });
+  return { scheduler, calls, registry };
+}
+
+test('two supervisors on one board cannot both admit past max_concurrent', () => {
+  const store = board({ items: [item('P1-01'), item('P1-02')], events: [{ type: 'dispatch', item: 'P1-01' }, { type: 'dispatch', item: 'P1-02' }] });
+  const second = supervisor(store, 'b');
+  let raced = null;
+  const first = supervisor(store, 'a', { onWorktree: () => { raced ??= second.scheduler.tick(); } });
+
+  assert.equal(first.scheduler.tick().status, 'started');
+  assert.equal(raced.status, 'at_capacity', 'the second supervisor must be refused by the first one\'s durable reservation');
+  assert.equal(first.calls.length + second.calls.length, 1, 'max_concurrent 1 means one provider process, not two');
+  assert.equal(createRunRegistry({ store }).list().records.length, 1);
+  assert.equal(store.readEvents().filter((event) => event.type === 'run_started').length, 1);
+});
+
+test('two supervisors cannot both dispatch the same item even when there is capacity for two', () => {
+  const store = board({ items: [item('P1-01')], events: [{ type: 'dispatch', item: 'P1-01' }], runner: { max_concurrent: 2 } });
+  const second = supervisor(store, 'b');
+  let raced = null;
+  const first = supervisor(store, 'a', { onWorktree: () => { raced ??= second.scheduler.tick(); } });
+
+  assert.equal(first.scheduler.tick().status, 'started');
+  assert.notEqual(raced.status, 'started', 'two agents on one item is two agents editing one worktree');
+  assert.equal(first.calls.length + second.calls.length, 1);
+  assert.equal(store.readEvents().filter((event) => event.type === 'run_started').length, 1);
+});
+
+// (d) With config.memory.enabled, tick() returns a Promise. serve.js called it
+// from a synchronous try/catch, so a rejection -- a worktree that cannot be
+// created, a provider that is not executable -- was an unhandled rejection that
+// killed `gw serve` and with it every live run's supervision.
+// The scheduler's two start paths report failure the same way -- the
+// synchronous one throws, the asynchronous one rejects -- so serve.js has one
+// rule to apply instead of two. What the scheduler owes either way is that the
+// admission it took is given back: a reservation that outlives a failed start
+// parks the supervisor at at_capacity forever with nothing actually running,
+// which is a worse failure than the crash because nothing reports it.
+test('a failing async tick releases its admission and reports through the same rejection serve already handles', async () => {
+  const store = board({ items: [item('P1-01')], events: [{ type: 'dispatch', item: 'P1-01' }] });
+  const config = JSON.parse(readFileSync(store.paths.config, 'utf8'));
+  config.memory = { enabled: true };
+  writeFileSync(store.paths.config, JSON.stringify(config));
+  const registry = createRunRegistry({ store });
+  const subject = createScheduler({
+    store, registry, makeRunId: () => 'r-test',
+    worktree: { ensure: () => ({ path: join(store.root, 'worktree') }) },
+    runner: { start() { throw new Error('the synchronous path must not be reached'); }, startWithMemory: async () => { throw new Error('spawn ENOENT: provider is not executable'); } },
+  });
+
+  await assert.rejects(subject.tick(), /not executable/, 'the failure must reach the supervisor, not be swallowed into a silent idle tick');
+  assert.deepEqual(registry.list().records, [], 'a failed start releases its reservation');
+  assert.equal(store.readItems()[0].owner, null, 'and releases the claim it took to make it');
+  assert.deepEqual(store.readEvents().filter((event) => event.type === 'run_started'), [], 'a run that never started is not recorded as started');
+});
+
+test('the serve supervisor loop survives a tick that throws and a tick that rejects', async () => {
+  const lines = []; const stderr = { write: (text) => lines.push(text) };
+  const seen = []; const onRejection = (error) => seen.push(error);
+  process.on('unhandledRejection', onRejection);
+  try {
+    assert.doesNotThrow(() => superviseTick(() => { throw new Error('sync boom'); }, stderr));
+    await superviseTick(() => Promise.reject(new Error('async boom')), stderr);
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally { process.off('unhandledRejection', onRejection); }
+  assert.deepEqual(seen, [], 'a tick rejection must never reach the process: it would take serve and every live run with it');
+  assert.match(lines.join(''), /sync boom/, 'a synchronous failure is still reported');
+  assert.match(lines.join(''), /async boom/, 'and so is a rejection');
 });

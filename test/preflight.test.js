@@ -122,3 +122,30 @@ test('fails on a dirty tree', () => {
 test('fails on a dev version', () => {
   assertFailure(fixture({ version: '1.2.3-dev', readme: '# Gatewright\n\n## Status\n\nGatewright is at v1.2.3.\n\n| Command | What it does |\n| --- | --- |\n| `gw init` | Create a board |\n' }), /version 1\.2\.3-dev is a placeholder/);
 });
+
+// T-0134 — `gw import` ships md, csv and json, and saying so in the usage
+// line (`[--format md|csv|json]`) made preflight read the option's values as
+// alternative commands and demand lib/commands/csv.js. A `|` inside an
+// option's brackets is a value; only a top-level one is another command.
+test('alternative option values are not commands, but alternative commands still are', () => {
+  const names = (help) => [...helpCommands(`usage: gw <command>\n\n${help}\n`)];
+  assert.deepEqual(names('  import <file> [--format md|csv|json]  ingest a task list'), ['import']);
+  assert.deepEqual(names('  show <id> | list [--stage S]          read one item, or many'), ['show', 'list']);
+  assert.deepEqual(
+    usageCommandEntries('usage: gw <command>\n\n  claim <id> | release <id>             take or drop ownership\n').map((entry) => entry.name),
+    ['claim', 'release'],
+  );
+});
+
+// A format advertised but never probed is a claim nobody checks, which is
+// the state this file's own fixture was in while `md` was the only one.
+test('fails when an advertised import format has no probe fixture', () => {
+  const help = '  import <file> [--format md|toml] ingest items';
+  const binary = `#!/usr/bin/env node
+import { mkdirSync } from 'node:fs';
+const args = process.argv.slice(2);
+if (args[0] === '--help') console.log(${JSON.stringify(help)});
+else if (args[0] === 'init') mkdirSync('.gatewright');
+`;
+  assertFailure(fixture({ help, binary }), /advertises `--format toml`, but scripts\/preflight\.mjs has no probe fixture/);
+});

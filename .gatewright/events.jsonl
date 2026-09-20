@@ -1407,3 +1407,65 @@
 {"ts":"2026-09-19T23:19:47.720Z","type":"add","item":"T-0127","by":"human:rahil","parent":null}
 {"ts":"2026-09-19T23:19:47.777Z","type":"claim","item":"T-0127","by":"human:rahil"}
 {"ts":"2026-09-19T23:19:47.839Z","type":"move","item":"T-0127","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:19.356Z","type":"move","item":"T-0127","from":"building","to":"built","by":"human:rahil","evidence":["https://www.npmjs.com/package/gatewright/v/0.13.2 published from 8ed1dc1; tagged v0.13.2"]}
+{"ts":"2026-09-20T11:44:19.422Z","type":"add","item":"T-0128","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.485Z","type":"add","item":"T-0129","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.546Z","type":"add","item":"T-0130","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.610Z","type":"add","item":"T-0131","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.673Z","type":"add","item":"T-0132","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.738Z","type":"add","item":"T-0133","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.799Z","type":"add","item":"T-0134","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.864Z","type":"add","item":"T-0135","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.926Z","type":"add","item":"T-0136","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:19.987Z","type":"add","item":"T-0137","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:20.049Z","type":"add","item":"T-0138","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:20.112Z","type":"add","item":"T-0139","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T11:44:20.169Z","type":"claim","item":"T-0128","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.230Z","type":"move","item":"T-0128","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.283Z","type":"claim","item":"T-0129","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.346Z","type":"move","item":"T-0129","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.405Z","type":"claim","item":"T-0130","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.466Z","type":"move","item":"T-0130","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.522Z","type":"claim","item":"T-0131","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.583Z","type":"move","item":"T-0131","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.641Z","type":"claim","item":"T-0132","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.702Z","type":"move","item":"T-0132","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.760Z","type":"claim","item":"T-0133","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.818Z","type":"move","item":"T-0133","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.875Z","type":"claim","item":"T-0134","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:20.935Z","type":"move","item":"T-0134","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:20.991Z","type":"claim","item":"T-0135","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:21.051Z","type":"move","item":"T-0135","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:21.108Z","type":"claim","item":"T-0136","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:21.170Z","type":"move","item":"T-0136","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:21.226Z","type":"claim","item":"T-0137","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:21.285Z","type":"move","item":"T-0137","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:21.343Z","type":"claim","item":"T-0138","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:21.403Z","type":"move","item":"T-0138","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T11:44:21.463Z","type":"claim","item":"T-0139","by":"human:rahil"}
+{"ts":"2026-09-20T11:44:21.524Z","type":"move","item":"T-0139","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T12:03:20.119Z","type":"move","item":"T-0128","from":"building","to":"built","by":"human:rahil","evidence":["Rendered hostile prompt verified: issue body fenced in GW-DATA markers with data warning, headings/fences escaped, argv[2]===prompt with $& in title; team pull -> needs-triage (test/untrusted-intake.test.js, /tmp/t0128/after.txt)"]}
+{"ts":"2026-09-20T12:06:40.565Z","type":"move","item":"T-0135","from":"building","to":"built","by":"human:rahil","evidence":["gc --events under the lock keeps open items whole and 20 per finished item, archives to events-archive.jsonl (13.4MB board -> 6.16MB + 7.24MB archive, nothing deleted); gw open caps inline events (14.3MB -> 7.0MB board.html); driven on scratch board"]}
+{"ts":"2026-09-20T12:06:40.629Z","type":"move","item":"T-0136","from":"building","to":"built","by":"human:rahil","evidence":["writeAtomic fsyncs file+dir, appendEvent fsyncs (gw add 67->77ms on btrfs); init writes .gatewright/.gitignore (verified on scratch); adapter ships PRETOOL_COMMAND probe, plugin.json 0.13.2, parity pinned by test/hook-adapter.test.js 4/4"]}
+{"ts":"2026-09-20T12:09:38.269Z","type":"move","item":"T-0138","from":"building","to":"built","by":"human:rahil","evidence":["Driven on scratch board: doctor 12 checks with fix lines, exit 1 on failure, --json shape; next says '1 further stage needs this first: done'; show renders — for unset; list --limit/--owner work (test files in agent report, suite 979/979)"]}
+{"ts":"2026-09-20T12:11:18.628Z","type":"move","item":"T-0137","from":"building","to":"built","by":"human:rahil","evidence":["Drove gw mcp over raw JSON-RPC on a scratch board: initialize handshake, 10 tools listed, gw_add returned T-0001, gw_move refusal isError with the CLI's exact advice; agent verified through real claude CLI (mcp add/list/tool calls, owner agent:mcp); zero deps (lib/mcp/, test/mcp-protocol.test.js)"]}
+{"ts":"2026-09-20T12:11:50.305Z","type":"move","item":"T-0130","from":"building","to":"built","by":"human:rahil","evidence":["Live probe on scratch serve: Host localhost/127.0.0.1/[::1] -> 200, evil.example and attacker@localhost -> 403; --host <name> works in a browser; admin routes stay loopback-only (agent matrix + test/serve.test.js)"]}
+{"ts":"2026-09-20T12:11:50.370Z","type":"move","item":"T-0133","from":"building","to":"built","by":"human:rahil","evidence":["Candidate filter 2199ms -> 5.8ms at 2000 items/100k events via shared outstandingDispatches; locked admit() compare-and-swap refuses capacity/held/owned so no claim stealing or double admission; superviseTick keeps serve alive through tick throws and rejections (test/scheduler.test.js 42/42)"]}
+{"ts":"2026-09-20T12:16:32.877Z","type":"move","item":"T-0131","from":"building","to":"built","by":"human:rahil","evidence":["Real worktree drive in agent transcript: run_ended carries the worktree's own sha through commondir-aware ref resolution, resume keeps it; 5 new tests run the real defaults incl. packed refs via lib/git.js (test/run-lifecycle.test.js 19/19)"]}
+{"ts":"2026-09-20T12:16:32.946Z","type":"move","item":"T-0134","from":"building","to":"built","by":"human:rahil","evidence":["CSV with notes+refs columns round-trips: notes 'kept note', refs URL preserved, driven on scratch board; md/json covered in import tests"]}
+{"ts":"2026-09-20T12:19:33.606Z","type":"move","item":"T-0129","from":"building","to":"built","by":"human:rahil","evidence":["Driven on solo and team scratch boards: 'new evidence 1' and free text refused ('must look like a commit, a file path, or a link'), advice prints <commit sha, test path, or URL> placeholder, abc1234 passes; ARTIFACT_EVIDENCE shared between templates and describe (test/refusal-advice.test.js)"]}
+{"ts":"2026-09-20T12:19:51.521Z","type":"move","item":"T-0132","from":"building","to":"built","by":"human:rahil","evidence":["Refusal matrix driven: code commit naming finished item exit 1 with reopen advice, board-only bookkeeping commit exempt, e.g. line absent when no open item exists (test/guard.test.js 38/38)"]}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"P2-10","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"P2-10.1","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"P2-10.2","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"P2-10.3","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"T-0001","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"T-0038.1","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"T-0052.1","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"T-0053.1","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:31:58.376Z","type":"flag","item":"T-0053.2","flag":null,"by":"human:rahil","repaired_by":"human:rahil","reason":"stale triage hold cleared from finished item"}
+{"ts":"2026-09-20T12:45:00.618Z","type":"move","item":"T-0139","from":"building","to":"built","by":"human:rahil","evidence":["PRD/specs/design/tasks corrected against the tree: D3a records the seq reversal, metrics table dated with actuals, specs gains 4.3 presets, 6.8-6.11, 8.2, 10.3, dry-run marked unshipped; tasks P7 section round-trips (test/import.test.js 101 items); spot-checked by grep and import --dry-run"]}
+{"ts":"2026-09-20T12:45:00.680Z","type":"add","item":"T-0140","by":"human:rahil","parent":null}
+{"ts":"2026-09-20T12:45:00.742Z","type":"claim","item":"T-0140","by":"human:rahil"}
+{"ts":"2026-09-20T12:45:00.805Z","type":"move","item":"T-0140","from":"backlog","to":"building","by":"human:rahil","evidence":[]}
+{"ts":"2026-09-20T12:45:21.604Z","type":"move","item":"T-0140","from":"building","to":"built","by":"human:rahil","evidence":["package.json 0.14.0; README v0.14 paragraph"]}

@@ -2,6 +2,7 @@ import './helpers/isolate-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -181,7 +182,7 @@ test('resume dispatches its stopped-run log tail into the next dry-run rendered 
     writeFileSync(fixture.store.paths.prompt, 'tail follows:\n{{log_tail}}');
     const scheduler = createScheduler({ store: fixture.store, registry: fixture.registry, runner: createRunner({ dryRun: true }), makeRunId: () => 'r-2', worktree: { ensure: () => ({ path: fixture.worktree }) } });
     const started = scheduler.tick().started;
-    assert.match(started.prompt, /tail follows:\nknown first line\nknown final line/);
+    assert.match(started.prompt, /tail follows:\n<<<GW-DATA:log_tail>>>\nknown first line\nknown final line\n<<<END-GW-DATA:log_tail>>>/);
   } finally { killFinally(proc); }
 });
 
@@ -263,4 +264,113 @@ test('stopItemAsync leaves the event loop turning through the grace period, stop
     clearInterval(blockedTicker);
     killFinally(syncChild);
   }
+});
+
+// T-0131 — every test above this line injects `gitHead`/`gitMessage`, and
+// that is precisely how a lifecycle whose real implementations could never
+// resolve a worktree's commit shipped: six tests agreed with each other and
+// none of them with git, so every finished run wrote `last_commit: null` and
+// every memory note said "changed:" with nothing after it. These run the
+// real defaults — no seams — against a real repository, a real linked
+// worktree and real commits, because that is the only arrangement the bug
+// ever lived in.
+function realRepo() {
+  const root = mkdtempSync(join(tmpdir(), 'gw-real-git-'));
+  // -c on every call rather than `git config`: a contributor's global
+  // commit.gpgsign or gpg.format would otherwise make this test depend on
+  // their key, not on their git.
+  const git = (argv, cwd = root) => execFileSync('git', [
+    '-c', 'user.email=test@example.invalid', '-c', 'user.name=Test',
+    '-c', 'commit.gpgsign=false', ...argv,
+  ], { cwd, encoding: 'utf8' }).trim();
+  git(['init']);
+  writeFileSync(join(root, 'README'), 'base\n');
+  git(['add', 'README']); git(['commit', '-m', 'base commit']);
+  const worktree = join(root, 'wt');
+  git(['worktree', 'add', '-b', 'gw/P4-07', worktree]);
+  writeFileSync(join(worktree, 'work.txt'), 'done\n');
+  git(['add', 'work.txt'], worktree); git(['commit', '-m', 'P4-07: the work the agent did'], worktree);
+  return { root, worktree, git, head: git(['rev-parse', 'HEAD'], worktree), rootHead: git(['rev-parse', 'HEAD']) };
+}
+
+function memoryBoard({ timeout = 0.02 } = {}) {
+  const fixture = board({ timeout });
+  writeFileSync(fixture.store.paths.config, JSON.stringify({
+    runner: { stop_timeout_s: timeout, run_timeout_min: 1, paused: false },
+    memory: { enabled: true, provider: 'transport', remember: { on_run_ok: true } },
+  }));
+  return fixture;
+}
+function flush() { return new Promise((resolve) => setImmediate(resolve)); }
+
+test('a finished run in a real linked worktree records that worktree\'s commit, not null', async () => {
+  const repo = realRepo();
+  assert.notEqual(repo.head, repo.rootHead, 'the worktree must be ahead of the repository, or this proves nothing');
+  const fixture = memoryBoard(); const remembered = [];
+  fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: process.pid, worktree: repo.worktree });
+
+  const result = createRunLifecycle({
+    store: fixture.store, registry: fixture.registry,
+    memoryTransport: { remember: (text) => { remembered.push(text); } },
+  }).finish({ run: 'r-1' }, { code: 0 });
+  await flush();
+
+  assert.equal(result.status, 'ended');
+  assert.equal(fixture.store.readItems()[0].last_commit, repo.head, 'the branch ref lives in the common dir, which is where it must be read from');
+  const event = fixture.store.readEvents().at(-1);
+  assert.equal(event.type, 'run_ended');
+  assert.equal(event.last_commit, repo.head, 'the run_ended event is the durable record of which commit the run produced');
+  assert.equal(remembered.length, 1);
+  assert.match(remembered[0], /changed: P4-07: the work the agent did ·/, 'the memory note names the commit subject, not an empty "changed:"');
+});
+
+test('a run in a plain checkout records its commit too: .git is a directory there, not a pointer file', () => {
+  const repo = realRepo();
+  const fixture = board();
+  fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: process.pid, worktree: repo.root });
+  createRunLifecycle({ store: fixture.store, registry: fixture.registry }).finish({ run: 'r-1' }, { code: 0 });
+  assert.equal(fixture.store.readItems()[0].last_commit, repo.rootHead, 'reading a .git directory as a file threw EISDIR into the same silent null');
+});
+
+// Packing is not exotic: any repository that has run `git gc` — which git
+// runs on its own — has no loose ref and no loose object left to read.
+test('a packed repository still yields the commit and its subject', async () => {
+  const repo = realRepo();
+  repo.git(['gc', '--prune=now', '--quiet']);
+  assert.equal(existsSync(join(repo.root, '.git', 'refs', 'heads', 'gw', 'P4-07')), false, 'the ref must really be packed, or this test proves nothing');
+  const fixture = memoryBoard(); const remembered = [];
+  fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: process.pid, worktree: repo.worktree });
+
+  createRunLifecycle({
+    store: fixture.store, registry: fixture.registry,
+    memoryTransport: { remember: (text) => { remembered.push(text); } },
+  }).finish({ run: 'r-1' }, { code: 0 });
+  await flush();
+
+  assert.equal(fixture.store.readItems()[0].last_commit, repo.head, 'packed-refs is read from the common dir');
+  assert.match(remembered[0], /changed: P4-07: the work the agent did ·/, 'a packed object is git\'s to unpack: the fallback shells out rather than reimplementing the pack index');
+});
+
+test('stopping a run in a real worktree notes the commit it reached', async () => {
+  const repo = realRepo();
+  const fixture = board();
+  const proc = child('setInterval(() => {}, 1000)', repo.worktree);
+  try {
+    fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: proc.pid, worktree: repo.worktree, log: join(fixture.store.dir, 'runs', 'P4-07-r-1.log') });
+    const results = createRunLifecycle({ store: fixture.store, registry: fixture.registry, ...winSafeKill() }).stopItem('P4-07');
+    assert.equal(results[0].status, 'stopped');
+    assert.equal(await waitGone(proc.pid), true);
+    const item = fixture.store.readItems()[0];
+    assert.equal(item.flag, 'paused');
+    assert.equal(item.last_commit, repo.head, 'a paused item records where its agent got to; resume reads the same worktree');
+    assert.equal(fixture.store.readEvents().at(-1).last_commit, repo.head);
+  } finally { killFinally(proc); }
+});
+
+test('a worktree that is not a checkout at all stays null rather than guessing', () => {
+  const fixture = board();
+  fixture.registry.record({ run: 'r-1', item: 'P4-07', pid: process.pid, worktree: fixture.worktree });
+  createRunLifecycle({ store: fixture.store, registry: fixture.registry }).finish({ run: 'r-1' }, { code: 0 });
+  assert.equal(fixture.store.readItems()[0].last_commit, null);
+  assert.equal(fixture.store.readEvents().at(-1).last_commit, null);
 });

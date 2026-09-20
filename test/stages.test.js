@@ -76,7 +76,9 @@ test('the shipped pipeline is unchanged by the role rule', () => {
 test('the shipped built stage requires the scope it is named after, alongside evidence', async () => {
   const { evaluateRequires } = await import('../lib/rules.js');
   const stages = shipped;
-  const evidence = [{ text: 'e1', stage: 'built' }];
+  // T-0129 — the shipped built gate also checks the SHAPE of the evidence,
+  // so this fixture carries a commit sha rather than a free-text token.
+  const evidence = [{ text: 'abc1234', stage: 'built' }];
   const unscoped = evaluateRequires({ id: 'T-0001', scope: '', owner: null, deps: [], evidence }, 'built', { items: [], stages });
   assert.equal(unscoped.ok, false);
   assert.match(unscoped.failures[0], /needs a scope: run `gw edit T-0001 --scope/);

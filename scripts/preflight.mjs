@@ -97,9 +97,17 @@ export function usageCommandEntries(help) {
   for (const [offset, line] of block.lines.entries()) {
     const index = block.start + offset;
     const syntax = line.match(/^ {2}([^\n]+)$/)?.[1] ?? '';
-    const primary = syntax.match(/^([a-z][\w-]*)\b/);
+    // T-0132/T-0134 — `|` means two things in a usage line: alternative
+    // COMMANDS at the top level (`show <id> | list`), and alternative VALUES
+    // inside an option's brackets (`[--format md|csv|json]`). Only the first
+    // kind is a command, so bracketed groups are blanked before alternatives
+    // are harvested -- otherwise advertising the import formats this binary
+    // actually ships invented two commands, `csv` and `json`, and preflight
+    // then demanded lib/commands/csv.js.
+    const outsideOptions = syntax.replace(/\[[^\]]*\]/g, ' ');
+    const primary = outsideOptions.match(/^([a-z][\w-]*)\b/);
     if (primary) entries.push({ name: primary[1], line: index + 1 });
-    for (const match of syntax.matchAll(/\|\s*([a-z][\w-]*)\b/g)) entries.push({ name: match[1], line: index + 1 });
+    for (const match of outsideOptions.matchAll(/\|\s*([a-z][\w-]*)\b/g)) entries.push({ name: match[1], line: index + 1 });
   }
   return entries;
 }
@@ -122,17 +130,32 @@ function commandModules(root) {
     .map((file) => file.slice(0, -3));
 }
 
+// One probe file per format: the smallest input each format calls valid.
+// Feeding the markdown fixture to every advertised format -- which is what
+// this did while `md` was the only advertised one -- proves nothing about
+// csv or json except that they correctly refuse a markdown file.
+const IMPORT_PROBES = {
+  md: { file: 'tasks.md', text: '## P1\n\n- [ ] Probe\n' },
+  csv: { file: 'tasks.csv', text: 'id,title\nT-0001,Probe\n' },
+  json: { file: 'tasks.json', text: '[{"id":"T-0001","title":"Probe"}]' },
+};
+
 function importFormatFailures(root, bin, help) {
   const formats = advertisedImportFormats(help);
   if (!formats.length) return [];
   const probe = mkdtempSync(join(tmpdir(), 'gatewright-preflight-'));
   try {
-    writeFileSync(join(probe, 'tasks.md'), '## P1\n\n- [ ] Probe\n');
     const initialized = command(probe, process.execPath, [join(root, bin), 'init']);
     if (!initialized.ok) return [`${bin}: could not initialize isolated --format probe; fix the binary. ${initialized.output}`];
     const failures = [];
     for (const format of formats) {
-      const result = command(probe, process.execPath, [join(root, bin), 'import', '--format', format, '--dry-run', 'tasks.md']);
+      const fixture = IMPORT_PROBES[format];
+      if (!fixture) {
+        failures.push(`gw --help: advertises \`--format ${format}\`, but scripts/preflight.mjs has no probe fixture for it; add one to IMPORT_PROBES so the claim is checked.`);
+        continue;
+      }
+      writeFileSync(join(probe, fixture.file), fixture.text);
+      const result = command(probe, process.execPath, [join(root, bin), 'import', '--format', format, '--dry-run', fixture.file]);
       if (!result.ok) failures.push(`${bin}: advertises \`--format ${format}\`, but the binary rejects it; remove it from gw --help or implement it. ${result.output}`);
     }
     return failures;

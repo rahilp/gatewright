@@ -223,3 +223,61 @@ test('gw open --watch keeps the last good board when JSONL is corrupt', async ()
     await stopWatcher(watcher.child);
   }
 });
+
+// T-0135 — `gw open` inlines the whole event log into board.html. At the
+// audited 2,000-item / 100k-event scale that is a 13.2MB document, nearly all
+// of it the history of finished items. The snapshot keeps every event of an
+// open item and the tail of each finished one — the same split `gw gc
+// --events` makes — and says how much it left out, so the board can point at
+// the archive rather than quietly showing a partial history as if it were all.
+function boardWithHistory({ open = 30, done = 30 } = {}) {
+  const { root, store } = freshRoot();
+  store.writeItems([item({ id: 'T-1', stage: 'backlog' }), item({ id: 'T-2', stage: 'verified' })]);
+  for (let i = 0; i < open; i += 1) store.appendEvent({ type: 'note', item: 'T-1', by: 'human:test', n: i });
+  for (let i = 0; i < done; i += 1) store.appendEvent({ type: 'note', item: 'T-2', by: 'human:test', n: i });
+  return { root, store };
+}
+
+const openCtx = (root, store, flags = {}) => ({ root, store, flags: { 'no-browser': true, ...flags }, stdout: { write() {} }, fetch: null });
+
+test('open inlines every event of an open item and only the tail of a finished one', async () => {
+  const { root, store } = boardWithHistory();
+  await open(openCtx(root, store));
+  const html = readFileSync(store.paths.board, 'utf8');
+  const events = extractBlock(html, 'gw-events');
+  assert.equal(events.filter((e) => e.item === 'T-1').length, 30);
+  assert.deepEqual(events.filter((e) => e.item === 'T-2').map((e) => e.n), Array.from({ length: 20 }, (_, i) => i + 10));
+});
+
+test('open tells the viewer how many events it left out and where they are', async () => {
+  const { root, store } = boardWithHistory();
+  await open(openCtx(root, store));
+  const config = extractBlock(readFileSync(store.paths.board, 'utf8'), 'gw-config');
+  assert.equal(config.eventsOmitted, 10);
+  assert.equal(config.eventsArchive, 'events-archive.jsonl');
+});
+
+test('open says nothing about omitted events when it inlined them all', async () => {
+  const { root, store } = boardWithHistory({ open: 3, done: 3 });
+  await open(openCtx(root, store));
+  const config = extractBlock(readFileSync(store.paths.board, 'utf8'), 'gw-config');
+  assert.equal(config.eventsOmitted, undefined);
+  assert.equal(config.eventsArchive, undefined);
+});
+
+test('open --all-events inlines the complete log', async () => {
+  const { root, store } = boardWithHistory();
+  await open(openCtx(root, store, { 'all-events': true }));
+  const html = readFileSync(store.paths.board, 'utf8');
+  assert.equal(extractBlock(html, 'gw-events').length, 60);
+  assert.equal(extractBlock(html, 'gw-config').eventsOmitted, undefined);
+});
+
+test('open honors config.gc.events_keep for what it inlines', async () => {
+  const { root, store } = boardWithHistory();
+  writeFileSync(store.paths.config, JSON.stringify({ gc: { events_keep: 2 } }));
+  await open(openCtx(root, store));
+  const html = readFileSync(store.paths.board, 'utf8');
+  assert.equal(extractBlock(html, 'gw-events').filter((e) => e.item === 'T-2').length, 2);
+  assert.equal(extractBlock(html, 'gw-config').eventsOmitted, 28);
+});
